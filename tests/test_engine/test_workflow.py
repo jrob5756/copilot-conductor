@@ -486,3 +486,325 @@ class TestWorkflowEngineOutputTemplates:
         result = await engine.run({})
 
         assert result["total"] == 42
+
+
+class TestWorkflowEngineLoopBack:
+    """Tests for loop-back routing patterns."""
+
+    @pytest.mark.asyncio
+    async def test_simple_loop_with_iteration_limit(self) -> None:
+        """Test a simple loop that terminates after iterations."""
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="loop-workflow",
+                entry_point="refiner",
+                context=ContextConfig(mode="accumulate"),
+                limits=LimitsConfig(max_iterations=10),
+            ),
+            agents=[
+                AgentDef(
+                    name="refiner",
+                    model="gpt-4",
+                    prompt="Refine iteration {{ context.iteration }}",
+                    output={
+                        "quality": OutputField(type="number"),
+                        "result": OutputField(type="string"),
+                    },
+                    routes=[
+                        RouteDef(to="$end", when="{{ output.quality >= 8 }}"),
+                        RouteDef(to="refiner"),  # Loop back
+                    ],
+                ),
+            ],
+            output={
+                "result": "{{ refiner.output.result }}",
+                "iterations": "{{ context.iteration }}",
+            },
+        )
+
+        iteration_count = 0
+
+        def mock_handler(agent, prompt, context):
+            nonlocal iteration_count
+            iteration_count += 1
+            # Quality improves with each iteration
+            quality = 5 + iteration_count
+            return {"quality": quality, "result": f"Refined {iteration_count} times"}
+
+        provider = CopilotProvider(mock_handler=mock_handler)
+        engine = WorkflowEngine(config, provider)
+
+        result = await engine.run({})
+
+        # Should have looped until quality >= 8
+        assert iteration_count == 3  # quality: 6, 7, 8
+        assert result["result"] == "Refined 3 times"
+
+    @pytest.mark.asyncio
+    async def test_loop_with_arithmetic_condition(self) -> None:
+        """Test loop with arithmetic expression condition."""
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="arithmetic-loop",
+                entry_point="counter",
+            ),
+            agents=[
+                AgentDef(
+                    name="counter",
+                    model="gpt-4",
+                    prompt="Count",
+                    output={"count": OutputField(type="number")},
+                    routes=[
+                        RouteDef(to="$end", when="count >= 3"),
+                        RouteDef(to="counter"),
+                    ],
+                ),
+            ],
+            output={"final_count": "{{ counter.output.count }}"},
+        )
+
+        call_count = 0
+
+        def mock_handler(agent, prompt, context):
+            nonlocal call_count
+            call_count += 1
+            return {"count": call_count}
+
+        provider = CopilotProvider(mock_handler=mock_handler)
+        engine = WorkflowEngine(config, provider)
+
+        result = await engine.run({})
+
+        assert call_count == 3
+        assert result["final_count"] == 3
+
+    @pytest.mark.asyncio
+    async def test_loop_back_to_different_agent(self) -> None:
+        """Test loop-back to a different previously executed agent."""
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="multi-agent-loop",
+                entry_point="drafter",
+            ),
+            agents=[
+                AgentDef(
+                    name="drafter",
+                    model="gpt-4",
+                    prompt="Draft content",
+                    output={"draft": OutputField(type="string")},
+                    routes=[RouteDef(to="reviewer")],
+                ),
+                AgentDef(
+                    name="reviewer",
+                    model="gpt-4",
+                    prompt="Review: {{ drafter.output.draft }}",
+                    output={
+                        "approved": OutputField(type="boolean"),
+                        "feedback": OutputField(type="string"),
+                    },
+                    routes=[
+                        RouteDef(to="$end", when="{{ output.approved }}"),
+                        RouteDef(to="drafter"),  # Loop back to drafter
+                    ],
+                ),
+            ],
+            output={"final_draft": "{{ drafter.output.draft }}"},
+        )
+
+        loop_count = 0
+
+        def mock_handler(agent, prompt, context):
+            nonlocal loop_count
+            if agent.name == "drafter":
+                loop_count += 1
+                return {"draft": f"Draft v{loop_count}"}
+            else:  # reviewer
+                # Approve on second review
+                return {
+                    "approved": loop_count >= 2,
+                    "feedback": "Needs work" if loop_count < 2 else "Approved",
+                }
+
+        provider = CopilotProvider(mock_handler=mock_handler)
+        engine = WorkflowEngine(config, provider)
+
+        result = await engine.run({})
+
+        assert loop_count == 2
+        assert result["final_draft"] == "Draft v2"
+        # Verify execution history shows the loop
+        summary = engine.get_execution_summary()
+        assert summary["agents_executed"] == ["drafter", "reviewer", "drafter", "reviewer"]
+
+    @pytest.mark.asyncio
+    async def test_iteration_tracking_across_loops(self) -> None:
+        """Test that iteration count is tracked across loop iterations."""
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="iteration-tracking",
+                entry_point="agent",
+            ),
+            agents=[
+                AgentDef(
+                    name="agent",
+                    model="gpt-4",
+                    prompt="Iteration: {{ context.iteration }}",
+                    output={"done": OutputField(type="boolean")},
+                    routes=[
+                        RouteDef(to="$end", when="{{ output.done }}"),
+                        RouteDef(to="agent"),
+                    ],
+                ),
+            ],
+            output={"total_iterations": "{{ context.iteration }}"},
+        )
+
+        received_iterations = []
+
+        def mock_handler(agent, prompt, context):
+            received_iterations.append(context.get("context", {}).get("iteration", 0))
+            return {"done": len(received_iterations) >= 3}
+
+        provider = CopilotProvider(mock_handler=mock_handler)
+        engine = WorkflowEngine(config, provider)
+
+        result = await engine.run({})
+
+        # Iterations should be tracked
+        assert len(received_iterations) == 3
+        assert result["total_iterations"] == 3
+
+
+class TestWorkflowEngineRouterIntegration:
+    """Tests for Router integration with WorkflowEngine."""
+
+    @pytest.mark.asyncio
+    async def test_route_output_transform(self) -> None:
+        """Test that route output transforms are applied on $end."""
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="output-transform",
+                entry_point="processor",
+            ),
+            agents=[
+                AgentDef(
+                    name="processor",
+                    model="gpt-4",
+                    prompt="Process",
+                    output={"value": OutputField(type="string")},
+                    routes=[
+                        RouteDef(
+                            to="$end",
+                            output={"transformed": "Transformed: {{ output.value }}"},
+                        ),
+                    ],
+                ),
+            ],
+            output={
+                "original": "{{ processor.output.value }}",
+            },
+        )
+
+        def mock_handler(agent, prompt, context):
+            return {"value": "test_value"}
+
+        provider = CopilotProvider(mock_handler=mock_handler)
+        engine = WorkflowEngine(config, provider)
+
+        result = await engine.run({})
+
+        assert result["original"] == "test_value"
+        assert result["transformed"] == "Transformed: test_value"
+
+    @pytest.mark.asyncio
+    async def test_no_matching_routes_error(self) -> None:
+        """Test that no matching routes raises clear error."""
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="no-match",
+                entry_point="agent",
+            ),
+            agents=[
+                AgentDef(
+                    name="agent",
+                    model="gpt-4",
+                    prompt="Test",
+                    output={"flag": OutputField(type="boolean")},
+                    routes=[
+                        RouteDef(to="$end", when="{{ output.flag }}"),
+                        # Missing catch-all route!
+                    ],
+                ),
+            ],
+            output={},
+        )
+
+        def mock_handler(agent, prompt, context):
+            return {"flag": False}
+
+        provider = CopilotProvider(mock_handler=mock_handler)
+        engine = WorkflowEngine(config, provider)
+
+        with pytest.raises(ValueError, match="No matching route found"):
+            await engine.run({})
+
+    @pytest.mark.asyncio
+    async def test_mixed_jinja_and_arithmetic_conditions(self) -> None:
+        """Test workflow with mixed Jinja2 and arithmetic conditions."""
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="mixed-conditions",
+                entry_point="evaluator",
+            ),
+            agents=[
+                AgentDef(
+                    name="evaluator",
+                    model="gpt-4",
+                    prompt="Evaluate",
+                    output={
+                        "score": OutputField(type="number"),
+                        "valid": OutputField(type="boolean"),
+                    },
+                    routes=[
+                        RouteDef(to="high", when="score >= 8"),  # arithmetic
+                        RouteDef(to="valid", when="{{ output.valid }}"),  # jinja
+                        RouteDef(to="default"),
+                    ],
+                ),
+                AgentDef(
+                    name="high",
+                    model="gpt-4",
+                    prompt="High score",
+                    routes=[RouteDef(to="$end")],
+                    output={"result": OutputField(type="string")},
+                ),
+                AgentDef(
+                    name="valid",
+                    model="gpt-4",
+                    prompt="Valid",
+                    routes=[RouteDef(to="$end")],
+                    output={"result": OutputField(type="string")},
+                ),
+                AgentDef(
+                    name="default",
+                    model="gpt-4",
+                    prompt="Default",
+                    routes=[RouteDef(to="$end")],
+                    output={"result": OutputField(type="string")},
+                ),
+            ],
+            output={"path": "{{ context.history[-1] }}"},
+        )
+
+        def mock_handler(agent, prompt, context):
+            if agent.name == "evaluator":
+                return {"score": 5, "valid": True}
+            return {"result": agent.name}
+
+        provider = CopilotProvider(mock_handler=mock_handler)
+        engine = WorkflowEngine(config, provider)
+
+        await engine.run({})
+
+        # Score 5 < 8, but valid is True, so should go to 'valid'
+        assert "valid" in engine.context.execution_history

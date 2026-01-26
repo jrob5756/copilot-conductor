@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from copilot_conductor.engine.context import WorkflowContext
+from copilot_conductor.engine.router import Router, RouteResult
 from copilot_conductor.exceptions import ExecutionError
 from copilot_conductor.executor.agent import AgentExecutor
 from copilot_conductor.executor.template import TemplateRenderer
@@ -52,6 +53,7 @@ class WorkflowEngine:
         self.context = WorkflowContext()
         self.executor = AgentExecutor(provider)
         self.renderer = TemplateRenderer()
+        self.router = Router()
 
     async def run(self, inputs: dict[str, Any]) -> dict[str, Any]:
         """Execute the workflow from entry_point to $end.
@@ -112,13 +114,13 @@ class WorkflowEngine:
             # Store output
             self.context.store(agent.name, output.content)
 
-            # Evaluate routes (basic for now - full routing in EPIC-006)
-            next_agent = self._get_next_agent(agent, output.content)
+            # Evaluate routes using the Router
+            route_result = self._evaluate_routes(agent, output.content)
 
-            if next_agent == "$end":
-                return self._build_final_output()
+            if route_result.target == "$end":
+                return self._build_final_output(route_result.output_transform)
 
-            current_agent_name = next_agent
+            current_agent_name = route_result.target
 
     def _find_agent(self, name: str) -> AgentDef | None:
         """Find agent by name.
@@ -132,11 +134,9 @@ class WorkflowEngine:
         return next((a for a in self.config.agents if a.name == name), None)
 
     def _get_next_agent(self, agent: AgentDef, output: dict[str, Any]) -> str:
-        """Get next agent from routes.
+        """Get next agent from routes (legacy method, use _evaluate_routes instead).
 
-        This is a basic implementation that evaluates routes in order.
-        Full conditional routing with expression evaluation will be
-        implemented in EPIC-006.
+        This method is kept for backward compatibility but delegates to _evaluate_routes.
 
         Args:
             agent: The current agent definition.
@@ -145,35 +145,42 @@ class WorkflowEngine:
         Returns:
             The name of the next agent or "$end".
         """
+        result = self._evaluate_routes(agent, output)
+        return result.target
+
+    def _evaluate_routes(self, agent: AgentDef, output: dict[str, Any]) -> RouteResult:
+        """Evaluate routes using the Router.
+
+        Uses the Router to evaluate routing rules and determine the next agent.
+        Supports both Jinja2 template conditions and simpleeval arithmetic expressions.
+
+        Args:
+            agent: The current agent definition.
+            output: The agent's output content.
+
+        Returns:
+            RouteResult with target and optional output transform.
+        """
         if not agent.routes:
-            return "$end"
+            # No routes defined - default to $end
+            return RouteResult(target="$end")
 
         # Build context for condition evaluation
         eval_context = self.context.get_for_template()
-        eval_context["output"] = output
 
-        # Evaluate routes in order (first match wins)
-        for route in agent.routes:
-            if route.when is None:
-                # Unconditional route - always matches
-                return route.to
+        return self.router.evaluate(agent.routes, output, eval_context)
 
-            # Evaluate the condition using template renderer
-            try:
-                condition_result = self.renderer.evaluate_condition(route.when, eval_context)
-                if condition_result:
-                    return route.to
-            except Exception:
-                # If condition evaluation fails, skip this route
-                continue
-
-        # No matching route - default to $end
-        return "$end"
-
-    def _build_final_output(self) -> dict[str, Any]:
+    def _build_final_output(
+        self, route_output_transform: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """Build final output using output templates.
 
         Renders each output template expression with the full context.
+        If a route output transform is provided, it will be merged with
+        the template-rendered output (transform values take precedence).
+
+        Args:
+            route_output_transform: Optional output values from the $end route.
 
         Returns:
             Dict with rendered output values.
@@ -185,6 +192,11 @@ class WorkflowEngine:
             rendered = self.renderer.render(template, ctx)
             # Try to parse as JSON if it looks like JSON
             result[key] = self._maybe_parse_json(rendered)
+
+        # Merge route output transform if provided (takes precedence)
+        if route_output_transform:
+            for key, value in route_output_transform.items():
+                result[key] = self._maybe_parse_json(value) if isinstance(value, str) else value
 
         return result
 

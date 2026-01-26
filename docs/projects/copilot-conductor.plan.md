@@ -328,21 +328,21 @@ The implementation is broken into 14 EPICs with atomic tasks suitable for execut
 
 | Task ID | Type | Description | Files | Estimate | Status |
 |---------|------|-------------|-------|----------|--------|
-| TASK-033 | IMPL | Implement Router with condition evaluation using template renderer for boolean expressions | `src/copilot_conductor/engine/router.py` | M | TODO |
-| TASK-034 | IMPL | Implement RouteResult dataclass with target, output_transform, matched_rule | `src/copilot_conductor/engine/router.py` | S | TODO |
-| TASK-035 | IMPL | Handle $end termination with final output building using output template expressions | `src/copilot_conductor/engine/workflow.py` | S | TODO |
-| TASK-036 | IMPL | Support loop-back routing (route to previously executed agent) with iteration tracking | `src/copilot_conductor/engine/workflow.py` | S | TODO |
-| TASK-037 | TEST | Unit tests for Router: unconditional, conditional, fallthrough, $end | `tests/test_engine/test_router.py` | M | TODO |
-| TASK-038 | TEST | Integration tests for loop-back workflows | `tests/test_engine/test_workflow.py` | M | TODO |
-| TASK-069 | IMPL | Integrate simpleeval for arithmetic comparisons in `when` clauses (e.g., `score > 7`, `iteration < 5`). Router detects expression type and routes to appropriate evaluator | `src/copilot_conductor/engine/router.py` | M | TODO |
+| TASK-033 | IMPL | Implement Router with condition evaluation using template renderer for boolean expressions | `src/copilot_conductor/engine/router.py` | M | DONE |
+| TASK-034 | IMPL | Implement RouteResult dataclass with target, output_transform, matched_rule | `src/copilot_conductor/engine/router.py` | S | DONE |
+| TASK-035 | IMPL | Handle $end termination with final output building using output template expressions | `src/copilot_conductor/engine/workflow.py` | S | DONE |
+| TASK-036 | IMPL | Support loop-back routing (route to previously executed agent) with iteration tracking | `src/copilot_conductor/engine/workflow.py` | S | DONE |
+| TASK-037 | TEST | Unit tests for Router: unconditional, conditional, fallthrough, $end | `tests/test_engine/test_router.py` | M | DONE |
+| TASK-038 | TEST | Integration tests for loop-back workflows | `tests/test_engine/test_workflow.py` | M | DONE |
+| TASK-069 | IMPL | Integrate simpleeval for arithmetic comparisons in `when` clauses (e.g., `score > 7`, `iteration < 5`). Router detects expression type and routes to appropriate evaluator | `src/copilot_conductor/engine/router.py` | M | DONE |
 
 **Acceptance Criteria**:
-- [ ] Routes evaluated in order, first matching `when` wins
-- [ ] Routes without `when` always match
-- [ ] `$end` terminates workflow and triggers output building
-- [ ] Loop-back to previous agent works correctly
-- [ ] No matching routes raises clear error
-- [ ] Arithmetic comparisons work in when clauses via simpleeval
+- [x] Routes evaluated in order, first matching `when` wins
+- [x] Routes without `when` always match
+- [x] `$end` terminates workflow and triggers output building
+- [x] Loop-back to previous agent works correctly
+- [x] No matching routes raises clear error
+- [x] Arithmetic comparisons work in when clauses via simpleeval
 
 ---
 
