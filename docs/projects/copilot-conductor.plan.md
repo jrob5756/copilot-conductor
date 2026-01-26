@@ -301,20 +301,20 @@ The implementation is broken into 14 EPICs with atomic tasks suitable for execut
 
 | Task ID | Type | Description | Files | Estimate | Status |
 |---------|------|-------------|-------|----------|--------|
-| TASK-024 | IMPL | Create Typer app with global options (--version, --help) | `src/copilot_conductor/cli/app.py` | S | TODO |
-| TASK-025 | IMPL | Implement `run` command with workflow file argument | `src/copilot_conductor/cli/run.py` | M | TODO |
-| TASK-026 | IMPL | Implement `--input.<name>=<value>` flag parsing with type coercion | `src/copilot_conductor/cli/run.py` | M | TODO |
-| TASK-027 | IMPL | Implement `--provider` flag for runtime provider override | `src/copilot_conductor/cli/run.py` | S | TODO |
-| TASK-028 | IMPL | Implement JSON output formatting for workflow results | `src/copilot_conductor/cli/run.py` | S | TODO |
-| TASK-029 | TEST | CLI tests for run command with various input combinations | `tests/test_cli/test_run.py` | M | TODO |
-| TASK-030 | TEST | End-to-end test with example workflow file | `tests/test_cli/test_e2e.py` | M | TODO |
+| TASK-024 | IMPL | Create Typer app with global options (--version, --help) | `src/copilot_conductor/cli/app.py` | S | DONE |
+| TASK-025 | IMPL | Implement `run` command with workflow file argument | `src/copilot_conductor/cli/run.py` | M | DONE |
+| TASK-026 | IMPL | Implement `--input.<name>=<value>` flag parsing with type coercion | `src/copilot_conductor/cli/run.py` | M | DONE |
+| TASK-027 | IMPL | Implement `--provider` flag for runtime provider override | `src/copilot_conductor/cli/run.py` | S | DONE |
+| TASK-028 | IMPL | Implement JSON output formatting for workflow results | `src/copilot_conductor/cli/run.py` | S | DONE |
+| TASK-029 | TEST | CLI tests for run command with various input combinations | `tests/test_cli/test_run.py` | M | DONE |
+| TASK-030 | TEST | End-to-end test with example workflow file | `tests/test_cli/test_e2e.py` | M | DONE |
 
 **Acceptance Criteria**:
-- [ ] `conductor run workflow.yaml` executes workflow
-- [ ] `--input.name=value` flags are parsed and passed to workflow
-- [ ] `--provider openai-agents` raises NotImplementedError (expected)
-- [ ] Output is valid JSON to stdout
-- [ ] Exit code 0 on success, non-zero on failure
+- [x] `conductor run workflow.yaml` executes workflow
+- [x] `--input.name=value` flags are parsed and passed to workflow
+- [x] `--provider openai-agents` raises NotImplementedError (expected)
+- [x] Output is valid JSON to stdout
+- [x] Exit code 0 on success, non-zero on failure
 
 ---
 
