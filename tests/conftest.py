@@ -18,19 +18,17 @@ def fixtures_dir() -> Path:
 def sample_workflow_yaml() -> str:
     """Return a minimal valid workflow YAML for testing."""
     return """\
-version: "1.0"
-name: test-workflow
-description: A test workflow
-
 workflow:
+  name: test-workflow
+  description: A test workflow
   entry_point: agent1
-  agents:
-    agent1:
-      type: llm
-      model: gpt-4
-      prompt: "Hello, world!"
-      routes:
-        - to: $end
+
+agents:
+  - name: agent1
+    model: gpt-4
+    prompt: "Hello, world!"
+    routes:
+      - to: $end
 """
 
 
