@@ -244,19 +244,19 @@ The implementation is broken into 14 EPICs with atomic tasks suitable for execut
 
 | Task ID | Type | Description | Files | Estimate | Status |
 |---------|------|-------------|-------|----------|--------|
-| TASK-013 | IMPL | Implement TemplateRenderer with StrictUndefined, json filter, default filter, and keep_trailing_newline | `src/copilot_conductor/executor/template.py` | M | TODO |
-| TASK-014 | TEST | Unit tests for template rendering: simple vars, json filter, conditionals, loops, missing vars, nested access | `tests/test_executor/test_template.py` | M | TODO |
-| TASK-015 | IMPL | Implement AgentProvider ABC with execute(), validate_connection(), close() methods and AgentOutput dataclass | `src/copilot_conductor/providers/base.py` | S | TODO |
-| TASK-016 | IMPL | Implement provider factory with copilot provider instantiation and error handling for unknown providers | `src/copilot_conductor/providers/factory.py` | S | TODO |
-| TASK-068 | IMPL | Implement validate_connection() integration - call during provider initialization in ProviderFactory, raise ProviderError with actionable message on failure | `src/copilot_conductor/providers/factory.py` | S | TODO |
+| TASK-013 | IMPL | Implement TemplateRenderer with StrictUndefined, json filter, default filter, and keep_trailing_newline | `src/copilot_conductor/executor/template.py` | M | DONE |
+| TASK-014 | TEST | Unit tests for template rendering: simple vars, json filter, conditionals, loops, missing vars, nested access | `tests/test_executor/test_template.py` | M | DONE |
+| TASK-015 | IMPL | Implement AgentProvider ABC with execute(), validate_connection(), close() methods and AgentOutput dataclass | `src/copilot_conductor/providers/base.py` | S | DONE |
+| TASK-016 | IMPL | Implement provider factory with copilot provider instantiation and error handling for unknown providers | `src/copilot_conductor/providers/factory.py` | S | DONE |
+| TASK-068 | IMPL | Implement validate_connection() integration - call during provider initialization in ProviderFactory, raise ProviderError with actionable message on failure | `src/copilot_conductor/providers/factory.py` | S | DONE |
 
 **Acceptance Criteria**:
-- [ ] Templates render with workflow and agent context
-- [ ] `{{ value | json }}` produces formatted JSON
-- [ ] Missing template variables raise TemplateError with variable name
-- [ ] Provider factory returns CopilotProvider for "copilot" type
-- [ ] Unknown provider types raise clear error
-- [ ] validate_connection() called on provider instantiation with clear error on failure
+- [x] Templates render with workflow and agent context
+- [x] `{{ value | json }}` produces formatted JSON
+- [x] Missing template variables raise TemplateError with variable name
+- [x] Provider factory returns CopilotProvider for "copilot" type
+- [x] Unknown provider types raise clear error
+- [x] validate_connection() called on provider instantiation with clear error on failure
 
 ---
 

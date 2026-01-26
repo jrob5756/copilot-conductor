@@ -1,0 +1,90 @@
+"""Unit tests for the provider factory."""
+
+import pytest
+
+from copilot_conductor.exceptions import ProviderError
+from copilot_conductor.providers.copilot import CopilotProvider
+from copilot_conductor.providers.factory import create_provider
+
+
+class TestCreateProvider:
+    """Tests for the create_provider factory function."""
+
+    @pytest.mark.asyncio
+    async def test_create_copilot_provider(self) -> None:
+        """Test creating a Copilot provider."""
+        provider = await create_provider("copilot")
+        assert isinstance(provider, CopilotProvider)
+        await provider.close()
+
+    @pytest.mark.asyncio
+    async def test_create_copilot_provider_default(self) -> None:
+        """Test that copilot is the default provider."""
+        provider = await create_provider()
+        assert isinstance(provider, CopilotProvider)
+        await provider.close()
+
+    @pytest.mark.asyncio
+    async def test_create_copilot_provider_no_validation(self) -> None:
+        """Test creating a provider without validation."""
+        provider = await create_provider("copilot", validate=False)
+        assert isinstance(provider, CopilotProvider)
+        await provider.close()
+
+    @pytest.mark.asyncio
+    async def test_create_openai_provider_raises(self) -> None:
+        """Test that OpenAI provider raises ProviderError (not implemented)."""
+        with pytest.raises(ProviderError) as exc_info:
+            await create_provider("openai-agents")
+        assert "not yet implemented" in str(exc_info.value)
+        assert exc_info.value.suggestion is not None
+        assert "copilot" in exc_info.value.suggestion
+
+    @pytest.mark.asyncio
+    async def test_create_claude_provider_raises(self) -> None:
+        """Test that Claude provider raises ProviderError (not implemented)."""
+        with pytest.raises(ProviderError) as exc_info:
+            await create_provider("claude")
+        assert "not yet implemented" in str(exc_info.value)
+        assert exc_info.value.suggestion is not None
+
+    @pytest.mark.asyncio
+    async def test_create_unknown_provider_raises(self) -> None:
+        """Test that unknown provider types raise ProviderError."""
+        with pytest.raises(ProviderError) as exc_info:
+            await create_provider("unknown-provider")  # type: ignore
+        assert "Unknown provider" in str(exc_info.value)
+        assert "unknown-provider" in str(exc_info.value)
+        assert exc_info.value.suggestion is not None
+        assert "copilot" in exc_info.value.suggestion
+
+    @pytest.mark.asyncio
+    async def test_provider_error_includes_valid_providers(self) -> None:
+        """Test that error message lists valid providers."""
+        with pytest.raises(ProviderError) as exc_info:
+            await create_provider("invalid")  # type: ignore
+        suggestion = exc_info.value.suggestion
+        assert suggestion is not None
+        assert "copilot" in suggestion
+        assert "openai-agents" in suggestion
+        assert "claude" in suggestion
+
+
+class TestProviderValidation:
+    """Tests for provider connection validation."""
+
+    @pytest.mark.asyncio
+    async def test_validation_called_by_default(self) -> None:
+        """Test that validation is called by default."""
+        # Since CopilotProvider.validate_connection returns True,
+        # this should succeed
+        provider = await create_provider("copilot")
+        assert isinstance(provider, CopilotProvider)
+        await provider.close()
+
+    @pytest.mark.asyncio
+    async def test_validation_can_be_skipped(self) -> None:
+        """Test that validation can be skipped."""
+        provider = await create_provider("copilot", validate=False)
+        assert isinstance(provider, CopilotProvider)
+        await provider.close()

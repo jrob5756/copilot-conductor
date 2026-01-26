@@ -3,3 +3,9 @@
 This module defines the agent provider abstraction and implementations
 for different LLM providers (Copilot SDK, etc.).
 """
+
+from copilot_conductor.providers.base import AgentOutput, AgentProvider
+from copilot_conductor.providers.copilot import CopilotProvider
+from copilot_conductor.providers.factory import create_provider
+
+__all__ = ["AgentOutput", "AgentProvider", "CopilotProvider", "create_provider"]
