@@ -3,3 +3,8 @@
 This module contains the workflow execution engine, context management,
 routing logic, and safety limits enforcement.
 """
+
+from copilot_conductor.engine.context import WorkflowContext
+from copilot_conductor.engine.workflow import WorkflowEngine
+
+__all__ = ["WorkflowContext", "WorkflowEngine"]

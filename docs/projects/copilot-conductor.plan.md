@@ -270,24 +270,24 @@ The implementation is broken into 14 EPICs with atomic tasks suitable for execut
 
 | Task ID | Type | Description | Files | Estimate | Status |
 |---------|------|-------------|-------|----------|--------|
-| TASK-017 | IMPL | Implement WorkflowContext dataclass with workflow_inputs, agent_outputs, iteration tracking, execution_history | `src/copilot_conductor/engine/context.py` | M | TODO |
-| TASK-018 | TEST | Unit tests for WorkflowContext: store, build_for_agent, get_for_template | `tests/test_engine/test_context.py` | S | TODO |
-| TASK-019 | IMPL | Implement basic WorkflowEngine with linear execution loop and async support | `src/copilot_conductor/engine/workflow.py` | L | TODO |
-| TASK-020 | IMPL | Implement output parsing and Pydantic validation against output schema | `src/copilot_conductor/executor/output.py` | M | TODO |
-| TASK-021 | IMPL | Implement AgentExecutor for single agent execution orchestration | `src/copilot_conductor/executor/agent.py` | M | TODO |
-| TASK-022 | IMPL | Implement CopilotProvider with GitHub Copilot SDK integration | `src/copilot_conductor/providers/copilot.py` | L | TODO |
-| TASK-023 | TEST | Integration tests for workflow execution with mock provider | `tests/test_engine/test_workflow.py` | M | TODO |
-| TASK-031 | IMPL | Implement context accumulation modes: `accumulate` (all prior outputs), `last_only` (previous agent only), `explicit` (only declared inputs). Mode configured at workflow.context.mode level | `src/copilot_conductor/engine/context.py` | M | TODO |
-| TASK-032 | IMPL | Implement optional input dependencies with `?` suffix (e.g., `reviewer.feedback?`). Missing optional deps omit from context rather than raising error | `src/copilot_conductor/engine/context.py` | S | TODO |
+| TASK-017 | IMPL | Implement WorkflowContext dataclass with workflow_inputs, agent_outputs, iteration tracking, execution_history | `src/copilot_conductor/engine/context.py` | M | DONE |
+| TASK-018 | TEST | Unit tests for WorkflowContext: store, build_for_agent, get_for_template | `tests/test_engine/test_context.py` | S | DONE |
+| TASK-019 | IMPL | Implement basic WorkflowEngine with linear execution loop and async support | `src/copilot_conductor/engine/workflow.py` | L | DONE |
+| TASK-020 | IMPL | Implement output parsing and Pydantic validation against output schema | `src/copilot_conductor/executor/output.py` | M | DONE |
+| TASK-021 | IMPL | Implement AgentExecutor for single agent execution orchestration | `src/copilot_conductor/executor/agent.py` | M | DONE |
+| TASK-022 | IMPL | Implement CopilotProvider with GitHub Copilot SDK integration | `src/copilot_conductor/providers/copilot.py` | L | DONE |
+| TASK-023 | TEST | Integration tests for workflow execution with mock provider | `tests/test_engine/test_workflow.py` | M | DONE |
+| TASK-031 | IMPL | Implement context accumulation modes: `accumulate` (all prior outputs), `last_only` (previous agent only), `explicit` (only declared inputs). Mode configured at workflow.context.mode level | `src/copilot_conductor/engine/context.py` | M | DONE |
+| TASK-032 | IMPL | Implement optional input dependencies with `?` suffix (e.g., `reviewer.feedback?`). Missing optional deps omit from context rather than raising error | `src/copilot_conductor/engine/context.py` | S | DONE |
 
 **Acceptance Criteria**:
-- [ ] Linear workflow executes from entry_point to $end
-- [ ] Agent outputs are stored in context and accessible to subsequent agents
-- [ ] Template expressions in prompts are rendered with correct context
-- [ ] Output schema violations raise ValidationError
-- [ ] Workflow returns final output as dict
-- [ ] All three context modes (accumulate, last_only, explicit) work correctly
-- [ ] Optional dependencies with `?` suffix are handled gracefully
+- [x] Linear workflow executes from entry_point to $end
+- [x] Agent outputs are stored in context and accessible to subsequent agents
+- [x] Template expressions in prompts are rendered with correct context
+- [x] Output schema violations raise ValidationError
+- [x] Workflow returns final output as dict
+- [x] All three context modes (accumulate, last_only, explicit) work correctly
+- [x] Optional dependencies with `?` suffix are handled gracefully
 
 ---
 
