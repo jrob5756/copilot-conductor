@@ -1,6 +1,7 @@
 """Unit tests for the CopilotProvider implementation."""
 
 import contextlib
+from typing import Any
 
 import pytest
 
@@ -9,20 +10,25 @@ from copilot_conductor.exceptions import ProviderError
 from copilot_conductor.providers.copilot import CopilotProvider, RetryConfig
 
 
+def stub_handler(agent: AgentDef, prompt: str, context: dict[str, Any]) -> dict[str, Any]:
+    """A simple mock handler that returns stub responses."""
+    return {"result": "stub response"}
+
+
 class TestCopilotProvider:
     """Tests for the CopilotProvider class."""
 
     @pytest.mark.asyncio
     async def test_validate_connection(self) -> None:
-        """Test that validate_connection returns True (stub behavior)."""
-        provider = CopilotProvider()
+        """Test that validate_connection returns True with mock handler."""
+        provider = CopilotProvider(mock_handler=stub_handler)
         result = await provider.validate_connection()
         assert result is True
 
     @pytest.mark.asyncio
     async def test_close(self) -> None:
         """Test that close cleans up the client."""
-        provider = CopilotProvider()
+        provider = CopilotProvider(mock_handler=stub_handler)
         provider._client = "some_client"  # Simulate having a client
         await provider.close()
         assert provider._client is None
@@ -30,7 +36,7 @@ class TestCopilotProvider:
     @pytest.mark.asyncio
     async def test_execute_returns_stub_output(self) -> None:
         """Test that execute returns a stub AgentOutput."""
-        provider = CopilotProvider()
+        provider = CopilotProvider(mock_handler=stub_handler)
         agent = AgentDef(
             name="test_agent",
             model="gpt-4",
@@ -48,7 +54,7 @@ class TestCopilotProvider:
     @pytest.mark.asyncio
     async def test_execute_uses_agent_model(self) -> None:
         """Test that execute uses the model from agent definition."""
-        provider = CopilotProvider()
+        provider = CopilotProvider(mock_handler=stub_handler)
         agent = AgentDef(
             name="test_agent",
             model="claude-3",
@@ -64,7 +70,7 @@ class TestCopilotProvider:
     @pytest.mark.asyncio
     async def test_execute_with_no_model(self) -> None:
         """Test that execute handles agent without model."""
-        provider = CopilotProvider()
+        provider = CopilotProvider(mock_handler=stub_handler)
         # Create agent with type="human_gate" to bypass model requirement
         # or just set model to None directly
         agent = AgentDef(
@@ -77,7 +83,7 @@ class TestCopilotProvider:
             context={},
             rendered_prompt="Test prompt",
         )
-        assert result.model == "unknown"
+        assert result.model == "mock"
 
 
 class TestCopilotProviderToolsSupport:
@@ -86,7 +92,7 @@ class TestCopilotProviderToolsSupport:
     @pytest.mark.asyncio
     async def test_execute_records_tools_in_call_history(self) -> None:
         """Test that tools are recorded in call history."""
-        provider = CopilotProvider()
+        provider = CopilotProvider(mock_handler=stub_handler)
         agent = AgentDef(
             name="test_agent",
             model="gpt-4",
@@ -108,7 +114,7 @@ class TestCopilotProviderToolsSupport:
     @pytest.mark.asyncio
     async def test_execute_with_empty_tools_list(self) -> None:
         """Test that empty tools list is recorded correctly."""
-        provider = CopilotProvider()
+        provider = CopilotProvider(mock_handler=stub_handler)
         agent = AgentDef(
             name="test_agent",
             model="gpt-4",
@@ -128,7 +134,7 @@ class TestCopilotProviderToolsSupport:
     @pytest.mark.asyncio
     async def test_execute_with_none_tools(self) -> None:
         """Test that None tools is recorded correctly."""
-        provider = CopilotProvider()
+        provider = CopilotProvider(mock_handler=stub_handler)
         agent = AgentDef(
             name="test_agent",
             model="gpt-4",
@@ -149,7 +155,7 @@ class TestCopilotProviderToolsSupport:
     async def test_mock_handler_receives_correct_tools(self) -> None:
         """Test that mock handler can verify tools passed to provider."""
 
-        def mock_handler(agent, prompt, context):
+        def mock_handler(agent: Any, prompt: Any, context: Any) -> dict[str, Any]:
             return {"result": "ok"}
 
         provider = CopilotProvider(mock_handler=mock_handler)
@@ -174,7 +180,7 @@ class TestCopilotProviderToolsSupport:
     @pytest.mark.asyncio
     async def test_multiple_agents_with_different_tools(self) -> None:
         """Test that multiple agent calls track tools independently."""
-        provider = CopilotProvider()
+        provider = CopilotProvider(mock_handler=stub_handler)
 
         agent1 = AgentDef(name="agent1", model="gpt-4", prompt="Prompt 1")
         agent2 = AgentDef(name="agent2", model="gpt-4", prompt="Prompt 2")

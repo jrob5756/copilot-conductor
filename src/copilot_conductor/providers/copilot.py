@@ -2,10 +2,6 @@
 
 This module provides the CopilotProvider class for executing agents
 using the GitHub Copilot SDK.
-
-Note: The actual SDK integration will be completed when the github-copilot-sdk
-package is available. This implementation provides a functional stub that
-can be used for testing and development.
 """
 
 from __future__ import annotations
@@ -22,6 +18,15 @@ from copilot_conductor.providers.base import AgentOutput, AgentProvider
 
 if TYPE_CHECKING:
     from copilot_conductor.config.schema import AgentDef
+
+# Try to import the Copilot SDK
+try:
+    from copilot import CopilotClient
+
+    COPILOT_SDK_AVAILABLE = True
+except ImportError:
+    COPILOT_SDK_AVAILABLE = False
+    CopilotClient = None  # type: ignore[misc, assignment]
 
 
 @dataclass
@@ -69,6 +74,7 @@ class CopilotProvider(AgentProvider):
         self,
         mock_handler: Callable[[AgentDef, str, dict[str, Any]], dict[str, Any]] | None = None,
         retry_config: RetryConfig | None = None,
+        model: str | None = None,
     ) -> None:
         """Initialize the Copilot provider.
 
@@ -76,12 +82,15 @@ class CopilotProvider(AgentProvider):
             mock_handler: Optional function that receives (agent, prompt, context)
                          and returns a dict output. Used for testing.
             retry_config: Optional retry configuration. Uses default if not provided.
+            model: Default model to use if not specified in agent. Defaults to "gpt-4o".
         """
         self._client: Any = None  # Will hold Copilot SDK client
         self._mock_handler = mock_handler
         self._call_history: list[dict[str, Any]] = []
         self._retry_config = retry_config or RetryConfig()
         self._retry_history: list[dict[str, Any]] = []  # For testing retries
+        self._default_model = model or "gpt-4o"
+        self._started = False
 
     async def execute(
         self,
@@ -116,21 +125,9 @@ class CopilotProvider(AgentProvider):
             "model": agent.model,
         })
 
-        # If mock handler is configured, use it
-        if self._mock_handler is not None:
-            return await self._execute_with_retry(
-                agent, context, rendered_prompt, tools
-            )
-
-        # Stub implementation for when SDK is not available
-        # Returns a response based on the expected output schema
-        content = self._generate_stub_output(agent)
-
-        return AgentOutput(
-            content=content,
-            raw_response=json.dumps(content),
-            tokens_used=0,
-            model=agent.model or "unknown",
+        # Use retry logic for both mock and real SDK calls
+        return await self._execute_with_retry(
+            agent, context, rendered_prompt, tools
         )
 
     async def _execute_with_retry(
@@ -242,19 +239,146 @@ class CopilotProvider(AgentProvider):
             # Mock handler for testing
             return self._mock_handler(agent, rendered_prompt, context)
 
-        # TODO: Real SDK implementation
-        # This would be something like:
-        # response = await self._client.chat.completions.create(
-        #     model=agent.model,
-        #     messages=[
-        #         {"role": "system", "content": agent.system_prompt or ""},
-        #         {"role": "user", "content": rendered_prompt},
-        #     ],
-        #     tools=tools,
-        # )
-        # return json.loads(response.choices[0].message.content)
+        # Use the real Copilot SDK
+        if not COPILOT_SDK_AVAILABLE:
+            raise ProviderError(
+                "GitHub Copilot SDK is not installed",
+                suggestion="Install with: pip install github-copilot-sdk",
+                is_retryable=False,
+            )
 
-        return self._generate_stub_output(agent)
+        # Ensure client is started
+        if not self._started:
+            await self._ensure_client_started()
+
+        model = agent.model or self._default_model
+
+        # Build the full prompt with system prompt if provided
+        full_prompt = rendered_prompt
+        if agent.system_prompt:
+            full_prompt = f"System: {agent.system_prompt}\n\nUser: {rendered_prompt}"
+
+        # If agent has output schema, instruct to respond in JSON
+        if agent.output:
+            schema_desc = json.dumps(
+                {name: field.type for name, field in agent.output.items()},
+                indent=2,
+            )
+            full_prompt += (
+                f"\n\nRespond with a JSON object matching this schema:\n{schema_desc}"
+            )
+
+        try:
+            # Create a session and send the prompt
+            session = await self._client.create_session({"model": model})
+
+            # Collect response using event handler
+            response_content = ""
+            done = asyncio.Event()
+            error_message: str | None = None
+
+            def on_event(event: Any) -> None:
+                nonlocal response_content, error_message
+                event_type = event.type.value if hasattr(event.type, "value") else str(event.type)
+
+                if event_type == "assistant.message":
+                    response_content = event.data.content
+                elif event_type == "session.idle":
+                    done.set()
+                elif event_type == "error":
+                    error_message = getattr(event.data, "message", str(event.data))
+                    done.set()
+
+            session.on(on_event)
+            await session.send({"prompt": full_prompt})
+
+            # Wait for completion with timeout
+            try:
+                await asyncio.wait_for(done.wait(), timeout=120.0)
+            except asyncio.TimeoutError:
+                await session.destroy()
+                raise ProviderError(
+                    "Copilot SDK request timed out after 120 seconds",
+                    suggestion="Try a simpler prompt or check your connection",
+                    is_retryable=True,
+                )
+
+            await session.destroy()
+
+            if error_message:
+                raise ProviderError(
+                    f"Copilot SDK error: {error_message}",
+                    is_retryable=True,
+                )
+
+            # Parse the response as JSON if we have an output schema
+            if agent.output and response_content:
+                try:
+                    # Try to extract JSON from the response
+                    return self._extract_json(response_content)
+                except (json.JSONDecodeError, ValueError) as e:
+                    # Return as string result if JSON parsing fails
+                    return {"result": response_content, "_parse_error": str(e)}
+
+            return {"result": response_content}
+
+        except ProviderError:
+            raise
+        except Exception as e:
+            raise ProviderError(
+                f"Copilot SDK call failed: {e}",
+                suggestion="Check that copilot CLI is installed and authenticated",
+                is_retryable=True,
+            ) from e
+
+    def _extract_json(self, content: str) -> dict[str, Any]:
+        """Extract JSON from response content.
+
+        Handles responses that may have markdown code blocks or extra text.
+
+        Args:
+            content: The response content string.
+
+        Returns:
+            Parsed JSON as dict.
+
+        Raises:
+            ValueError: If no valid JSON found.
+        """
+        # Try direct parse first
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError:
+            pass
+
+        # Try to find JSON in code blocks
+        import re
+
+        # Look for ```json ... ``` blocks
+        json_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", content, re.DOTALL)
+        if json_match:
+            try:
+                return json.loads(json_match.group(1).strip())
+            except json.JSONDecodeError:
+                pass
+
+        # Look for {...} pattern
+        brace_match = re.search(r"\{.*\}", content, re.DOTALL)
+        if brace_match:
+            try:
+                return json.loads(brace_match.group(0))
+            except json.JSONDecodeError:
+                pass
+
+        raise ValueError(f"Could not extract JSON from response: {content[:200]}...")
+
+    async def _ensure_client_started(self) -> None:
+        """Ensure the Copilot client is started."""
+        if self._client is None:
+            self._client = CopilotClient()
+        if not self._started:
+            await self._client.start()
+            self._started = True
 
     def _calculate_delay(self, attempt: int, config: RetryConfig) -> float:
         """Calculate delay with exponential backoff and jitter.
@@ -321,20 +445,45 @@ class CopilotProvider(AgentProvider):
         Returns:
             True if connection is valid, False otherwise.
 
-        Note:
-            Returns True for stub implementation.
-            Real implementation will check SDK authentication.
+        Raises:
+            ProviderError: If SDK is not available or connection fails.
         """
-        # For stub implementation, always return True
-        # Real implementation will verify SDK connection
-        return True
+        if self._mock_handler is not None:
+            return True
+
+        if not COPILOT_SDK_AVAILABLE:
+            raise ProviderError(
+                "GitHub Copilot SDK is not installed",
+                suggestion="Install with: pip install github-copilot-sdk",
+                is_retryable=False,
+            )
+
+        try:
+            await self._ensure_client_started()
+            return True
+        except Exception as e:
+            raise ProviderError(
+                f"Failed to connect to Copilot SDK: {e}",
+                suggestion=(
+                    "Ensure the Copilot CLI is installed and you have an active "
+                    "GitHub Copilot subscription. Install CLI: "
+                    "https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli"
+                ),
+                is_retryable=False,
+            ) from e
 
     async def close(self) -> None:
         """Close Copilot SDK client.
 
         Releases any resources held by the SDK client.
         """
+        if self._client is not None and self._started:
+            try:
+                await self._client.stop()
+            except Exception:
+                pass  # Ignore errors during cleanup
         self._client = None
+        self._started = False
         self._call_history.clear()
         self._retry_history.clear()
 
