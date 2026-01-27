@@ -5,6 +5,7 @@ This module defines the main Typer app and global options.
 
 from __future__ import annotations
 
+import contextvars
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -24,6 +25,16 @@ app = typer.Typer(
 # Rich console for formatted output
 console = Console(stderr=True)
 output_console = Console()
+
+# Context variable for verbose mode
+verbose_mode: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "verbose_mode", default=False
+)
+
+
+def is_verbose() -> bool:
+    """Check if verbose mode is enabled."""
+    return verbose_mode.get()
 
 
 def version_callback(value: bool) -> None:
@@ -45,9 +56,17 @@ def main(
             is_eager=True,
         ),
     ] = False,
+    verbose: Annotated[
+        bool,
+        typer.Option(
+            "--verbose",
+            "-V",
+            help="Show detailed execution progress and logging.",
+        ),
+    ] = False,
 ) -> None:
     """Copilot Conductor - Orchestrate multi-agent workflows defined in YAML."""
-    pass
+    verbose_mode.set(verbose)
 
 
 @app.command()
@@ -161,3 +180,114 @@ def run(
         else:
             console.print(f"[bold red]Unexpected error:[/bold red] {e}")
         raise typer.Exit(code=1) from None
+
+
+@app.command()
+def validate(
+    workflow: Annotated[
+        Path,
+        typer.Argument(
+            help="Path to the workflow YAML file to validate.",
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            readable=True,
+            resolve_path=True,
+        ),
+    ],
+) -> None:
+    """Validate a workflow YAML file without executing it.
+
+    Checks the workflow file for:
+    - Valid YAML syntax
+    - Valid schema structure
+    - Valid agent references
+    - Valid route targets
+
+    \b
+    Examples:
+        conductor validate workflow.yaml
+        conductor validate ./examples/my-workflow.yaml
+    """
+    from copilot_conductor.cli.validate import (
+        display_validation_success,
+        validate_workflow,
+    )
+
+    is_valid, config = validate_workflow(workflow, output_console)
+
+    if is_valid and config is not None:
+        display_validation_success(config, workflow, output_console)
+    else:
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def init(
+    name: Annotated[
+        str,
+        typer.Argument(
+            help="Name for the new workflow.",
+        ),
+    ],
+    template: Annotated[
+        str,
+        typer.Option(
+            "--template",
+            "-t",
+            help="Template to use (see 'conductor templates' for options).",
+        ),
+    ] = "simple",
+    output: Annotated[
+        Path | None,
+        typer.Option(
+            "--output",
+            "-o",
+            help="Output file path. Defaults to <name>.yaml in current directory.",
+        ),
+    ] = None,
+) -> None:
+    """Initialize a new workflow file from a template.
+
+    Creates a new workflow YAML file based on the specified template.
+    Use 'conductor templates' to see available templates.
+
+    \b
+    Examples:
+        conductor init my-workflow
+        conductor init my-workflow --template loop
+        conductor init my-workflow -t human-gate -o ./workflows/my-workflow.yaml
+    """
+    from copilot_conductor.cli.init import create_workflow_file, get_template
+
+    # Check if template exists
+    template_info = get_template(template)
+    if template_info is None:
+        console.print(f"[bold red]Error:[/bold red] Template '{template}' not found.")
+        console.print("[dim]Use 'conductor templates' to see available templates.[/dim]")
+        raise typer.Exit(code=1)
+
+    try:
+        create_workflow_file(name, template, output, output_console)
+    except FileExistsError as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
+        console.print("[dim]Use --output to specify a different path.[/dim]")
+        raise typer.Exit(code=1) from None
+    except ValueError as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
+        raise typer.Exit(code=1) from None
+
+
+@app.command()
+def templates() -> None:
+    """List available workflow templates.
+
+    Shows all templates that can be used with 'conductor init'.
+
+    \b
+    Examples:
+        conductor templates
+    """
+    from copilot_conductor.cli.init import display_templates
+
+    display_templates(output_console)

@@ -452,17 +452,17 @@ The implementation is broken into 14 EPICs with atomic tasks suitable for execut
 
 | Task ID | Type | Description | Files | Estimate | Status |
 |---------|------|-------------|-------|----------|--------|
-| TASK-055 | IMPL | Implement `conductor validate` command with detailed error reporting | `src/copilot_conductor/cli/validate.py` | M | TODO |
-| TASK-056 | TEST | Tests for validate command with valid/invalid files | `tests/test_cli/test_validate.py` | S | TODO |
-| TASK-057 | IMPL | Implement `conductor init` and `conductor templates` commands with template scaffolding | `src/copilot_conductor/cli/init.py`, `src/copilot_conductor/templates/` | M | TODO |
-| TASK-058 | IMPL | Implement --verbose flag with Rich logging showing context, prompts, responses, timing | `src/copilot_conductor/cli/app.py`, `src/copilot_conductor/cli/run.py` | M | TODO |
+| TASK-055 | IMPL | Implement `conductor validate` command with detailed error reporting | `src/copilot_conductor/cli/validate.py` | M | DONE |
+| TASK-056 | TEST | Tests for validate command with valid/invalid files | `tests/test_cli/test_validate.py` | S | DONE |
+| TASK-057 | IMPL | Implement `conductor init` and `conductor templates` commands with template scaffolding | `src/copilot_conductor/cli/init.py`, `src/copilot_conductor/templates/` | M | DONE |
+| TASK-058 | IMPL | Implement --verbose flag with Rich logging showing context, prompts, responses, timing | `src/copilot_conductor/cli/app.py`, `src/copilot_conductor/cli/run.py` | M | DONE |
 
 **Acceptance Criteria**:
-- [ ] `validate` reports all schema errors without execution
-- [ ] `init <name>` creates workflow file from template
-- [ ] `templates` lists available templates with descriptions
-- [ ] `--verbose` shows detailed execution progress
-- [ ] All commands have `--help` documentation
+- [x] `validate` reports all schema errors without execution
+- [x] `init <name>` creates workflow file from template
+- [x] `templates` lists available templates with descriptions
+- [x] `--verbose` shows detailed execution progress
+- [x] All commands have `--help` documentation
 
 ---
 

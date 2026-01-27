@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -22,6 +23,53 @@ from copilot_conductor.providers.factory import create_provider
 
 if TYPE_CHECKING:
     pass
+
+# Verbose console for logging (stderr)
+_verbose_console = Console(stderr=True)
+
+
+def verbose_log(message: str, style: str = "dim") -> None:
+    """Log a message if verbose mode is enabled.
+
+    Args:
+        message: The message to log.
+        style: Rich style for the message.
+    """
+    from copilot_conductor.cli.app import is_verbose
+
+    if is_verbose():
+        _verbose_console.print(f"[{style}]{message}[/{style}]")
+
+
+def verbose_log_section(title: str, content: str, max_length: int = 500) -> None:
+    """Log a section with title if verbose mode is enabled.
+
+    Args:
+        title: Section title.
+        content: Section content (will be truncated if too long).
+        max_length: Maximum content length before truncation.
+    """
+    from copilot_conductor.cli.app import is_verbose
+
+    if is_verbose():
+        if len(content) > max_length:
+            content = content[:max_length] + "..."
+        _verbose_console.print(
+            Panel(content, title=f"[cyan]{title}[/cyan]", border_style="dim")
+        )
+
+
+def verbose_log_timing(operation: str, elapsed: float) -> None:
+    """Log timing information if verbose mode is enabled.
+
+    Args:
+        operation: Description of the operation.
+        elapsed: Elapsed time in seconds.
+    """
+    from copilot_conductor.cli.app import is_verbose
+
+    if is_verbose():
+        _verbose_console.print(f"[dim]⏱ {operation}: {elapsed:.2f}s[/dim]")
 
 
 def parse_input_flags(raw_inputs: list[str]) -> dict[str, Any]:
@@ -174,20 +222,44 @@ async def run_workflow_async(
     Raises:
         ConductorError: If workflow execution fails.
     """
+    start_time = time.time()
+
+    # Log workflow loading
+    verbose_log(f"Loading workflow: {workflow_path}")
+
     # Load configuration
+    load_start = time.time()
     config = load_config(workflow_path)
+    verbose_log_timing("Configuration loaded", time.time() - load_start)
+
+    # Log workflow details
+    verbose_log(f"Workflow: {config.workflow.name}")
+    verbose_log(f"Entry point: {config.workflow.entry_point}")
+    verbose_log(f"Agents: {len(config.agents)}")
+
+    if inputs:
+        verbose_log_section("Workflow Inputs", json.dumps(inputs, indent=2))
 
     # Apply provider override if specified
     if provider_override:
+        verbose_log(f"Provider override: {provider_override}", style="yellow")
         config.workflow.runtime.provider = provider_override  # type: ignore[assignment]
 
     # Create provider
+    verbose_log(f"Creating provider: {config.workflow.runtime.provider}")
     provider = await create_provider(config.workflow.runtime.provider)
 
     try:
         # Create and run workflow engine
+        verbose_log("Starting workflow execution...")
+
         engine = WorkflowEngine(config, provider, skip_gates=skip_gates)
         result = await engine.run(inputs)
+
+        # Log completion
+        verbose_log_timing("Total workflow execution", time.time() - start_time)
+        verbose_log("Workflow completed successfully", style="green")
+
         return result
     finally:
         await provider.close()
