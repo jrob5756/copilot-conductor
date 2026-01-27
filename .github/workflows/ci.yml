@@ -1,0 +1,103 @@
+# Continuous Integration workflow for Copilot Conductor
+#
+# Runs on:
+# - Push to main branch
+# - Pull requests to main branch
+#
+# Jobs:
+# - lint: Runs ruff linter
+# - test: Runs pytest with coverage
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Run ruff linter
+        run: uv run ruff check .
+
+      - name: Run ruff formatter check
+        run: uv run ruff format --check .
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Run tests with coverage
+        run: uv run pytest --cov=src/copilot_conductor --cov-report=xml --cov-report=term-missing
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  # Optional: Type checking with mypy
+  # Uncomment if you want to enforce type checking
+  # typecheck:
+  #   name: Type Check
+  #   runs-on: ubuntu-latest
+  #
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
+  #
+  #     - name: Install uv
+  #       uses: astral-sh/setup-uv@v4
+  #       with:
+  #         version: "latest"
+  #         enable-cache: true
+  #
+  #     - name: Set up Python
+  #       run: uv python install ${{ env.PYTHON_VERSION }}
+  #
+  #     - name: Install dependencies
+  #       run: uv sync --group dev
+  #
+  #     - name: Run mypy
+  #       run: uv run mypy src/

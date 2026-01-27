@@ -525,18 +525,18 @@ The implementation is broken into 14 EPICs with atomic tasks suitable for execut
 
 | Task ID | Type | Description | Files | Estimate | Status |
 |---------|------|-------------|-------|----------|--------|
-| TASK-066 | DOCS | Add docstrings to all public APIs with type hints | All `src/` files | M | TODO |
-| TASK-067 | DOCS | Create README.md with quick start, examples, and CLI reference | `README.md` | M | TODO |
-| TASK-073 | IMPL | Create example workflow files (simple-qa, design-review, research-assistant) | `examples/*.yaml` | S | TODO |
-| TASK-074 | IMPL | Configure GitHub Actions for CI (lint with ruff, type check with ty, test with pytest) | `.github/workflows/ci.yml` | S | TODO |
-| TASK-075 | IMPL | Configure PyPI publishing workflow with version tagging | `.github/workflows/publish.yml`, `pyproject.toml` | S | TODO |
+| TASK-066 | DOCS | Add docstrings to all public APIs with type hints | All `src/` files | M | DONE |
+| TASK-067 | DOCS | Create README.md with quick start, examples, and CLI reference | `README.md` | M | DONE |
+| TASK-073 | IMPL | Create example workflow files (simple-qa, design-review, research-assistant) | `examples/*.yaml` | S | DONE |
+| TASK-074 | IMPL | Configure GitHub Actions for CI (lint with ruff, type check with ty, test with pytest) | `.github/workflows/ci.yml` | S | DONE |
+| TASK-075 | IMPL | Configure PyPI publishing workflow with version tagging | `.github/workflows/publish.yml`, `pyproject.toml` | S | DONE |
 
 **Acceptance Criteria**:
-- [ ] All public functions have docstrings with type hints
-- [ ] README has installation, quick start, and CLI reference
-- [ ] Examples cover: simple Q&A, loop pattern, human gate, tools
-- [ ] CI runs on every PR
-- [ ] Package installable via `uvx copilot-conductor`
+- [x] All public functions have docstrings with type hints
+- [x] README has installation, quick start, and CLI reference
+- [x] Examples cover: simple Q&A, loop pattern, human gate, tools
+- [x] CI runs on every PR
+- [x] Package installable via `uvx copilot-conductor`
 
 ---
 
