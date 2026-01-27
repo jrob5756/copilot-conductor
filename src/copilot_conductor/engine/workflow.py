@@ -6,6 +6,7 @@ multi-agent workflow execution.
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from copilot_conductor.engine.context import WorkflowContext
@@ -18,6 +19,58 @@ from copilot_conductor.executor.template import TemplateRenderer
 if TYPE_CHECKING:
     from copilot_conductor.config.schema import AgentDef, WorkflowConfig
     from copilot_conductor.providers.base import AgentProvider
+
+
+@dataclass
+class ExecutionStep:
+    """A single step in the execution plan.
+
+    Represents an agent that will be executed during workflow execution,
+    along with its configuration and possible routing destinations.
+    """
+
+    agent_name: str
+    """Name of the agent."""
+
+    agent_type: str
+    """Type: 'agent' or 'human_gate'."""
+
+    model: str | None
+    """Model used by this agent."""
+
+    routes: list[dict[str, Any]] = field(default_factory=list)
+    """Possible routes from this agent."""
+
+    is_loop_target: bool = False
+    """True if this agent could be a loop-back target."""
+
+
+@dataclass
+class ExecutionPlan:
+    """Represents the workflow execution plan without actually running.
+
+    This provides a static analysis of the workflow structure, showing
+    all possible agents that may be executed and their routing paths.
+    Used by the --dry-run flag to display the execution plan.
+    """
+
+    workflow_name: str
+    """Name of the workflow."""
+
+    entry_point: str
+    """Name of the first agent."""
+
+    steps: list[ExecutionStep] = field(default_factory=list)
+    """Ordered steps in the execution plan."""
+
+    max_iterations: int = 10
+    """Maximum iterations configured."""
+
+    timeout_seconds: int = 600
+    """Timeout configured."""
+
+    possible_paths: list[list[str]] = field(default_factory=list)
+    """Possible execution paths through the workflow."""
 
 
 class WorkflowEngine:
@@ -264,3 +317,109 @@ class WorkflowEngine:
             "max_iterations": self.limits.max_iterations,
             "timeout_seconds": self.limits.timeout_seconds,
         }
+
+    def build_execution_plan(self) -> ExecutionPlan:
+        """Build an execution plan by analyzing the workflow.
+
+        This traces all possible paths through the workflow without
+        actually executing any agents. Used for --dry-run mode.
+
+        Returns:
+            ExecutionPlan with steps and possible paths.
+        """
+        plan = ExecutionPlan(
+            workflow_name=self.config.workflow.name,
+            entry_point=self.config.workflow.entry_point,
+            max_iterations=self.config.workflow.limits.max_iterations,
+            timeout_seconds=self.config.workflow.limits.timeout_seconds,
+        )
+
+        visited: set[str] = set()
+        loop_targets: set[str] = set()
+
+        # Trace from entry_point
+        self._trace_path(
+            self.config.workflow.entry_point,
+            plan,
+            visited,
+            loop_targets,
+        )
+
+        # Mark loop targets in steps
+        for step in plan.steps:
+            if step.agent_name in loop_targets:
+                step.is_loop_target = True
+
+        return plan
+
+    def _trace_path(
+        self,
+        agent_name: str,
+        plan: ExecutionPlan,
+        visited: set[str],
+        loop_targets: set[str],
+    ) -> None:
+        """Recursively trace execution path from an agent.
+
+        This method performs a depth-first traversal of the workflow graph,
+        building up the execution plan with all reachable agents.
+
+        Args:
+            agent_name: Name of the current agent to trace.
+            plan: The execution plan being built.
+            visited: Set of already visited agent names (to detect loops).
+            loop_targets: Set of agents that are targets of loop-back routes.
+        """
+        if agent_name == "$end":
+            return
+
+        agent = self._find_agent(agent_name)
+        if agent is None:
+            return
+
+        # Check for loop
+        is_loop = agent_name in visited
+        if is_loop:
+            # Mark as loop target and don't recurse further
+            loop_targets.add(agent_name)
+            return
+
+        visited.add(agent_name)
+
+        # Get routes from the agent (handle both regular agents and human gates)
+        routes_info: list[dict[str, Any]] = []
+        route_targets: list[str] = []
+
+        if agent.routes:
+            for route in agent.routes:
+                routes_info.append({
+                    "to": route.to,
+                    "when": route.when,
+                    "is_conditional": route.when is not None,
+                })
+                route_targets.append(route.to)
+        elif agent.options:
+            # Human gate with options
+            for option in agent.options:
+                routes_info.append({
+                    "to": option.route,
+                    "when": f"selection == '{option.value}'",
+                    "is_conditional": True,
+                    "label": option.label,
+                })
+                route_targets.append(option.route)
+
+        # Build step
+        step = ExecutionStep(
+            agent_name=agent_name,
+            agent_type=agent.type or "agent",
+            model=agent.model,
+            routes=routes_info,
+            is_loop_target=False,  # Will be updated after traversal
+        )
+        plan.steps.append(step)
+
+        # Trace routes
+        for target in route_targets:
+            if target != "$end":
+                self._trace_path(target, plan, visited, loop_targets)

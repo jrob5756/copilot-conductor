@@ -79,6 +79,13 @@ def run(
             help="Workflow inputs in name=value format. Can be repeated.",
         ),
     ] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="Show execution plan without running the workflow.",
+        ),
+    ] = False,
 ) -> None:
     """Run a workflow from a YAML file.
 
@@ -91,6 +98,7 @@ def run(
         conductor run workflow.yaml --input question="What is Python?"
         conductor run workflow.yaml -i question="Hello" -i context="Programming"
         conductor run workflow.yaml --provider copilot
+        conductor run workflow.yaml --dry-run
     """
     import asyncio
     import json
@@ -98,9 +106,26 @@ def run(
     # Import here to avoid circular imports and defer heavy imports
     from copilot_conductor.cli.run import (
         InputCollector,
+        build_dry_run_plan,
+        display_execution_plan,
         parse_input_flags,
         run_workflow_async,
     )
+
+    # Handle dry-run mode
+    if dry_run:
+        try:
+            plan = build_dry_run_plan(workflow)
+            display_execution_plan(plan, output_console)
+            return
+        except Exception as e:
+            from copilot_conductor.exceptions import ConductorError
+
+            if isinstance(e, ConductorError):
+                console.print(f"[bold red]Error:[/bold red] {e}")
+            else:
+                console.print(f"[bold red]Unexpected error:[/bold red] {e}")
+            raise typer.Exit(code=1) from None
 
     # Collect inputs from both --input and --input.* patterns
     inputs: dict[str, Any] = {}

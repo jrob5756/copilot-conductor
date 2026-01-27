@@ -382,16 +382,16 @@ The implementation is broken into 14 EPICs with atomic tasks suitable for execut
 
 | Task ID | Type | Description | Files | Estimate | Status |
 |---------|------|-------------|-------|----------|--------|
-| TASK-045 | IMPL | Implement ExecutionPlan builder that traces workflow without executing | `src/copilot_conductor/engine/workflow.py` | M | TODO |
-| TASK-046 | IMPL | Implement Rich-formatted dry-run output showing agent sequence, models, and conditions | `src/copilot_conductor/cli/run.py` | M | TODO |
-| TASK-047 | TEST | Tests for dry-run mode with various workflow patterns | `tests/test_cli/test_run.py` | S | TODO |
+| TASK-045 | IMPL | Implement ExecutionPlan builder that traces workflow without executing | `src/copilot_conductor/engine/workflow.py` | M | DONE |
+| TASK-046 | IMPL | Implement Rich-formatted dry-run output showing agent sequence, models, and conditions | `src/copilot_conductor/cli/run.py` | M | DONE |
+| TASK-047 | TEST | Tests for dry-run mode with various workflow patterns | `tests/test_cli/test_run.py` | S | DONE |
 
 **Acceptance Criteria**:
-- [ ] `--dry-run` shows execution plan without calling SDK
-- [ ] Plan shows agent sequence with models
-- [ ] Conditional routes show possible branches
-- [ ] Loop patterns are indicated
-- [ ] No network calls made during dry-run
+- [x] `--dry-run` shows execution plan without calling SDK
+- [x] Plan shows agent sequence with models
+- [x] Conditional routes show possible branches
+- [x] Loop patterns are indicated
+- [x] No network calls made during dry-run
 
 ---
 
