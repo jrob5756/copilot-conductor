@@ -109,7 +109,7 @@ class WorkflowEngine:
         self.provider = provider
         self.skip_gates = skip_gates
         self.context = WorkflowContext()
-        self.executor = AgentExecutor(provider)
+        self.executor = AgentExecutor(provider, workflow_tools=config.tools)
         self.renderer = TemplateRenderer()
         self.router = Router()
         self.limits = LimitEnforcer(

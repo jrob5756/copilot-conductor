@@ -430,15 +430,15 @@ The implementation is broken into 14 EPICs with atomic tasks suitable for execut
 
 | Task ID | Type | Description | Files | Estimate | Status |
 |---------|------|-------------|-------|----------|--------|
-| TASK-053 | IMPL | Implement tool configuration parsing at workflow level (tools list in WorkflowConfig) | `src/copilot_conductor/config/schema.py` | S | TODO |
-| TASK-054 | IMPL | Pass tool list to CopilotProvider for SDK resolution. Support agent-level tools (all, subset, none) | `src/copilot_conductor/providers/copilot.py`, `src/copilot_conductor/executor/agent.py` | M | TODO |
-| TASK-071 | TEST | Tests for tool configuration and passing | `tests/test_providers/test_copilot.py` | S | TODO |
+| TASK-053 | IMPL | Implement tool configuration parsing at workflow level (tools list in WorkflowConfig) | `src/copilot_conductor/config/schema.py` | S | DONE |
+| TASK-054 | IMPL | Pass tool list to CopilotProvider for SDK resolution. Support agent-level tools (all, subset, none) | `src/copilot_conductor/providers/copilot.py`, `src/copilot_conductor/executor/agent.py` | M | DONE |
+| TASK-071 | TEST | Tests for tool configuration and passing | `tests/test_providers/test_copilot.py`, `tests/test_executor/test_agent.py` | S | DONE |
 
 **Acceptance Criteria**:
-- [ ] Workflow-level tools list is parsed from YAML
-- [ ] Agent-level tools (subset, all, none) work correctly
-- [ ] Tools are passed to SDK provider
-- [ ] Unknown tools produce clear error
+- [x] Workflow-level tools list is parsed from YAML
+- [x] Agent-level tools (subset, all, none) work correctly
+- [x] Tools are passed to SDK provider
+- [x] Unknown tools produce clear error
 
 ---
 

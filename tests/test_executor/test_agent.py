@@ -4,6 +4,7 @@ Tests cover:
 - Prompt rendering with context
 - Provider execution
 - Output validation
+- Tool resolution
 - Error handling
 """
 
@@ -11,7 +12,7 @@ import pytest
 
 from copilot_conductor.config.schema import AgentDef, OutputField
 from copilot_conductor.exceptions import TemplateError, ValidationError
-from copilot_conductor.executor.agent import AgentExecutor
+from copilot_conductor.executor.agent import AgentExecutor, resolve_agent_tools
 from copilot_conductor.providers.base import AgentOutput
 from copilot_conductor.providers.copilot import CopilotProvider
 
@@ -211,13 +212,13 @@ class TestAgentExecutorWithTools:
     """Tests for agent execution with tools."""
 
     @pytest.mark.asyncio
-    async def test_execute_passes_tools_to_provider(self) -> None:
-        """Test that tools are passed to the provider."""
+    async def test_execute_passes_resolved_tools_to_provider(self) -> None:
+        """Test that resolved tools are passed to the provider."""
         agent = AgentDef(
             name="test",
             model="gpt-4",
             prompt="Use tools",
-            tools=["web_search", "calculator"],
+            tools=["web_search", "calculator"],  # Subset of workflow tools
             output=None,
         )
 
@@ -225,21 +226,23 @@ class TestAgentExecutorWithTools:
             return {"result": "ok"}
 
         provider = CopilotProvider(mock_handler=mock_handler)
-        executor = AgentExecutor(provider)
+        # Workflow has these tools defined
+        executor = AgentExecutor(provider, workflow_tools=["web_search", "calculator", "file_read"])
 
         await executor.execute(agent, {})
 
         call_history = provider.get_call_history()
+        # Agent should get only the tools it requested (subset of workflow tools)
         assert call_history[0]["tools"] == ["web_search", "calculator"]
 
     @pytest.mark.asyncio
-    async def test_execute_with_no_tools(self) -> None:
-        """Test execution with no tools specified."""
+    async def test_execute_with_no_agent_tools_gets_all_workflow_tools(self) -> None:
+        """Test execution with no agent tools specified gets all workflow tools."""
         agent = AgentDef(
             name="test",
             model="gpt-4",
-            prompt="No tools",
-            tools=None,
+            prompt="All tools",
+            tools=None,  # None = all workflow tools
             output=None,
         )
 
@@ -247,21 +250,22 @@ class TestAgentExecutorWithTools:
             return {"result": "ok"}
 
         provider = CopilotProvider(mock_handler=mock_handler)
-        executor = AgentExecutor(provider)
+        executor = AgentExecutor(provider, workflow_tools=["web_search", "file_read"])
 
         await executor.execute(agent, {})
 
         call_history = provider.get_call_history()
-        assert call_history[0]["tools"] is None
+        # Agent should get all workflow tools
+        assert call_history[0]["tools"] == ["web_search", "file_read"]
 
     @pytest.mark.asyncio
-    async def test_execute_with_empty_tools(self) -> None:
-        """Test execution with empty tools list."""
+    async def test_execute_with_empty_tools_gets_no_tools(self) -> None:
+        """Test execution with empty tools list gets no tools."""
         agent = AgentDef(
             name="test",
             model="gpt-4",
             prompt="No tools allowed",
-            tools=[],
+            tools=[],  # Empty = no tools
             output=None,
         )
 
@@ -269,12 +273,148 @@ class TestAgentExecutorWithTools:
             return {"result": "ok"}
 
         provider = CopilotProvider(mock_handler=mock_handler)
-        executor = AgentExecutor(provider)
+        executor = AgentExecutor(provider, workflow_tools=["web_search", "file_read"])
 
         await executor.execute(agent, {})
 
         call_history = provider.get_call_history()
+        # Agent should get no tools
         assert call_history[0]["tools"] == []
+
+    @pytest.mark.asyncio
+    async def test_execute_with_no_workflow_tools(self) -> None:
+        """Test execution when workflow has no tools defined."""
+        agent = AgentDef(
+            name="test",
+            model="gpt-4",
+            prompt="No workflow tools",
+            tools=None,  # None = all workflow tools (which is empty)
+            output=None,
+        )
+
+        def mock_handler(agent, prompt, context):
+            return {"result": "ok"}
+
+        provider = CopilotProvider(mock_handler=mock_handler)
+        executor = AgentExecutor(provider)  # No workflow_tools specified
+
+        await executor.execute(agent, {})
+
+        call_history = provider.get_call_history()
+        # Agent should get empty list when workflow has no tools
+        assert call_history[0]["tools"] == []
+
+    @pytest.mark.asyncio
+    async def test_execute_with_unknown_tools_raises_error(self) -> None:
+        """Test that agent specifying unknown tools raises ValidationError."""
+        agent = AgentDef(
+            name="test",
+            model="gpt-4",
+            prompt="Unknown tools",
+            tools=["unknown_tool", "web_search"],  # unknown_tool not in workflow
+            output=None,
+        )
+
+        def mock_handler(agent, prompt, context):
+            return {"result": "ok"}
+
+        provider = CopilotProvider(mock_handler=mock_handler)
+        executor = AgentExecutor(provider, workflow_tools=["web_search", "file_read"])
+
+        with pytest.raises(ValidationError, match="unknown tools"):
+            await executor.execute(agent, {})
+
+
+class TestResolveAgentTools:
+    """Tests for the resolve_agent_tools function."""
+
+    def test_none_agent_tools_returns_all_workflow_tools(self) -> None:
+        """Test that None agent tools returns all workflow tools."""
+        workflow_tools = ["tool_a", "tool_b", "tool_c"]
+        result = resolve_agent_tools(None, workflow_tools)
+        assert result == ["tool_a", "tool_b", "tool_c"]
+
+    def test_none_agent_tools_returns_copy(self) -> None:
+        """Test that returned list is a copy, not the original."""
+        workflow_tools = ["tool_a", "tool_b"]
+        result = resolve_agent_tools(None, workflow_tools)
+        result.append("tool_c")
+        assert workflow_tools == ["tool_a", "tool_b"]
+
+    def test_empty_agent_tools_returns_empty_list(self) -> None:
+        """Test that empty agent tools returns empty list."""
+        workflow_tools = ["tool_a", "tool_b", "tool_c"]
+        result = resolve_agent_tools([], workflow_tools)
+        assert result == []
+
+    def test_subset_agent_tools_returns_subset(self) -> None:
+        """Test that subset of tools is returned correctly."""
+        workflow_tools = ["tool_a", "tool_b", "tool_c"]
+        agent_tools = ["tool_a", "tool_c"]
+        result = resolve_agent_tools(agent_tools, workflow_tools)
+        assert result == ["tool_a", "tool_c"]
+
+    def test_subset_agent_tools_returns_copy(self) -> None:
+        """Test that returned subset is a copy, not the original."""
+        workflow_tools = ["tool_a", "tool_b", "tool_c"]
+        agent_tools = ["tool_a", "tool_b"]
+        result = resolve_agent_tools(agent_tools, workflow_tools)
+        result.append("tool_c")
+        assert agent_tools == ["tool_a", "tool_b"]
+
+    def test_unknown_tools_raises_validation_error(self) -> None:
+        """Test that unknown tools raise ValidationError."""
+        workflow_tools = ["tool_a", "tool_b"]
+        agent_tools = ["tool_a", "unknown_tool"]
+
+        with pytest.raises(ValidationError, match="unknown tools"):
+            resolve_agent_tools(agent_tools, workflow_tools)
+
+    def test_multiple_unknown_tools_lists_all(self) -> None:
+        """Test that multiple unknown tools are all listed in error."""
+        workflow_tools = ["tool_a"]
+        agent_tools = ["tool_b", "tool_c"]
+
+        with pytest.raises(ValidationError) as exc_info:
+            resolve_agent_tools(agent_tools, workflow_tools)
+
+        error_msg = str(exc_info.value)
+        assert "tool_b" in error_msg
+        assert "tool_c" in error_msg
+
+    def test_unknown_tools_shows_available_tools_in_suggestion(self) -> None:
+        """Test that error suggestion includes available tools."""
+        workflow_tools = ["web_search", "file_read"]
+        agent_tools = ["unknown"]
+
+        with pytest.raises(ValidationError) as exc_info:
+            resolve_agent_tools(agent_tools, workflow_tools)
+
+        # Check suggestion includes available tools
+        assert exc_info.value.suggestion is not None
+        assert "file_read" in exc_info.value.suggestion
+        assert "web_search" in exc_info.value.suggestion
+
+    def test_empty_workflow_tools_with_none_agent_tools(self) -> None:
+        """Test that empty workflow tools with None agent tools returns empty."""
+        workflow_tools: list[str] = []
+        result = resolve_agent_tools(None, workflow_tools)
+        assert result == []
+
+    def test_empty_workflow_tools_with_agent_tools_raises(self) -> None:
+        """Test that agent tools with empty workflow tools raises error."""
+        workflow_tools: list[str] = []
+        agent_tools = ["tool_a"]
+
+        with pytest.raises(ValidationError, match="unknown tools"):
+            resolve_agent_tools(agent_tools, workflow_tools)
+
+    def test_all_workflow_tools_as_agent_subset(self) -> None:
+        """Test requesting all workflow tools as explicit subset works."""
+        workflow_tools = ["tool_a", "tool_b"]
+        agent_tools = ["tool_a", "tool_b"]
+        result = resolve_agent_tools(agent_tools, workflow_tools)
+        assert result == ["tool_a", "tool_b"]
 
 
 class TestAgentExecutorOutputHandling:
