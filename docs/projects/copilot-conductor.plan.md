@@ -405,18 +405,18 @@ The implementation is broken into 14 EPICs with atomic tasks suitable for execut
 
 | Task ID | Type | Description | Files | Estimate | Status |
 |---------|------|-------------|-------|----------|--------|
-| TASK-048 | IMPL | Implement HumanGateHandler with option display and context access | `src/copilot_conductor/gates/human.py` | M | TODO |
-| TASK-049 | IMPL | Implement Rich-based interactive selection prompt with keyboard navigation | `src/copilot_conductor/gates/human.py` | M | TODO |
-| TASK-050 | IMPL | Implement prompt_for text input collection and storage in context | `src/copilot_conductor/gates/human.py` | S | TODO |
-| TASK-051 | IMPL | Implement --skip-gates flag for automation testing (auto-selects first option) | `src/copilot_conductor/cli/run.py`, `src/copilot_conductor/gates/human.py` | S | TODO |
-| TASK-052 | TEST | Unit tests for human gate with mocked terminal input | `tests/test_gates/test_human.py` | M | TODO |
+| TASK-048 | IMPL | Implement HumanGateHandler with option display and context access | `src/copilot_conductor/gates/human.py` | M | DONE |
+| TASK-049 | IMPL | Implement Rich-based interactive selection prompt with keyboard navigation | `src/copilot_conductor/gates/human.py` | M | DONE |
+| TASK-050 | IMPL | Implement prompt_for text input collection and storage in context | `src/copilot_conductor/gates/human.py` | S | DONE |
+| TASK-051 | IMPL | Implement --skip-gates flag for automation testing (auto-selects first option) | `src/copilot_conductor/cli/run.py`, `src/copilot_conductor/gates/human.py` | S | DONE |
+| TASK-052 | TEST | Unit tests for human gate with mocked terminal input | `tests/test_gates/test_human.py` | M | DONE |
 
 **Acceptance Criteria**:
-- [ ] Human gates pause workflow for user selection
-- [ ] Options display with Rich formatting
-- [ ] Selected option's route is followed
-- [ ] prompt_for collects text input and stores in context
-- [ ] --skip-gates auto-selects first option
+- [x] Human gates pause workflow for user selection
+- [x] Options display with Rich formatting
+- [x] Selected option's route is followed
+- [x] prompt_for collects text input and stores in context
+- [x] --skip-gates auto-selects first option
 
 ---
 

@@ -86,6 +86,13 @@ def run(
             help="Show execution plan without running the workflow.",
         ),
     ] = False,
+    skip_gates: Annotated[
+        bool,
+        typer.Option(
+            "--skip-gates",
+            help="Auto-select first option at human gates (for automation).",
+        ),
+    ] = False,
 ) -> None:
     """Run a workflow from a YAML file.
 
@@ -99,6 +106,7 @@ def run(
         conductor run workflow.yaml -i question="Hello" -i context="Programming"
         conductor run workflow.yaml --provider copilot
         conductor run workflow.yaml --dry-run
+        conductor run workflow.yaml --skip-gates
     """
     import asyncio
     import json
@@ -139,7 +147,7 @@ def run(
 
     try:
         # Run the workflow
-        result = asyncio.run(run_workflow_async(workflow, inputs, provider))
+        result = asyncio.run(run_workflow_async(workflow, inputs, provider, skip_gates))
 
         # Output as JSON to stdout
         output_console.print_json(json.dumps(result))

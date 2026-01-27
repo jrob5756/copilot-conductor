@@ -158,6 +158,7 @@ async def run_workflow_async(
     workflow_path: Path,
     inputs: dict[str, Any],
     provider_override: str | None = None,
+    skip_gates: bool = False,
 ) -> dict[str, Any]:
     """Execute a workflow asynchronously.
 
@@ -165,6 +166,7 @@ async def run_workflow_async(
         workflow_path: Path to the workflow YAML file.
         inputs: Workflow input values.
         provider_override: Optional provider name to override workflow config.
+        skip_gates: If True, auto-selects first option at human gates.
 
     Returns:
         The workflow output as a dictionary.
@@ -184,7 +186,7 @@ async def run_workflow_async(
 
     try:
         # Create and run workflow engine
-        engine = WorkflowEngine(config, provider)
+        engine = WorkflowEngine(config, provider, skip_gates=skip_gates)
         result = await engine.run(inputs)
         return result
     finally:

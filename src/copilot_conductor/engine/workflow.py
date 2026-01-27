@@ -15,6 +15,7 @@ from copilot_conductor.engine.router import Router, RouteResult
 from copilot_conductor.exceptions import ExecutionError
 from copilot_conductor.executor.agent import AgentExecutor
 from copilot_conductor.executor.template import TemplateRenderer
+from copilot_conductor.gates.human import GateResult, HumanGateHandler
 
 if TYPE_CHECKING:
     from copilot_conductor.config.schema import AgentDef, WorkflowConfig
@@ -95,15 +96,18 @@ class WorkflowEngine:
         self,
         config: WorkflowConfig,
         provider: AgentProvider,
+        skip_gates: bool = False,
     ) -> None:
         """Initialize the WorkflowEngine.
 
         Args:
             config: The workflow configuration.
             provider: The agent provider for execution.
+            skip_gates: If True, auto-selects first option at human gates.
         """
         self.config = config
         self.provider = provider
+        self.skip_gates = skip_gates
         self.context = WorkflowContext()
         self.executor = AgentExecutor(provider)
         self.renderer = TemplateRenderer()
@@ -112,6 +116,7 @@ class WorkflowEngine:
             max_iterations=config.workflow.limits.max_iterations,
             timeout_seconds=config.workflow.limits.timeout_seconds,
         )
+        self.gate_handler = HumanGateHandler(skip_gates=skip_gates)
 
     async def run(self, inputs: dict[str, Any]) -> dict[str, Any]:
         """Execute the workflow from entry_point to $end.
@@ -151,23 +156,28 @@ class WorkflowEngine:
                 # Check iteration limit before executing
                 self.limits.check_iteration(current_agent_name)
 
-                # Skip human gates for now (EPIC-009)
+                # Handle human gates
                 if agent.type == "human_gate":
-                    # Placeholder - will be implemented in EPIC-009
-                    # For now, just follow the first route
-                    if agent.routes:
-                        next_agent = agent.routes[0].to
-                    elif agent.options:
-                        next_agent = agent.options[0].route
-                    else:
-                        next_agent = "$end"
+                    # Build context for the gate prompt
+                    agent_context = self.context.get_for_template()
+
+                    # Use the gate handler for interaction
+                    gate_result: GateResult = await self.gate_handler.handle_gate(
+                        agent, agent_context
+                    )
+
+                    # Store gate result in context
+                    self.context.store(agent.name, {
+                        "selected": gate_result.selected_option.value,
+                        **gate_result.additional_input,
+                    })
 
                     # Record human gate as executed
                     self.limits.record_execution(agent.name)
 
-                    if next_agent == "$end":
+                    if gate_result.route == "$end":
                         return self._build_final_output()
-                    current_agent_name = next_agent
+                    current_agent_name = gate_result.route
                     continue
 
                 # Build context for this agent

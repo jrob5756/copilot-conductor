@@ -13,6 +13,7 @@ import pytest
 from copilot_conductor.config.schema import (
     AgentDef,
     ContextConfig,
+    GateOption,
     LimitsConfig,
     OutputField,
     RouteDef,
@@ -808,3 +809,188 @@ class TestWorkflowEngineRouterIntegration:
 
         # Score 5 < 8, but valid is True, so should go to 'valid'
         assert "valid" in engine.context.execution_history
+
+
+class TestWorkflowEngineHumanGates:
+    """Tests for human gate integration in workflows."""
+
+    @pytest.fixture
+    def human_gate_workflow_config(self) -> WorkflowConfig:
+        """Create a workflow with a human gate."""
+        return WorkflowConfig(
+            workflow=WorkflowDef(
+                name="human-gate-workflow",
+                entry_point="drafter",
+                runtime=RuntimeConfig(provider="copilot"),
+            ),
+            agents=[
+                AgentDef(
+                    name="drafter",
+                    model="gpt-4",
+                    prompt="Draft content",
+                    output={"draft": OutputField(type="string")},
+                    routes=[RouteDef(to="approval_gate")],
+                ),
+                AgentDef(
+                    name="approval_gate",
+                    type="human_gate",
+                    prompt="Review the draft:\n\n{{ drafter.output.draft }}",
+                    options=[
+                        GateOption(
+                            label="Approve",
+                            value="approved",
+                            route="publisher",
+                        ),
+                        GateOption(
+                            label="Request changes",
+                            value="changes_requested",
+                            route="drafter",
+                        ),
+                        GateOption(
+                            label="Reject",
+                            value="rejected",
+                            route="$end",
+                        ),
+                    ],
+                ),
+                AgentDef(
+                    name="publisher",
+                    model="gpt-4",
+                    prompt="Publish: {{ drafter.output.draft }}",
+                    output={"published": OutputField(type="boolean")},
+                    routes=[RouteDef(to="$end")],
+                ),
+            ],
+            output={
+                "draft": "{{ drafter.output.draft }}",
+                "gate_result": "{{ approval_gate.output.selected }}",
+            },
+        )
+
+    @pytest.mark.asyncio
+    async def test_human_gate_with_skip_gates(
+        self,
+        human_gate_workflow_config: WorkflowConfig,
+    ) -> None:
+        """Test workflow with human gate using --skip-gates mode."""
+
+        def mock_handler(agent, prompt, context):
+            if agent.name == "drafter":
+                return {"draft": "This is the draft content"}
+            elif agent.name == "publisher":
+                return {"published": True}
+            return {}
+
+        provider = CopilotProvider(mock_handler=mock_handler)
+        engine = WorkflowEngine(
+            human_gate_workflow_config, provider, skip_gates=True
+        )
+
+        result = await engine.run({})
+
+        # Should have auto-selected first option (Approve)
+        assert result["gate_result"] == "approved"
+        # Publisher should have been executed
+        assert "publisher" in engine.context.execution_history
+
+    @pytest.mark.asyncio
+    async def test_human_gate_stores_selection_in_context(
+        self,
+        human_gate_workflow_config: WorkflowConfig,
+    ) -> None:
+        """Test that human gate selection is stored in context."""
+
+        def mock_handler(agent, prompt, context):
+            if agent.name == "drafter":
+                return {"draft": "Draft content"}
+            elif agent.name == "publisher":
+                # Check that gate selection is in context
+                gate_result = context.get("approval_gate", {})
+                assert gate_result.get("output", {}).get("selected") == "approved"
+                return {"published": True}
+            return {}
+
+        provider = CopilotProvider(mock_handler=mock_handler)
+        engine = WorkflowEngine(
+            human_gate_workflow_config, provider, skip_gates=True
+        )
+
+        result = await engine.run({})
+
+        # Verify gate result is in final output
+        assert result["gate_result"] == "approved"
+
+    @pytest.mark.asyncio
+    async def test_human_gate_with_end_route(self) -> None:
+        """Test human gate that routes to $end."""
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="gate-to-end",
+                entry_point="gate",
+            ),
+            agents=[
+                AgentDef(
+                    name="gate",
+                    type="human_gate",
+                    prompt="Confirm action",
+                    options=[
+                        GateOption(
+                            label="Cancel",
+                            value="cancelled",
+                            route="$end",
+                        ),
+                        GateOption(
+                            label="Continue",
+                            value="continued",
+                            route="next",
+                        ),
+                    ],
+                ),
+                AgentDef(
+                    name="next",
+                    model="gpt-4",
+                    prompt="Continue",
+                    routes=[RouteDef(to="$end")],
+                    output={"done": OutputField(type="boolean")},
+                ),
+            ],
+            output={"status": "{{ gate.output.selected }}"},
+        )
+
+        def mock_handler(agent, prompt, context):
+            return {"done": True}
+
+        provider = CopilotProvider(mock_handler=mock_handler)
+        engine = WorkflowEngine(config, provider, skip_gates=True)
+
+        result = await engine.run({})
+
+        # First option routes to $end
+        assert result["status"] == "cancelled"
+        # "next" agent should NOT have been executed
+        assert "next" not in engine.context.execution_history
+
+    @pytest.mark.asyncio
+    async def test_human_gate_iteration_tracking(
+        self,
+        human_gate_workflow_config: WorkflowConfig,
+    ) -> None:
+        """Test that human gates are tracked in iteration counts."""
+
+        def mock_handler(agent, prompt, context):
+            if agent.name == "drafter":
+                return {"draft": "Draft"}
+            return {"published": True}
+
+        provider = CopilotProvider(mock_handler=mock_handler)
+        engine = WorkflowEngine(
+            human_gate_workflow_config, provider, skip_gates=True
+        )
+
+        await engine.run({})
+
+        summary = engine.get_execution_summary()
+        # Should show drafter, approval_gate, publisher
+        assert "approval_gate" in summary["agents_executed"]
+        assert summary["iterations"] == 3
+
