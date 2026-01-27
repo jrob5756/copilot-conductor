@@ -356,19 +356,19 @@ The implementation is broken into 14 EPICs with atomic tasks suitable for execut
 
 | Task ID | Type | Description | Files | Estimate | Status |
 |---------|------|-------------|-------|----------|--------|
-| TASK-039 | IMPL | Implement LimitEnforcer with iteration tracking | `src/copilot_conductor/engine/limits.py` | S | TODO |
-| TASK-040 | IMPL | Implement MaxIterationsError with context (current iteration, agent history) | `src/copilot_conductor/engine/limits.py` | S | TODO |
-| TASK-041 | IMPL | Implement timeout enforcement using asyncio.timeout() | `src/copilot_conductor/engine/limits.py` | M | TODO |
-| TASK-042 | IMPL | Implement TimeoutError with context (elapsed time, current agent) | `src/copilot_conductor/engine/limits.py` | S | TODO |
-| TASK-043 | IMPL | Integrate limits into WorkflowEngine execution loop | `src/copilot_conductor/engine/workflow.py` | S | TODO |
-| TASK-044 | TEST | Unit tests for limit enforcement with edge cases | `tests/test_engine/test_limits.py` | M | TODO |
+| TASK-039 | IMPL | Implement LimitEnforcer with iteration tracking | `src/copilot_conductor/engine/limits.py` | S | DONE |
+| TASK-040 | IMPL | Implement MaxIterationsError with context (current iteration, agent history) | `src/copilot_conductor/engine/limits.py` | S | DONE |
+| TASK-041 | IMPL | Implement timeout enforcement using asyncio.timeout() | `src/copilot_conductor/engine/limits.py` | M | DONE |
+| TASK-042 | IMPL | Implement TimeoutError with context (elapsed time, current agent) | `src/copilot_conductor/engine/limits.py` | S | DONE |
+| TASK-043 | IMPL | Integrate limits into WorkflowEngine execution loop | `src/copilot_conductor/engine/workflow.py` | S | DONE |
+| TASK-044 | TEST | Unit tests for limit enforcement with edge cases | `tests/test_engine/test_limits.py` | M | DONE |
 
 **Acceptance Criteria**:
-- [ ] Workflow terminates at max_iterations with MaxIterationsError
-- [ ] Workflow terminates at timeout with TimeoutError
-- [ ] Error messages include iteration count and agent history
-- [ ] Default limits (10 iterations, 600s) apply when not specified
-- [ ] Limits are configurable via workflow.limits
+- [x] Workflow terminates at max_iterations with MaxIterationsError
+- [x] Workflow terminates at timeout with TimeoutError
+- [x] Error messages include iteration count and agent history
+- [x] Default limits (10 iterations, 600s) apply when not specified
+- [x] Limits are configurable via workflow.limits
 
 ---
 

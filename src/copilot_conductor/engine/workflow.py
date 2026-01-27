@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from copilot_conductor.engine.context import WorkflowContext
+from copilot_conductor.engine.limits import LimitEnforcer
 from copilot_conductor.engine.router import Router, RouteResult
 from copilot_conductor.exceptions import ExecutionError
 from copilot_conductor.executor.agent import AgentExecutor
@@ -54,14 +55,19 @@ class WorkflowEngine:
         self.executor = AgentExecutor(provider)
         self.renderer = TemplateRenderer()
         self.router = Router()
+        self.limits = LimitEnforcer(
+            max_iterations=config.workflow.limits.max_iterations,
+            timeout_seconds=config.workflow.limits.timeout_seconds,
+        )
 
     async def run(self, inputs: dict[str, Any]) -> dict[str, Any]:
         """Execute the workflow from entry_point to $end.
 
         This is the main entry point for workflow execution. It:
         1. Sets up the context with the provided inputs
-        2. Executes agents in sequence based on routing rules
-        3. Returns the final output built from output templates
+        2. Enforces iteration and timeout limits
+        3. Executes agents in sequence based on routing rules
+        4. Returns the final output built from output templates
 
         Args:
             inputs: Workflow input values.
@@ -71,56 +77,72 @@ class WorkflowEngine:
 
         Raises:
             ExecutionError: If an agent is not found or execution fails.
+            MaxIterationsError: If max iterations limit is exceeded.
+            TimeoutError: If timeout limit is exceeded.
             ValidationError: If agent output doesn't match schema.
             TemplateError: If template rendering fails.
         """
         self.context.set_workflow_inputs(inputs)
+        self.limits.start()
         current_agent_name = self.config.workflow.entry_point
 
-        while True:
-            agent = self._find_agent(current_agent_name)
-            if agent is None:
-                raise ExecutionError(
-                    f"Agent not found: {current_agent_name}",
-                    suggestion=f"Ensure '{current_agent_name}' is defined in the workflow",
+        async with self.limits.timeout_context():
+            while True:
+                agent = self._find_agent(current_agent_name)
+                if agent is None:
+                    raise ExecutionError(
+                        f"Agent not found: {current_agent_name}",
+                        suggestion=f"Ensure '{current_agent_name}' is defined in the workflow",
+                    )
+
+                # Check iteration limit before executing
+                self.limits.check_iteration(current_agent_name)
+
+                # Skip human gates for now (EPIC-009)
+                if agent.type == "human_gate":
+                    # Placeholder - will be implemented in EPIC-009
+                    # For now, just follow the first route
+                    if agent.routes:
+                        next_agent = agent.routes[0].to
+                    elif agent.options:
+                        next_agent = agent.options[0].route
+                    else:
+                        next_agent = "$end"
+
+                    # Record human gate as executed
+                    self.limits.record_execution(agent.name)
+
+                    if next_agent == "$end":
+                        return self._build_final_output()
+                    current_agent_name = next_agent
+                    continue
+
+                # Build context for this agent
+                agent_context = self.context.build_for_agent(
+                    agent.name,
+                    agent.input,
+                    mode=self.config.workflow.context.mode,
                 )
 
-            # Skip human gates for now (EPIC-009)
-            if agent.type == "human_gate":
-                # Placeholder - will be implemented in EPIC-009
-                # For now, just follow the first route
-                if agent.routes:
-                    next_agent = agent.routes[0].to
-                elif agent.options:
-                    next_agent = agent.options[0].route
-                else:
-                    next_agent = "$end"
+                # Execute agent
+                output = await self.executor.execute(agent, agent_context)
 
-                if next_agent == "$end":
-                    return self._build_final_output()
-                current_agent_name = next_agent
-                continue
+                # Store output
+                self.context.store(agent.name, output.content)
 
-            # Build context for this agent
-            agent_context = self.context.build_for_agent(
-                agent.name,
-                agent.input,
-                mode=self.config.workflow.context.mode,
-            )
+                # Record successful execution
+                self.limits.record_execution(agent.name)
 
-            # Execute agent
-            output = await self.executor.execute(agent, agent_context)
+                # Check timeout after each agent
+                self.limits.check_timeout()
 
-            # Store output
-            self.context.store(agent.name, output.content)
+                # Evaluate routes using the Router
+                route_result = self._evaluate_routes(agent, output.content)
 
-            # Evaluate routes using the Router
-            route_result = self._evaluate_routes(agent, output.content)
+                if route_result.target == "$end":
+                    return self._build_final_output(route_result.output_transform)
 
-            if route_result.target == "$end":
-                return self._build_final_output(route_result.output_transform)
-
-            current_agent_name = route_result.target
+                current_agent_name = route_result.target
 
     def _find_agent(self, name: str) -> AgentDef | None:
         """Find agent by name.
@@ -231,10 +253,14 @@ class WorkflowEngine:
         """Get a summary of the workflow execution.
 
         Returns:
-            Dict with execution statistics.
+            Dict with execution statistics including iterations,
+            agents executed, context mode, elapsed time, and limits.
         """
         return {
-            "iterations": self.context.current_iteration,
-            "agents_executed": self.context.execution_history.copy(),
+            "iterations": self.limits.current_iteration,
+            "agents_executed": self.limits.execution_history.copy(),
             "context_mode": self.config.workflow.context.mode,
+            "elapsed_seconds": self.limits.get_elapsed_time(),
+            "max_iterations": self.limits.max_iterations,
+            "timeout_seconds": self.limits.timeout_seconds,
         }

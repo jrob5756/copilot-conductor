@@ -5,7 +5,8 @@ routing logic, and safety limits enforcement.
 """
 
 from copilot_conductor.engine.context import WorkflowContext
+from copilot_conductor.engine.limits import LimitEnforcer
 from copilot_conductor.engine.router import Router, RouteResult
 from copilot_conductor.engine.workflow import WorkflowEngine
 
-__all__ = ["RouteResult", "Router", "WorkflowContext", "WorkflowEngine"]
+__all__ = ["LimitEnforcer", "RouteResult", "Router", "WorkflowContext", "WorkflowEngine"]
