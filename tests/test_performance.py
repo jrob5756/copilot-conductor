@@ -1,0 +1,514 @@
+"""Performance tests for Copilot Conductor.
+
+Tests cover:
+- Startup time: CLI app initialization should be <500ms
+- Memory usage: 10-agent workflow should use <100MB
+
+These tests verify NFR-001 and NFR-002 from the requirements.
+"""
+
+import subprocess
+import sys
+import time
+from typing import Any
+
+import pytest
+
+from copilot_conductor.config.schema import (
+    AgentDef,
+    ContextConfig,
+    LimitsConfig,
+    OutputField,
+    RouteDef,
+    WorkflowConfig,
+    WorkflowDef,
+)
+from copilot_conductor.engine.workflow import WorkflowEngine
+from copilot_conductor.providers.copilot import CopilotProvider
+
+# Mark all tests in this module as performance tests
+pytestmark = pytest.mark.performance
+
+
+class TestStartupTime:
+    """Test that startup time is under 500ms."""
+
+    def test_cli_import_time(self) -> None:
+        """Test that importing the CLI app takes less than 500ms.
+
+        NFR-001: Startup time should be <500ms.
+        """
+        # Measure import time using subprocess for clean environment
+        code = """
+import time
+start = time.perf_counter()
+from copilot_conductor.cli.app import app
+elapsed = time.perf_counter() - start
+print(elapsed)
+"""
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode == 0, f"Import failed: {result.stderr}"
+        elapsed = float(result.stdout.strip())
+
+        # Allow 500ms for CLI import
+        assert elapsed < 0.5, f"CLI import took {elapsed:.3f}s, expected <0.5s"
+
+    def test_config_load_time(self, fixtures_dir) -> None:
+        """Test that loading and validating a config is fast."""
+        from copilot_conductor.config.loader import load_config
+
+        workflow_file = fixtures_dir / "valid_full.yaml"
+
+        start = time.perf_counter()
+        config = load_config(workflow_file)
+        elapsed = time.perf_counter() - start
+
+        # Config loading should be very fast (<100ms)
+        assert elapsed < 0.1, f"Config load took {elapsed:.3f}s, expected <0.1s"
+        assert config.workflow.name == "full-workflow"
+
+    def test_workflow_engine_init_time(self) -> None:
+        """Test that WorkflowEngine initialization is fast."""
+        config = self._create_simple_config()
+        provider = CopilotProvider()
+
+        start = time.perf_counter()
+        engine = WorkflowEngine(config, provider)
+        elapsed = time.perf_counter() - start
+
+        # Engine init should be very fast (<50ms)
+        assert elapsed < 0.05, f"Engine init took {elapsed:.3f}s, expected <0.05s"
+        assert engine is not None
+
+    def test_template_renderer_init_time(self) -> None:
+        """Test that TemplateRenderer initialization is fast."""
+        from copilot_conductor.executor.template import TemplateRenderer
+
+        start = time.perf_counter()
+        renderer = TemplateRenderer()
+        # Do a simple render to ensure full initialization
+        _ = renderer.render("Hello {{ name }}", {"name": "World"})
+        elapsed = time.perf_counter() - start
+
+        assert elapsed < 0.1, f"Renderer init took {elapsed:.3f}s, expected <0.1s"
+
+    def _create_simple_config(self) -> WorkflowConfig:
+        """Create a simple config for testing."""
+        return WorkflowConfig(
+            workflow=WorkflowDef(
+                name="test-workflow",
+                entry_point="agent1",
+            ),
+            agents=[
+                AgentDef(
+                    name="agent1",
+                    model="gpt-4",
+                    prompt="Test",
+                    routes=[RouteDef(to="$end")],
+                    output={"result": OutputField(type="string")},
+                ),
+            ],
+            output={"result": "{{ agent1.output.result }}"},
+        )
+
+
+class TestMemoryUsage:
+    """Test that memory usage is under 100MB for 10-agent workflow."""
+
+    def test_ten_agent_workflow_memory(self) -> None:
+        """Test that a 10-agent workflow uses less than 100MB.
+
+        NFR-002: Memory usage should be <100MB for 10-agent workflow.
+        """
+        import tracemalloc
+
+        # Start tracing memory
+        tracemalloc.start()
+
+        # Create 10-agent workflow config
+        config = self._create_ten_agent_config()
+
+        def mock_handler(agent, prompt, context):
+            # Return reasonably sized response
+            return {"result": f"Response from {agent.name}: " + "x" * 100}
+
+        provider = CopilotProvider(mock_handler=mock_handler)
+        engine = WorkflowEngine(config, provider)
+
+        # Run the workflow
+        import asyncio
+        result = asyncio.run(engine.run({"input": "test"}))
+
+        # Get peak memory
+        current, peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+
+        # Allow 100MB for the workflow execution
+        assert peak < 100 * 1024 * 1024, (
+            f"Workflow used {peak / (1024 * 1024):.1f}MB peak, expected <100MB"
+        )
+
+        # Verify workflow completed successfully
+        assert "result" in result
+
+    def test_large_context_memory(self) -> None:
+        """Test memory usage with large context accumulation."""
+        import tracemalloc
+
+        tracemalloc.start()
+
+        # Create workflow that accumulates context
+        config = self._create_context_accumulating_config()
+
+        call_count = 0
+
+        def mock_handler(agent, prompt, context):
+            nonlocal call_count
+            call_count += 1
+            # Return large-ish content
+            return {"result": f"Large content block {call_count}: " + "data" * 500}
+
+        provider = CopilotProvider(mock_handler=mock_handler)
+        engine = WorkflowEngine(config, provider)
+
+        import asyncio
+        result = asyncio.run(engine.run({}))
+
+        current, peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+
+        # Should still be under 100MB
+        assert peak < 100 * 1024 * 1024, (
+            f"Large context used {peak / (1024 * 1024):.1f}MB peak"
+        )
+        assert result is not None
+
+    def test_many_iterations_memory(self) -> None:
+        """Test memory usage with many loop iterations."""
+        import tracemalloc
+
+        tracemalloc.start()
+
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="loop-workflow",
+                entry_point="looper",
+                limits=LimitsConfig(max_iterations=50),
+            ),
+            agents=[
+                AgentDef(
+                    name="looper",
+                    model="gpt-4",
+                    prompt="Iteration {{ context.iteration }}",
+                    output={
+                        "count": OutputField(type="number"),
+                        "data": OutputField(type="string"),
+                    },
+                    routes=[
+                        RouteDef(to="$end", when="count >= 25"),
+                        RouteDef(to="looper"),
+                    ],
+                ),
+            ],
+            output={"final_count": "{{ looper.output.count }}"},
+        )
+
+        call_count = 0
+
+        def mock_handler(agent, prompt, context):
+            nonlocal call_count
+            call_count += 1
+            return {"count": call_count, "data": f"Data block {call_count}"}
+
+        provider = CopilotProvider(mock_handler=mock_handler)
+        engine = WorkflowEngine(config, provider)
+
+        import asyncio
+        result = asyncio.run(engine.run({}))
+
+        current, peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+
+        # Many iterations should still stay under limit
+        assert peak < 100 * 1024 * 1024, (
+            f"Many iterations used {peak / (1024 * 1024):.1f}MB peak"
+        )
+        assert result["final_count"] == 25
+
+    def _create_ten_agent_config(self) -> WorkflowConfig:
+        """Create a workflow with 10 agents in sequence."""
+        agents = []
+
+        for i in range(1, 11):
+            next_agent = f"agent{i + 1}" if i < 10 else "$end"
+            agents.append(
+                AgentDef(
+                    name=f"agent{i}",
+                    model="gpt-4",
+                    prompt=f"Agent {i}: Process {{ workflow.input.input }}",
+                    output={"result": OutputField(type="string")},
+                    routes=[RouteDef(to=next_agent)],
+                )
+            )
+
+        return WorkflowConfig(
+            workflow=WorkflowDef(
+                name="ten-agent-workflow",
+                entry_point="agent1",
+                context=ContextConfig(mode="accumulate"),
+            ),
+            agents=agents,
+            output={"result": "{{ agent10.output.result }}"},
+        )
+
+    def _create_context_accumulating_config(self) -> WorkflowConfig:
+        """Create workflow that accumulates significant context."""
+        return WorkflowConfig(
+            workflow=WorkflowDef(
+                name="context-workflow",
+                entry_point="agent1",
+                context=ContextConfig(mode="accumulate"),
+            ),
+            agents=[
+                AgentDef(
+                    name="agent1",
+                    model="gpt-4",
+                    prompt="First agent",
+                    output={"result": OutputField(type="string")},
+                    routes=[RouteDef(to="agent2")],
+                ),
+                AgentDef(
+                    name="agent2",
+                    model="gpt-4",
+                    prompt="Second agent: {{ agent1.output.result }}",
+                    output={"result": OutputField(type="string")},
+                    routes=[RouteDef(to="agent3")],
+                ),
+                AgentDef(
+                    name="agent3",
+                    model="gpt-4",
+                    prompt="Third agent with context",
+                    output={"result": OutputField(type="string")},
+                    routes=[RouteDef(to="$end")],
+                ),
+            ],
+            output={"result": "{{ agent3.output.result }}"},
+        )
+
+
+class TestProviderPerformance:
+    """Test provider execution performance."""
+
+    @pytest.mark.asyncio
+    async def test_mock_handler_performance(self) -> None:
+        """Test that mock handler execution is fast."""
+        def mock_handler(agent, prompt, context):
+            return {"result": "fast response"}
+
+        provider = CopilotProvider(mock_handler=mock_handler)
+
+        config = WorkflowConfig(
+            workflow=WorkflowDef(name="test", entry_point="agent"),
+            agents=[
+                AgentDef(
+                    name="agent",
+                    model="gpt-4",
+                    prompt="Test",
+                    output={"result": OutputField(type="string")},
+                    routes=[RouteDef(to="$end")],
+                ),
+            ],
+            output={"result": "{{ agent.output.result }}"},
+        )
+
+        engine = WorkflowEngine(config, provider)
+
+        start = time.perf_counter()
+        for _ in range(100):
+            await engine.run({})
+        elapsed = time.perf_counter() - start
+
+        # 100 workflow runs should complete in under 1 second with mock
+        avg_time = elapsed / 100
+        assert avg_time < 0.01, f"Average workflow time {avg_time:.4f}s, expected <0.01s"
+
+
+class TestTemplatePerformance:
+    """Test template rendering performance."""
+
+    def test_complex_template_rendering(self) -> None:
+        """Test that complex templates render quickly."""
+        from copilot_conductor.executor.template import TemplateRenderer
+
+        renderer = TemplateRenderer()
+
+        # Complex template with loops, conditionals, and filters
+        template = """
+{% for item in items %}
+  {% if item.active %}
+    - {{ item.name }}: {{ item.data | json }}
+  {% endif %}
+{% endfor %}
+
+Summary:
+{{ summary | default("No summary") }}
+Metadata: {{ metadata | json }}
+"""
+
+        context: dict[str, Any] = {
+            "items": [
+                {"name": f"Item {i}", "active": i % 2 == 0, "data": {"value": i}}
+                for i in range(50)
+            ],
+            "summary": "Test summary with lots of text " * 10,
+            "metadata": {"key1": "value1", "key2": ["a", "b", "c"]},
+        }
+
+        start = time.perf_counter()
+        for _ in range(100):
+            _ = renderer.render(template, context)
+        elapsed = time.perf_counter() - start
+
+        # 100 complex template renders should complete in under 1 second
+        avg_time = elapsed / 100
+        assert avg_time < 0.01, f"Average render time {avg_time:.4f}s, expected <0.01s"
+
+    def test_json_filter_performance(self) -> None:
+        """Test that json filter is fast with large objects."""
+        from copilot_conductor.executor.template import TemplateRenderer
+
+        renderer = TemplateRenderer()
+
+        # Large nested object
+        large_obj: dict[str, Any] = {
+            "level1": {
+                f"key{i}": {
+                    "nested": [f"value{j}" for j in range(10)]
+                }
+                for i in range(100)
+            }
+        }
+
+        template = "{{ data | json }}"
+        context = {"data": large_obj}
+
+        start = time.perf_counter()
+        for _ in range(50):
+            _ = renderer.render(template, context)
+        elapsed = time.perf_counter() - start
+
+        # 50 json filter renders should complete quickly
+        avg_time = elapsed / 50
+        assert avg_time < 0.05, f"Average json render time {avg_time:.4f}s, expected <0.05s"
+
+
+class TestRouterPerformance:
+    """Test routing evaluation performance."""
+
+    def test_many_routes_evaluation(self) -> None:
+        """Test that evaluating many routes is fast."""
+        from copilot_conductor.engine.router import Router
+
+        router = Router()
+
+        # Create many conditional routes
+        routes = [
+            RouteDef(to=f"agent{i}", when=f"value == {i}")
+            for i in range(50)
+        ]
+        routes.append(RouteDef(to="default"))  # Fallback
+
+        output = {"value": 49}  # Match near the end
+        context: dict[str, Any] = {"output": output}
+
+        start = time.perf_counter()
+        for _ in range(100):
+            result = router.evaluate(routes, output, context)
+        elapsed = time.perf_counter() - start
+
+        # 100 route evaluations should complete in under 1 second
+        avg_time = elapsed / 100
+        assert avg_time < 0.01, f"Average route eval time {avg_time:.4f}s"
+        assert result.target == "agent49"
+
+    def test_arithmetic_conditions_performance(self) -> None:
+        """Test that arithmetic conditions evaluate quickly."""
+        from copilot_conductor.engine.router import Router
+
+        router = Router()
+
+        routes = [
+            RouteDef(to="high", when="score >= 80 and confidence > 0.9"),
+            RouteDef(to="medium", when="score >= 50 and score < 80"),
+            RouteDef(to="low", when="score < 50"),
+            RouteDef(to="default"),
+        ]
+
+        output = {"score": 75, "confidence": 0.85}
+        context: dict[str, Any] = {"output": output}
+
+        start = time.perf_counter()
+        for _ in range(1000):
+            result = router.evaluate(routes, output, context)
+        elapsed = time.perf_counter() - start
+
+        # 1000 arithmetic evaluations should be very fast
+        avg_time = elapsed / 1000
+        assert avg_time < 0.001, f"Average arithmetic eval {avg_time:.6f}s"
+        assert result.target == "medium"
+
+
+class TestContextPerformance:
+    """Test context management performance."""
+
+    def test_context_accumulation_performance(self) -> None:
+        """Test that context accumulation is efficient."""
+        from copilot_conductor.engine.context import WorkflowContext
+
+        context = WorkflowContext()
+        context.set_workflow_inputs({"input": "test"})
+
+        start = time.perf_counter()
+
+        # Simulate 100 agent outputs
+        for i in range(100):
+            context.store(f"agent{i}", {
+                "result": f"Output {i}",
+                "data": {"key": f"value{i}", "nested": [1, 2, 3]},
+            })
+
+        # Build context for each agent
+        for i in range(100):
+            _ = context.build_for_agent(f"agent{i}", None, mode="accumulate")
+
+        elapsed = time.perf_counter() - start
+
+        # 100 stores + 100 builds should complete in under 1 second
+        assert elapsed < 1.0, f"Context operations took {elapsed:.3f}s"
+
+    def test_token_estimation_performance(self) -> None:
+        """Test that token estimation is fast."""
+        from copilot_conductor.engine.context import WorkflowContext
+
+        context = WorkflowContext()
+        context.set_workflow_inputs({"input": "test input " * 100})
+
+        # Add many agent outputs
+        for i in range(20):
+            context.store(f"agent{i}", {
+                "result": "Long output text that simulates real content " * 50,
+            })
+
+        start = time.perf_counter()
+        for _ in range(1000):
+            _ = context.estimate_context_tokens()
+        elapsed = time.perf_counter() - start
+
+        # 1000 token estimations should be fast
+        avg_time = elapsed / 1000
+        assert avg_time < 0.001, f"Average token estimate {avg_time:.6f}s"

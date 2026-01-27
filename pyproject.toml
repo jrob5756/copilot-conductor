@@ -40,3 +40,6 @@ select = ["E", "W", "F", "I", "B", "C4", "UP", "SIM"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "performance: marks tests as performance tests (deselect with '-m \"not performance\"')",
+]
