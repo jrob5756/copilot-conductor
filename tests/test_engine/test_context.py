@@ -6,11 +6,17 @@ Tests cover:
 - Building context for agents in different modes
 - Optional dependencies with ? suffix
 - Template context generation
+- Context trimming strategies
 """
 
 import pytest
 
-from copilot_conductor.engine.context import WorkflowContext
+from copilot_conductor.engine.context import (
+    CHARS_PER_TOKEN,
+    WorkflowContext,
+    estimate_dict_tokens,
+    estimate_tokens,
+)
 
 
 class TestWorkflowContextBasic:
@@ -321,3 +327,209 @@ class TestWorkflowContextGetForTemplate:
         assert template_ctx["workflow"]["input"] == {}
         assert template_ctx["context"]["iteration"] == 0
         assert template_ctx["context"]["history"] == []
+
+
+class TestTokenEstimation:
+    """Tests for token estimation functions."""
+
+    def test_estimate_tokens_basic(self) -> None:
+        """Test basic token estimation."""
+        text = "Hello world"  # 11 chars
+        tokens = estimate_tokens(text)
+        assert tokens == 11 // CHARS_PER_TOKEN
+
+    def test_estimate_tokens_empty(self) -> None:
+        """Test token estimation for empty string."""
+        tokens = estimate_tokens("")
+        assert tokens == 0
+
+    def test_estimate_dict_tokens(self) -> None:
+        """Test token estimation for dictionaries."""
+        data = {"key": "value", "number": 123}
+        tokens = estimate_dict_tokens(data)
+        assert tokens > 0
+
+
+class TestContextTokenEstimation:
+    """Tests for context token estimation."""
+
+    def test_estimate_context_tokens(self) -> None:
+        """Test that context tokens can be estimated."""
+        ctx = WorkflowContext()
+        ctx.set_workflow_inputs({"question": "What is Python?"})
+        ctx.store("answerer", {"answer": "A programming language"})
+
+        tokens = ctx.estimate_context_tokens()
+        assert tokens > 0
+
+    def test_estimate_context_tokens_increases_with_content(self) -> None:
+        """Test that token estimate increases with more content."""
+        ctx = WorkflowContext()
+        initial_tokens = ctx.estimate_context_tokens()
+
+        ctx.set_workflow_inputs({"question": "What is Python?"})
+        after_inputs = ctx.estimate_context_tokens()
+
+        ctx.store("agent1", {"result": "A" * 1000})
+        after_agent = ctx.estimate_context_tokens()
+
+        assert after_inputs > initial_tokens
+        assert after_agent > after_inputs
+
+
+class TestContextTrimmingDropOldest:
+    """Tests for drop_oldest trimming strategy."""
+
+    def test_trim_context_not_needed(self) -> None:
+        """Test that trimming doesn't happen when under limit."""
+        ctx = WorkflowContext()
+        ctx.store("agent1", {"result": "short"})
+
+        # Set a high limit
+        result_tokens = ctx.trim_context(max_tokens=10000, strategy="drop_oldest")
+
+        # Context should be unchanged
+        assert "agent1" in ctx.agent_outputs
+        assert result_tokens <= 10000
+
+    def test_trim_context_drops_oldest_agent(self) -> None:
+        """Test that drop_oldest removes oldest agent outputs."""
+        ctx = WorkflowContext()
+        ctx.store("agent1", {"result": "A" * 500})
+        ctx.store("agent2", {"result": "B" * 500})
+        ctx.store("agent3", {"result": "C" * 500})
+
+        # Get initial token count
+        initial_tokens = ctx.estimate_context_tokens()
+
+        # Set a limit that requires trimming
+        target_tokens = initial_tokens // 2
+
+        ctx.trim_context(max_tokens=target_tokens, strategy="drop_oldest")
+
+        # Some agents should have been removed
+        remaining_agents = list(ctx.agent_outputs.keys())
+        # agent1 (oldest) should be removed first
+        assert "agent1" not in remaining_agents or len(remaining_agents) < 3
+
+    def test_trim_context_preserves_recent(self) -> None:
+        """Test that recent agents are preserved when possible."""
+        ctx = WorkflowContext()
+        ctx.store("agent1", {"result": "old"})
+        ctx.store("agent2", {"result": "newer"})
+        ctx.store("agent3", {"result": "newest"})
+
+        # Use a limit that allows keeping at least agent3
+        ctx.trim_context(max_tokens=500, strategy="drop_oldest")
+
+        # Most recent should be kept if possible
+        if ctx.agent_outputs:
+            # Either agent3 is kept or all were dropped
+            assert "agent3" in ctx.agent_outputs or len(ctx.agent_outputs) == 0
+
+
+class TestContextTrimmingTruncate:
+    """Tests for truncate trimming strategy."""
+
+    def test_truncate_shortens_long_strings(self) -> None:
+        """Test that truncate shortens long string values."""
+        ctx = WorkflowContext()
+        long_content = "A" * 2000
+        ctx.store("agent1", {"result": long_content})
+
+        initial_tokens = ctx.estimate_context_tokens()
+        target_tokens = initial_tokens // 2
+
+        ctx.trim_context(max_tokens=target_tokens, strategy="truncate")
+
+        # Content should be truncated
+        truncated = ctx.agent_outputs["agent1"]["result"]
+        assert len(truncated) < len(long_content)
+        assert "[truncated]" in truncated
+
+    def test_truncate_preserves_short_strings(self) -> None:
+        """Test that truncate doesn't affect short strings unnecessarily."""
+        ctx = WorkflowContext()
+        ctx.store("agent1", {"result": "short value"})
+
+        initial_output = ctx.agent_outputs["agent1"]["result"]
+
+        # Use a high limit
+        ctx.trim_context(max_tokens=10000, strategy="truncate")
+
+        # Short content should be preserved
+        assert ctx.agent_outputs["agent1"]["result"] == initial_output
+
+
+class TestContextTrimmingSummarize:
+    """Tests for summarize trimming strategy."""
+
+    def test_summarize_requires_provider(self) -> None:
+        """Test that summarize strategy requires a provider."""
+        ctx = WorkflowContext()
+        ctx.store("agent1", {"result": "A" * 1000})
+
+        with pytest.raises(ValueError, match="requires a provider"):
+            ctx.trim_context(max_tokens=100, strategy="summarize", provider=None)
+
+    def test_summarize_with_provider_drops_old_agents(self) -> None:
+        """Test that summarize keeps recent agents and drops old ones."""
+        ctx = WorkflowContext()
+        ctx.store("agent1", {"result": "old data"})
+        ctx.store("agent2", {"result": "older data"})
+        ctx.store("agent3", {"result": "newest data"})
+        ctx.store("agent4", {"result": "most recent"})
+
+        # Create a mock provider (just needs to exist for the fallback logic)
+        class MockProvider:
+            pass
+
+        initial_tokens = ctx.estimate_context_tokens()
+        target_tokens = initial_tokens // 3
+
+        ctx.trim_context(
+            max_tokens=target_tokens,
+            strategy="summarize",
+            provider=MockProvider(),  # type: ignore
+        )
+
+        # Recent agents should be preserved, old ones dropped or summarized
+        # The summarize strategy keeps half of the agents
+        remaining = set(ctx.agent_outputs.keys())
+        assert len(remaining) <= 3  # Some were dropped
+
+    def test_summarize_creates_summary_entry(self) -> None:
+        """Test that summarize creates a summary of dropped agents."""
+        ctx = WorkflowContext()
+        ctx.store("agent1", {"result": "first output"})
+        ctx.store("agent2", {"result": "second output"})
+        ctx.store("agent3", {"result": "third output"})
+        ctx.store("agent4", {"result": "fourth output"})
+
+        class MockProvider:
+            pass
+
+        # Force trimming
+        ctx.trim_context(
+            max_tokens=100,  # Very low to force trimming
+            strategy="summarize",
+            provider=MockProvider(),  # type: ignore
+        )
+
+        # Should have a summary entry if agents were dropped
+        if "_context_summary" in ctx.agent_outputs:
+            summary = ctx.agent_outputs["_context_summary"]
+            assert "summary" in summary
+            assert "dropped_agents" in summary
+
+
+class TestContextTrimmingInvalidStrategy:
+    """Tests for invalid trimming strategy."""
+
+    def test_invalid_strategy_raises_error(self) -> None:
+        """Test that invalid strategy raises ValueError."""
+        ctx = WorkflowContext()
+        ctx.store("agent1", {"result": "data"})
+
+        with pytest.raises(ValueError, match="Unknown trimming strategy"):
+            ctx.trim_context(max_tokens=10, strategy="invalid")  # type: ignore

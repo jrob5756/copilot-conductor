@@ -10,14 +10,35 @@ can be used for testing and development.
 
 from __future__ import annotations
 
+import asyncio
 import json
+import random
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from copilot_conductor.exceptions import ProviderError
 from copilot_conductor.providers.base import AgentOutput, AgentProvider
 
 if TYPE_CHECKING:
     from copilot_conductor.config.schema import AgentDef
+
+
+@dataclass
+class RetryConfig:
+    """Configuration for retry behavior.
+
+    Attributes:
+        max_attempts: Maximum number of retry attempts (including first attempt).
+        base_delay: Base delay in seconds before first retry.
+        max_delay: Maximum delay in seconds between retries.
+        jitter: Maximum random jitter to add to delay (0.0 to 1.0 fraction of delay).
+    """
+
+    max_attempts: int = 3
+    base_delay: float = 1.0
+    max_delay: float = 30.0
+    jitter: float = 0.25
 
 
 class CopilotProvider(AgentProvider):
@@ -47,16 +68,20 @@ class CopilotProvider(AgentProvider):
     def __init__(
         self,
         mock_handler: Callable[[AgentDef, str, dict[str, Any]], dict[str, Any]] | None = None,
+        retry_config: RetryConfig | None = None,
     ) -> None:
         """Initialize the Copilot provider.
 
         Args:
             mock_handler: Optional function that receives (agent, prompt, context)
                          and returns a dict output. Used for testing.
+            retry_config: Optional retry configuration. Uses default if not provided.
         """
         self._client: Any = None  # Will hold Copilot SDK client
         self._mock_handler = mock_handler
         self._call_history: list[dict[str, Any]] = []
+        self._retry_config = retry_config or RetryConfig()
+        self._retry_history: list[dict[str, Any]] = []  # For testing retries
 
     async def execute(
         self,
@@ -78,6 +103,9 @@ class CopilotProvider(AgentProvider):
 
         Returns:
             Normalized AgentOutput with structured content.
+
+        Raises:
+            ProviderError: If execution fails after all retry attempts.
         """
         # Record the call for testing purposes
         self._call_history.append({
@@ -90,12 +118,8 @@ class CopilotProvider(AgentProvider):
 
         # If mock handler is configured, use it
         if self._mock_handler is not None:
-            content = self._mock_handler(agent, rendered_prompt, context)
-            return AgentOutput(
-                content=content,
-                raw_response=json.dumps(content),
-                tokens_used=0,
-                model=agent.model or "mock",
+            return await self._execute_with_retry(
+                agent, context, rendered_prompt, tools
             )
 
         # Stub implementation for when SDK is not available
@@ -108,6 +132,152 @@ class CopilotProvider(AgentProvider):
             tokens_used=0,
             model=agent.model or "unknown",
         )
+
+    async def _execute_with_retry(
+        self,
+        agent: AgentDef,
+        context: dict[str, Any],
+        rendered_prompt: str,
+        tools: list[str] | None = None,
+    ) -> AgentOutput:
+        """Execute with exponential backoff retry logic.
+
+        Args:
+            agent: Agent definition from workflow config.
+            context: Accumulated workflow context.
+            rendered_prompt: Jinja2-rendered user prompt.
+            tools: List of tool names available to this agent.
+
+        Returns:
+            Normalized AgentOutput with structured content.
+
+        Raises:
+            ProviderError: If execution fails after all retry attempts.
+        """
+        last_error: Exception | None = None
+        config = self._retry_config
+
+        for attempt in range(1, config.max_attempts + 1):
+            try:
+                content = await self._execute_sdk_call(
+                    agent, rendered_prompt, context, tools
+                )
+                return AgentOutput(
+                    content=content,
+                    raw_response=json.dumps(content),
+                    tokens_used=0,
+                    model=agent.model or "mock",
+                )
+            except ProviderError as e:
+                last_error = e
+                self._retry_history.append({
+                    "attempt": attempt,
+                    "agent_name": agent.name,
+                    "error": str(e),
+                    "is_retryable": e.is_retryable,
+                })
+
+                # Don't retry non-retryable errors
+                if not e.is_retryable:
+                    raise
+
+                # Don't retry if this was the last attempt
+                if attempt >= config.max_attempts:
+                    break
+
+                # Calculate delay with exponential backoff
+                delay = self._calculate_delay(attempt, config)
+
+                # Log retry attempt (for testing visibility)
+                self._retry_history[-1]["delay"] = delay
+
+                await asyncio.sleep(delay)
+
+            except Exception as e:
+                # Wrap unexpected errors as retryable
+                last_error = e
+                self._retry_history.append({
+                    "attempt": attempt,
+                    "agent_name": agent.name,
+                    "error": str(e),
+                    "is_retryable": True,
+                })
+
+                if attempt >= config.max_attempts:
+                    break
+
+                delay = self._calculate_delay(attempt, config)
+                self._retry_history[-1]["delay"] = delay
+                await asyncio.sleep(delay)
+
+        # All retries exhausted
+        raise ProviderError(
+            f"SDK call failed after {config.max_attempts} attempts: {last_error}",
+            suggestion=f"Check provider configuration and connectivity. Last error: {last_error}",
+            is_retryable=False,
+        )
+
+    async def _execute_sdk_call(
+        self,
+        agent: AgentDef,
+        rendered_prompt: str,
+        context: dict[str, Any],
+        tools: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Execute the actual SDK call or mock handler.
+
+        Args:
+            agent: Agent definition from workflow config.
+            rendered_prompt: Jinja2-rendered user prompt.
+            context: Accumulated workflow context.
+            tools: List of tool names available to this agent.
+
+        Returns:
+            Dict containing the agent's response content.
+
+        Raises:
+            ProviderError: If the SDK call fails.
+        """
+        if self._mock_handler is not None:
+            # Mock handler for testing
+            return self._mock_handler(agent, rendered_prompt, context)
+
+        # TODO: Real SDK implementation
+        # This would be something like:
+        # response = await self._client.chat.completions.create(
+        #     model=agent.model,
+        #     messages=[
+        #         {"role": "system", "content": agent.system_prompt or ""},
+        #         {"role": "user", "content": rendered_prompt},
+        #     ],
+        #     tools=tools,
+        # )
+        # return json.loads(response.choices[0].message.content)
+
+        return self._generate_stub_output(agent)
+
+    def _calculate_delay(self, attempt: int, config: RetryConfig) -> float:
+        """Calculate delay with exponential backoff and jitter.
+
+        Args:
+            attempt: Current attempt number (1-indexed).
+            config: Retry configuration.
+
+        Returns:
+            Delay in seconds before next retry.
+        """
+        # Exponential backoff: base * 2^(attempt-1)
+        delay = config.base_delay * (2 ** (attempt - 1))
+
+        # Cap at max delay
+        delay = min(delay, config.max_delay)
+
+        # Add jitter (random fraction of delay)
+        if config.jitter > 0:
+            jitter_amount = delay * config.jitter * random.random()
+            delay += jitter_amount
+
+        return delay
 
     def _generate_stub_output(self, agent: AgentDef) -> dict[str, Any]:
         """Generate stub output based on agent's output schema.
@@ -166,6 +336,7 @@ class CopilotProvider(AgentProvider):
         """
         self._client = None
         self._call_history.clear()
+        self._retry_history.clear()
 
     def get_call_history(self) -> list[dict[str, Any]]:
         """Get the history of execute calls.
@@ -178,6 +349,28 @@ class CopilotProvider(AgentProvider):
         """
         return self._call_history.copy()
 
+    def get_retry_history(self) -> list[dict[str, Any]]:
+        """Get the history of retry attempts.
+
+        This is useful for testing retry behavior.
+
+        Returns:
+            List of retry records with attempt, agent_name, error, is_retryable, delay.
+        """
+        return self._retry_history.copy()
+
     def clear_call_history(self) -> None:
         """Clear the call history."""
         self._call_history.clear()
+
+    def clear_retry_history(self) -> None:
+        """Clear the retry history."""
+        self._retry_history.clear()
+
+    def set_retry_config(self, config: RetryConfig) -> None:
+        """Update the retry configuration.
+
+        Args:
+            config: New retry configuration.
+        """
+        self._retry_config = config

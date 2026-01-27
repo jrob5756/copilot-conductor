@@ -1,9 +1,12 @@
 """Unit tests for the CopilotProvider implementation."""
 
+import contextlib
+
 import pytest
 
 from copilot_conductor.config.schema import AgentDef
-from copilot_conductor.providers.copilot import CopilotProvider
+from copilot_conductor.exceptions import ProviderError
+from copilot_conductor.providers.copilot import CopilotProvider, RetryConfig
 
 
 class TestCopilotProvider:
@@ -189,3 +192,210 @@ class TestCopilotProviderToolsSupport:
         assert history[1]["tools"] == []
         assert history[2]["agent_name"] == "agent3"
         assert history[2]["tools"] is None
+
+
+class TestCopilotProviderRetryLogic:
+    """Tests for retry logic in CopilotProvider."""
+
+    @pytest.mark.asyncio
+    async def test_successful_call_no_retry(self) -> None:
+        """Test that successful calls don't trigger retries."""
+        call_count = 0
+
+        def mock_handler(agent, prompt, context):
+            nonlocal call_count
+            call_count += 1
+            return {"result": "success"}
+
+        provider = CopilotProvider(mock_handler=mock_handler)
+        agent = AgentDef(name="test", model="gpt-4", prompt="Test")
+
+        result = await provider.execute(agent, {}, "Test")
+
+        assert result.content["result"] == "success"
+        assert call_count == 1
+        assert len(provider.get_retry_history()) == 0
+
+    @pytest.mark.asyncio
+    async def test_retryable_error_retries(self) -> None:
+        """Test that retryable errors are retried."""
+        call_count = 0
+
+        def mock_handler(agent, prompt, context):
+            nonlocal call_count
+            call_count += 1
+            if call_count < 3:
+                raise ProviderError("Server error", status_code=500)
+            return {"result": "success after retry"}
+
+        retry_config = RetryConfig(
+            max_attempts=3,
+            base_delay=0.01,  # Fast for testing
+            max_delay=0.1,
+        )
+        provider = CopilotProvider(mock_handler=mock_handler, retry_config=retry_config)
+        agent = AgentDef(name="test", model="gpt-4", prompt="Test")
+
+        result = await provider.execute(agent, {}, "Test")
+
+        assert result.content["result"] == "success after retry"
+        assert call_count == 3
+        retry_history = provider.get_retry_history()
+        assert len(retry_history) == 2  # 2 failures before success
+
+    @pytest.mark.asyncio
+    async def test_non_retryable_error_fails_immediately(self) -> None:
+        """Test that non-retryable errors fail without retry."""
+        call_count = 0
+
+        def mock_handler(agent, prompt, context):
+            nonlocal call_count
+            call_count += 1
+            raise ProviderError("Unauthorized", status_code=401)
+
+        provider = CopilotProvider(mock_handler=mock_handler)
+        agent = AgentDef(name="test", model="gpt-4", prompt="Test")
+
+        with pytest.raises(ProviderError) as exc_info:
+            await provider.execute(agent, {}, "Test")
+
+        assert call_count == 1  # Only one call, no retries
+        assert exc_info.value.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_max_retries_exhausted(self) -> None:
+        """Test that max retries are exhausted and then fails."""
+        call_count = 0
+
+        def mock_handler(agent, prompt, context):
+            nonlocal call_count
+            call_count += 1
+            raise ProviderError("Server error", status_code=500)
+
+        retry_config = RetryConfig(
+            max_attempts=3,
+            base_delay=0.01,
+            max_delay=0.1,
+        )
+        provider = CopilotProvider(mock_handler=mock_handler, retry_config=retry_config)
+        agent = AgentDef(name="test", model="gpt-4", prompt="Test")
+
+        with pytest.raises(ProviderError) as exc_info:
+            await provider.execute(agent, {}, "Test")
+
+        assert call_count == 3
+        assert "3 attempts" in str(exc_info.value)
+        assert not exc_info.value.is_retryable
+
+    @pytest.mark.asyncio
+    async def test_rate_limit_429_is_retried(self) -> None:
+        """Test that 429 rate limit errors are retried."""
+        call_count = 0
+
+        def mock_handler(agent, prompt, context):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise ProviderError("Rate limited", status_code=429)
+            return {"result": "success"}
+
+        retry_config = RetryConfig(
+            max_attempts=3,
+            base_delay=0.01,
+            max_delay=0.1,
+        )
+        provider = CopilotProvider(mock_handler=mock_handler, retry_config=retry_config)
+        agent = AgentDef(name="test", model="gpt-4", prompt="Test")
+
+        result = await provider.execute(agent, {}, "Test")
+
+        assert result.content["result"] == "success"
+        assert call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_retry_delay_increases_exponentially(self) -> None:
+        """Test that retry delays increase exponentially."""
+        call_count = 0
+
+        def mock_handler(agent, prompt, context):
+            nonlocal call_count
+            call_count += 1
+            if call_count < 3:
+                raise ProviderError("Server error", status_code=500)
+            return {"result": "success"}
+
+        retry_config = RetryConfig(
+            max_attempts=3,
+            base_delay=1.0,
+            max_delay=30.0,
+            jitter=0.0,  # No jitter for predictable testing
+        )
+        provider = CopilotProvider(mock_handler=mock_handler, retry_config=retry_config)
+
+        # Note: We can't easily test actual delays without mocking asyncio.sleep
+        # but we can verify the delays recorded in retry history
+        provider._calculate_delay(1, retry_config)  # 1 * 2^0 = 1.0
+        provider._calculate_delay(2, retry_config)  # 1 * 2^1 = 2.0
+        provider._calculate_delay(3, retry_config)  # 1 * 2^2 = 4.0
+
+        # Just verify the method works
+        assert provider._calculate_delay(1, retry_config) == 1.0
+        assert provider._calculate_delay(2, retry_config) == 2.0
+        assert provider._calculate_delay(3, retry_config) == 4.0
+
+    @pytest.mark.asyncio
+    async def test_retry_config_can_be_updated(self) -> None:
+        """Test that retry config can be updated after creation."""
+        provider = CopilotProvider()
+
+        new_config = RetryConfig(max_attempts=5, base_delay=2.0)
+        provider.set_retry_config(new_config)
+
+        assert provider._retry_config.max_attempts == 5
+        assert provider._retry_config.base_delay == 2.0
+
+    @pytest.mark.asyncio
+    async def test_retry_history_is_cleared_on_close(self) -> None:
+        """Test that retry history is cleared when provider is closed."""
+        def mock_handler(agent, prompt, context):
+            raise ProviderError("Server error", status_code=500)
+
+        retry_config = RetryConfig(max_attempts=2, base_delay=0.01)
+        provider = CopilotProvider(mock_handler=mock_handler, retry_config=retry_config)
+
+        with contextlib.suppress(ProviderError):
+            await provider.execute(
+                AgentDef(name="test", model="gpt-4", prompt="Test"),
+                {},
+                "Test",
+            )
+
+        assert len(provider.get_retry_history()) > 0
+
+        await provider.close()
+        assert len(provider.get_retry_history()) == 0
+
+
+class TestRetryConfig:
+    """Tests for RetryConfig dataclass."""
+
+    def test_default_values(self) -> None:
+        """Test default configuration values."""
+        config = RetryConfig()
+        assert config.max_attempts == 3
+        assert config.base_delay == 1.0
+        assert config.max_delay == 30.0
+        assert config.jitter == 0.25
+
+    def test_custom_values(self) -> None:
+        """Test custom configuration values."""
+        config = RetryConfig(
+            max_attempts=5,
+            base_delay=2.0,
+            max_delay=60.0,
+            jitter=0.5,
+        )
+        assert config.max_attempts == 5
+        assert config.base_delay == 2.0
+        assert config.max_delay == 60.0
+        assert config.jitter == 0.5

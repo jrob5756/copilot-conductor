@@ -476,20 +476,20 @@ The implementation is broken into 14 EPICs with atomic tasks suitable for execut
 
 | Task ID | Type | Description | Files | Estimate | Status |
 |---------|------|-------------|-------|----------|--------|
-| TASK-059 | IMPL | Implement lifecycle hooks (on_start, on_complete, on_error) execution in WorkflowEngine | `src/copilot_conductor/engine/workflow.py` | M | TODO |
-| TASK-060 | IMPL | Enhance all exceptions with file path, line numbers, suggestions | `src/copilot_conductor/exceptions.py` | M | TODO |
-| TASK-061 | IMPL | Implement error formatting with Rich output (colored, structured) | `src/copilot_conductor/cli/app.py` | S | TODO |
-| TASK-062 | IMPL | Implement exponential backoff retry for SDK calls (3 attempts, configurable) | `src/copilot_conductor/providers/copilot.py` | M | TODO |
-| TASK-070 | IMPL | Implement context trimming strategies: `truncate` (cut oldest content), `drop_oldest` (remove full agent outputs FIFO), `summarize` (use LLM to summarize). Applied when context exceeds max_tokens | `src/copilot_conductor/engine/context.py` | L | TODO |
-| TASK-072 | TEST | Tests for error handling, retry logic, and context trimming | `tests/test_providers/test_copilot.py`, `tests/test_exceptions.py`, `tests/test_engine/test_context.py` | M | TODO |
+| TASK-059 | IMPL | Implement lifecycle hooks (on_start, on_complete, on_error) execution in WorkflowEngine | `src/copilot_conductor/engine/workflow.py` | M | DONE |
+| TASK-060 | IMPL | Enhance all exceptions with file path, line numbers, suggestions | `src/copilot_conductor/exceptions.py` | M | DONE |
+| TASK-061 | IMPL | Implement error formatting with Rich output (colored, structured) | `src/copilot_conductor/cli/app.py` | S | DONE |
+| TASK-062 | IMPL | Implement exponential backoff retry for SDK calls (3 attempts, configurable) | `src/copilot_conductor/providers/copilot.py` | M | DONE |
+| TASK-070 | IMPL | Implement context trimming strategies: `truncate` (cut oldest content), `drop_oldest` (remove full agent outputs FIFO), `summarize` (use LLM to summarize). Applied when context exceeds max_tokens | `src/copilot_conductor/engine/context.py` | L | DONE |
+| TASK-072 | TEST | Tests for error handling, retry logic, and context trimming | `tests/test_providers/test_copilot.py`, `tests/test_exceptions.py`, `tests/test_engine/test_context.py` | M | DONE |
 
 **Acceptance Criteria**:
-- [ ] All errors include what, where, why, and how to fix
-- [ ] SDK failures retry with exponential backoff (3 attempts)
-- [ ] Lifecycle hooks are called at appropriate times
-- [ ] Error output uses Rich formatting for readability
-- [ ] Non-retryable errors fail immediately with clear message
-- [ ] All three context trimming strategies work correctly
+- [x] All errors include what, where, why, and how to fix
+- [x] SDK failures retry with exponential backoff (3 attempts)
+- [x] Lifecycle hooks are called at appropriate times
+- [x] Error output uses Rich formatting for readability
+- [x] Non-retryable errors fail immediately with clear message
+- [x] All three context trimming strategies work correctly
 
 ---
 

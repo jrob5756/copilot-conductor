@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 from copilot_conductor.engine.context import WorkflowContext
 from copilot_conductor.engine.limits import LimitEnforcer
 from copilot_conductor.engine.router import Router, RouteResult
-from copilot_conductor.exceptions import ExecutionError
+from copilot_conductor.exceptions import ConductorError, ExecutionError
 from copilot_conductor.executor.agent import AgentExecutor
 from copilot_conductor.executor.template import TemplateRenderer
 from copilot_conductor.gates.human import GateResult, HumanGateHandler
@@ -20,6 +20,23 @@ from copilot_conductor.gates.human import GateResult, HumanGateHandler
 if TYPE_CHECKING:
     from copilot_conductor.config.schema import AgentDef, WorkflowConfig
     from copilot_conductor.providers.base import AgentProvider
+
+
+@dataclass
+class LifecycleHookResult:
+    """Result of executing a lifecycle hook.
+
+    Attributes:
+        hook_name: Name of the hook (on_start, on_complete, on_error).
+        executed: Whether the hook was executed.
+        result: The rendered result of the hook template.
+        error: Any error that occurred during hook execution.
+    """
+
+    hook_name: str
+    executed: bool
+    result: str | None = None
+    error: str | None = None
 
 
 @dataclass
@@ -122,10 +139,12 @@ class WorkflowEngine:
         """Execute the workflow from entry_point to $end.
 
         This is the main entry point for workflow execution. It:
-        1. Sets up the context with the provided inputs
-        2. Enforces iteration and timeout limits
-        3. Executes agents in sequence based on routing rules
-        4. Returns the final output built from output templates
+        1. Calls on_start lifecycle hook if defined
+        2. Sets up the context with the provided inputs
+        3. Enforces iteration and timeout limits
+        4. Executes agents in sequence based on routing rules
+        5. Calls on_complete/on_error lifecycle hooks as appropriate
+        6. Returns the final output built from output templates
 
         Args:
             inputs: Workflow input values.
@@ -144,68 +163,168 @@ class WorkflowEngine:
         self.limits.start()
         current_agent_name = self.config.workflow.entry_point
 
-        async with self.limits.timeout_context():
-            while True:
-                agent = self._find_agent(current_agent_name)
-                if agent is None:
-                    raise ExecutionError(
-                        f"Agent not found: {current_agent_name}",
-                        suggestion=f"Ensure '{current_agent_name}' is defined in the workflow",
+        # Execute on_start hook
+        self._execute_hook("on_start")
+
+        try:
+            async with self.limits.timeout_context():
+                while True:
+                    agent = self._find_agent(current_agent_name)
+                    if agent is None:
+                        raise ExecutionError(
+                            f"Agent not found: {current_agent_name}",
+                            suggestion=f"Ensure '{current_agent_name}' is defined in the workflow",
+                        )
+
+                    # Check iteration limit before executing
+                    self.limits.check_iteration(current_agent_name)
+
+                    # Trim context if max_tokens is configured
+                    self._trim_context_if_needed()
+
+                    # Handle human gates
+                    if agent.type == "human_gate":
+                        # Build context for the gate prompt
+                        agent_context = self.context.get_for_template()
+
+                        # Use the gate handler for interaction
+                        gate_result: GateResult = await self.gate_handler.handle_gate(
+                            agent, agent_context
+                        )
+
+                        # Store gate result in context
+                        self.context.store(agent.name, {
+                            "selected": gate_result.selected_option.value,
+                            **gate_result.additional_input,
+                        })
+
+                        # Record human gate as executed
+                        self.limits.record_execution(agent.name)
+
+                        if gate_result.route == "$end":
+                            result = self._build_final_output()
+                            self._execute_hook("on_complete", result=result)
+                            return result
+                        current_agent_name = gate_result.route
+                        continue
+
+                    # Build context for this agent
+                    agent_context = self.context.build_for_agent(
+                        agent.name,
+                        agent.input,
+                        mode=self.config.workflow.context.mode,
                     )
 
-                # Check iteration limit before executing
-                self.limits.check_iteration(current_agent_name)
+                    # Execute agent
+                    output = await self.executor.execute(agent, agent_context)
 
-                # Handle human gates
-                if agent.type == "human_gate":
-                    # Build context for the gate prompt
-                    agent_context = self.context.get_for_template()
+                    # Store output
+                    self.context.store(agent.name, output.content)
 
-                    # Use the gate handler for interaction
-                    gate_result: GateResult = await self.gate_handler.handle_gate(
-                        agent, agent_context
-                    )
-
-                    # Store gate result in context
-                    self.context.store(agent.name, {
-                        "selected": gate_result.selected_option.value,
-                        **gate_result.additional_input,
-                    })
-
-                    # Record human gate as executed
+                    # Record successful execution
                     self.limits.record_execution(agent.name)
 
-                    if gate_result.route == "$end":
-                        return self._build_final_output()
-                    current_agent_name = gate_result.route
-                    continue
+                    # Check timeout after each agent
+                    self.limits.check_timeout()
 
-                # Build context for this agent
-                agent_context = self.context.build_for_agent(
-                    agent.name,
-                    agent.input,
-                    mode=self.config.workflow.context.mode,
-                )
+                    # Evaluate routes using the Router
+                    route_result = self._evaluate_routes(agent, output.content)
 
-                # Execute agent
-                output = await self.executor.execute(agent, agent_context)
+                    if route_result.target == "$end":
+                        result = self._build_final_output(route_result.output_transform)
+                        self._execute_hook("on_complete", result=result)
+                        return result
 
-                # Store output
-                self.context.store(agent.name, output.content)
+                    current_agent_name = route_result.target
 
-                # Record successful execution
-                self.limits.record_execution(agent.name)
+        except ConductorError as e:
+            # Execute on_error hook with error information
+            self._execute_hook("on_error", error=e)
+            raise
+        except Exception as e:
+            # Execute on_error hook for unexpected errors
+            self._execute_hook("on_error", error=e)
+            raise
 
-                # Check timeout after each agent
-                self.limits.check_timeout()
+    def _execute_hook(
+        self,
+        hook_name: str,
+        result: dict[str, Any] | None = None,
+        error: Exception | None = None,
+    ) -> LifecycleHookResult:
+        """Execute a lifecycle hook if defined.
 
-                # Evaluate routes using the Router
-                route_result = self._evaluate_routes(agent, output.content)
+        Renders the hook template with the current context plus any
+        additional information (result for on_complete, error for on_error).
 
-                if route_result.target == "$end":
-                    return self._build_final_output(route_result.output_transform)
+        Args:
+            hook_name: Name of the hook (on_start, on_complete, on_error).
+            result: Workflow result (for on_complete hook).
+            error: Exception that occurred (for on_error hook).
 
-                current_agent_name = route_result.target
+        Returns:
+            LifecycleHookResult with execution status and any rendered result.
+        """
+        hooks = self.config.workflow.hooks
+        if hooks is None:
+            return LifecycleHookResult(hook_name=hook_name, executed=False)
+
+        hook_template = getattr(hooks, hook_name, None)
+        if not hook_template:
+            return LifecycleHookResult(hook_name=hook_name, executed=False)
+
+        try:
+            # Build context for hook template
+            ctx = self.context.get_for_template()
+
+            # Add hook-specific context
+            if result is not None:
+                ctx["result"] = result
+
+            if error is not None:
+                ctx["error"] = {
+                    "type": type(error).__name__,
+                    "message": str(error),
+                }
+                if hasattr(error, "suggestion") and error.suggestion:
+                    ctx["error"]["suggestion"] = error.suggestion
+
+            # Render the hook template
+            rendered = self.renderer.render(hook_template, ctx)
+
+            return LifecycleHookResult(
+                hook_name=hook_name,
+                executed=True,
+                result=rendered,
+            )
+
+        except Exception as e:
+            # Hook execution errors should not fail the workflow
+            return LifecycleHookResult(
+                hook_name=hook_name,
+                executed=True,
+                error=str(e),
+            )
+
+    def _trim_context_if_needed(self) -> None:
+        """Trim context if max_tokens is configured and exceeded.
+
+        Uses the configured trim_strategy or defaults to drop_oldest.
+        """
+        context_config = self.config.workflow.context
+        if context_config.max_tokens is None:
+            return
+
+        current_tokens = self.context.estimate_context_tokens()
+        if current_tokens <= context_config.max_tokens:
+            return
+
+        strategy = context_config.trim_strategy or "drop_oldest"
+        self.context.trim_context(
+            max_tokens=context_config.max_tokens,
+            strategy=strategy,  # type: ignore
+            provider=self.provider if strategy == "summarize" else None,
+        )
 
     def _find_agent(self, name: str) -> AgentDef | None:
         """Find agent by name.

@@ -11,6 +11,8 @@ from typing import Annotated, Any
 
 import typer
 from rich.console import Console
+from rich.panel import Panel
+from rich.text import Text
 
 from copilot_conductor import __version__
 
@@ -35,6 +37,87 @@ verbose_mode: contextvars.ContextVar[bool] = contextvars.ContextVar(
 def is_verbose() -> bool:
     """Check if verbose mode is enabled."""
     return verbose_mode.get()
+
+
+def format_error(error: Exception) -> Panel:
+    """Format an exception for Rich console display.
+
+    Creates a styled Panel with error type, message, location (if available),
+    and suggestion (if available).
+
+    Args:
+        error: The exception to format.
+
+    Returns:
+        Rich Panel with formatted error content.
+    """
+    from copilot_conductor.exceptions import ConductorError
+
+    # Build error content
+    content = Text()
+
+    # Error message (red)
+    error_message = str(error).split("\n")[0]  # First line only for main message
+    content.append(error_message, style="bold red")
+
+    # Add location info if available
+    if isinstance(error, ConductorError):
+        if error.file_path or error.line_number:
+            content.append("\n\n")
+            content.append("📍 Location: ", style="yellow")
+            if error.file_path:
+                content.append(error.file_path, style="cyan")
+            if error.line_number:
+                if error.file_path:
+                    content.append(":", style="yellow")
+                content.append(f"line {error.line_number}", style="cyan")
+
+        # Add field path for configuration errors
+        if hasattr(error, "field_path") and error.field_path:
+            content.append("\n")
+            content.append("📋 Field: ", style="yellow")
+            content.append(error.field_path, style="cyan")
+
+        # Add suggestion if available
+        if error.suggestion:
+            content.append("\n\n")
+            content.append("💡 Suggestion: ", style="green")
+            content.append(error.suggestion, style="white")
+
+    # Get error type name for the panel title
+    error_type = type(error).__name__
+    if isinstance(error, ConductorError) and hasattr(error, "error_type"):
+        error_type = error.error_type
+
+    return Panel(
+        content,
+        title=f"[bold red]❌ {error_type}[/bold red]",
+        border_style="red",
+        padding=(1, 2),
+    )
+
+
+def print_error(error: Exception) -> None:
+    """Print a formatted error to stderr.
+
+    Args:
+        error: The exception to print.
+    """
+    from copilot_conductor.exceptions import ConductorError
+
+    if isinstance(error, ConductorError):
+        console.print(format_error(error))
+    else:
+        # For non-Conductor errors, still format nicely
+        content = Text()
+        content.append(str(error), style="red")
+        panel = Panel(
+            content,
+            title=f"[bold red]❌ {type(error).__name__}[/bold red]",
+            border_style="red",
+            padding=(1, 2),
+        )
+        console.print(panel)
 
 
 def version_callback(value: bool) -> None:
@@ -146,12 +229,7 @@ def run(
             display_execution_plan(plan, output_console)
             return
         except Exception as e:
-            from copilot_conductor.exceptions import ConductorError
-
-            if isinstance(e, ConductorError):
-                console.print(f"[bold red]Error:[/bold red] {e}")
-            else:
-                console.print(f"[bold red]Unexpected error:[/bold red] {e}")
+            print_error(e)
             raise typer.Exit(code=1) from None
 
     # Collect inputs from both --input and --input.* patterns
@@ -172,13 +250,7 @@ def run(
         output_console.print_json(json.dumps(result))
 
     except Exception as e:
-        # Import here to avoid circular imports
-        from copilot_conductor.exceptions import ConductorError
-
-        if isinstance(e, ConductorError):
-            console.print(f"[bold red]Error:[/bold red] {e}")
-        else:
-            console.print(f"[bold red]Unexpected error:[/bold red] {e}")
+        print_error(e)
         raise typer.Exit(code=1) from None
 
 

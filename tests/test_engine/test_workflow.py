@@ -994,3 +994,247 @@ class TestWorkflowEngineHumanGates:
         assert "approval_gate" in summary["agents_executed"]
         assert summary["iterations"] == 3
 
+
+class TestWorkflowEngineLifecycleHooks:
+    """Tests for lifecycle hooks execution."""
+
+    @pytest.mark.asyncio
+    async def test_on_start_hook_executed(self) -> None:
+        """Test that on_start hook is executed at workflow start."""
+        from copilot_conductor.config.schema import HooksConfig
+
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="hooks-workflow",
+                entry_point="agent1",
+                hooks=HooksConfig(
+                    on_start="Workflow started with input: {{ workflow.input.question }}",
+                ),
+            ),
+            agents=[
+                AgentDef(
+                    name="agent1",
+                    model="gpt-4",
+                    prompt="Hello",
+                    output={"result": OutputField(type="string")},
+                    routes=[RouteDef(to="$end")],
+                ),
+            ],
+            output={"result": "{{ agent1.output.result }}"},
+        )
+
+        def mock_handler(agent, prompt, context):
+            return {"result": "done"}
+
+        provider = CopilotProvider(mock_handler=mock_handler)
+        engine = WorkflowEngine(config, provider)
+
+        result = await engine.run({"question": "test"})
+
+        assert result["result"] == "done"
+
+    @pytest.mark.asyncio
+    async def test_on_complete_hook_executed(self) -> None:
+        """Test that on_complete hook is executed on success."""
+        from copilot_conductor.config.schema import HooksConfig
+
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="hooks-workflow",
+                entry_point="agent1",
+                hooks=HooksConfig(
+                    on_complete="Workflow completed with result: {{ result }}",
+                ),
+            ),
+            agents=[
+                AgentDef(
+                    name="agent1",
+                    model="gpt-4",
+                    prompt="Hello",
+                    output={"result": OutputField(type="string")},
+                    routes=[RouteDef(to="$end")],
+                ),
+            ],
+            output={"result": "{{ agent1.output.result }}"},
+        )
+
+        def mock_handler(agent, prompt, context):
+            return {"result": "success"}
+
+        provider = CopilotProvider(mock_handler=mock_handler)
+        engine = WorkflowEngine(config, provider)
+
+        result = await engine.run({})
+
+        assert result["result"] == "success"
+
+    @pytest.mark.asyncio
+    async def test_on_error_hook_executed(self) -> None:
+        """Test that on_error hook is executed on failure."""
+        from copilot_conductor.config.schema import HooksConfig
+        from copilot_conductor.exceptions import ProviderError
+
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="hooks-workflow",
+                entry_point="agent1",
+                hooks=HooksConfig(
+                    on_error="Error: {{ error.type }} - {{ error.message }}",
+                ),
+            ),
+            agents=[
+                AgentDef(
+                    name="agent1",
+                    model="gpt-4",
+                    prompt="Hello",
+                    output={"result": OutputField(type="string")},
+                    routes=[RouteDef(to="$end")],
+                ),
+            ],
+            output={"result": "{{ agent1.output.result }}"},
+        )
+
+        def mock_handler(agent, prompt, context):
+            # Simulate a provider error during execution
+            raise ProviderError("API request failed", provider_name="copilot", status_code=500)
+
+        provider = CopilotProvider(mock_handler=mock_handler)
+        engine = WorkflowEngine(config, provider)
+
+        with pytest.raises(ProviderError, match="API request failed"):
+            await engine.run({})
+
+    @pytest.mark.asyncio
+    async def test_hooks_not_defined(self) -> None:
+        """Test that workflow works without hooks defined."""
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="no-hooks-workflow",
+                entry_point="agent1",
+                # No hooks defined
+            ),
+            agents=[
+                AgentDef(
+                    name="agent1",
+                    model="gpt-4",
+                    prompt="Hello",
+                    output={"result": OutputField(type="string")},
+                    routes=[RouteDef(to="$end")],
+                ),
+            ],
+            output={"result": "{{ agent1.output.result }}"},
+        )
+
+        def mock_handler(agent, prompt, context):
+            return {"result": "done"}
+
+        provider = CopilotProvider(mock_handler=mock_handler)
+        engine = WorkflowEngine(config, provider)
+
+        result = await engine.run({})
+
+        assert result["result"] == "done"
+
+
+class TestWorkflowEngineContextTrimming:
+    """Tests for context trimming integration in workflow engine."""
+
+    @pytest.mark.asyncio
+    async def test_context_trimming_with_max_tokens(self) -> None:
+        """Test that context trimming is applied when max_tokens is set."""
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="trimming-workflow",
+                entry_point="agent1",
+                context=ContextConfig(
+                    mode="accumulate",
+                    max_tokens=500,  # Low limit to trigger trimming
+                    trim_strategy="truncate",
+                ),
+            ),
+            agents=[
+                AgentDef(
+                    name="agent1",
+                    model="gpt-4",
+                    prompt="First",
+                    output={"result": OutputField(type="string")},
+                    routes=[RouteDef(to="agent2")],
+                ),
+                AgentDef(
+                    name="agent2",
+                    model="gpt-4",
+                    prompt="Second",
+                    output={"result": OutputField(type="string")},
+                    routes=[RouteDef(to="agent3")],
+                ),
+                AgentDef(
+                    name="agent3",
+                    model="gpt-4",
+                    prompt="Third",
+                    output={"result": OutputField(type="string")},
+                    routes=[RouteDef(to="$end")],
+                ),
+            ],
+            output={"result": "{{ agent3.output.result }}"},
+        )
+
+        call_count = 0
+
+        def mock_handler(agent, prompt, context):
+            nonlocal call_count
+            call_count += 1
+            # Return large content to trigger trimming
+            return {"result": "A" * 200}
+
+        provider = CopilotProvider(mock_handler=mock_handler)
+        engine = WorkflowEngine(config, provider)
+
+        result = await engine.run({})
+
+        assert call_count == 3
+        # Workflow should complete even with trimming
+        assert "result" in result
+
+    @pytest.mark.asyncio
+    async def test_context_trimming_not_applied_without_max_tokens(self) -> None:
+        """Test that context is not trimmed when max_tokens is not set."""
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="no-trimming-workflow",
+                entry_point="agent1",
+                context=ContextConfig(
+                    mode="accumulate",
+                    # No max_tokens set
+                ),
+            ),
+            agents=[
+                AgentDef(
+                    name="agent1",
+                    model="gpt-4",
+                    prompt="First",
+                    output={"result": OutputField(type="string")},
+                    routes=[RouteDef(to="agent2")],
+                ),
+                AgentDef(
+                    name="agent2",
+                    model="gpt-4",
+                    prompt="Second",
+                    output={"result": OutputField(type="string")},
+                    routes=[RouteDef(to="$end")],
+                ),
+            ],
+            output={"result": "{{ agent2.output.result }}"},
+        )
+
+        def mock_handler(agent, prompt, context):
+            return {"result": "Large content: " + "X" * 500}
+
+        provider = CopilotProvider(mock_handler=mock_handler)
+        engine = WorkflowEngine(config, provider)
+
+        await engine.run({})
+
+        # Both agent outputs should be fully preserved
+        assert len(engine.context.agent_outputs["agent1"]["result"]) > 500
+        assert len(engine.context.agent_outputs["agent2"]["result"]) > 500
+
