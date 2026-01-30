@@ -202,14 +202,18 @@ class WorkflowContext:
             # workflow.input.param_name format
             if len(parts) >= 3 and parts[1] == "input":
                 param_name = parts[2]
+                # Ensure workflow.input exists in ctx
+                if "workflow" not in ctx:
+                    ctx["workflow"] = {"input": {}}
+                elif "input" not in ctx["workflow"]:
+                    ctx["workflow"]["input"] = {}
+
                 if param_name in self.workflow_inputs:
-                    # Ensure workflow.input exists in ctx
-                    if "workflow" not in ctx:
-                        ctx["workflow"] = {"input": {}}
-                    elif "input" not in ctx["workflow"]:
-                        ctx["workflow"]["input"] = {}
                     ctx["workflow"]["input"][param_name] = self.workflow_inputs[param_name]
-                elif not is_optional:
+                elif is_optional:
+                    # Set optional inputs to None so templates can check them
+                    ctx["workflow"]["input"][param_name] = None
+                else:
                     raise KeyError(f"Missing required workflow input: {param_name}")
         else:
             # agent_name.output or agent_name.output.field or agent_name.field format

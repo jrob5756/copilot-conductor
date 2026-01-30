@@ -1,4 +1,4 @@
-.PHONY: install dev test test-cov lint format typecheck check clean build all
+.PHONY: install install-cli dev test test-cov lint format typecheck check clean build all
 
 # Default target
 all: check test
@@ -6,6 +6,10 @@ all: check test
 # Install the package
 install:
 	uv sync
+
+# Install as a global CLI tool
+install-cli:
+	uv tool install --editable .
 
 # Install with dev dependencies
 dev:

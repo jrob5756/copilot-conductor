@@ -27,11 +27,11 @@ class LimitEnforcer:
     The LimitEnforcer tracks workflow execution progress and enforces
     safety limits to prevent runaway workflows:
     - max_iterations: Maximum number of agent executions
-    - timeout_seconds: Maximum wall-clock time for entire workflow
+    - timeout_seconds: Maximum wall-clock time for entire workflow (None = unlimited)
 
     Attributes:
         max_iterations: Maximum number of agent executions allowed.
-        timeout_seconds: Maximum wall-clock time for entire workflow.
+        timeout_seconds: Maximum wall-clock time for entire workflow. None means unlimited.
         current_iteration: Current iteration count.
         start_time: Workflow start timestamp (monotonic).
         execution_history: Ordered list of executed agent names.
@@ -48,8 +48,8 @@ class LimitEnforcer:
     max_iterations: int = 10
     """Maximum number of agent executions."""
 
-    timeout_seconds: int = 600
-    """Maximum wall-clock time for entire workflow."""
+    timeout_seconds: int | None = None
+    """Maximum wall-clock time for entire workflow. None means unlimited."""
 
     current_iteration: int = 0
     """Current iteration count."""
@@ -118,11 +118,16 @@ class LimitEnforcer:
 
         This should be called periodically during workflow execution.
         If the timeout has been exceeded, raises ConductorTimeoutError.
+        If timeout_seconds is None, no timeout is enforced.
 
         Raises:
             ConductorTimeoutError: If timeout exceeded.
         """
         if self.start_time is None:
+            return
+        
+        # No timeout if not set
+        if self.timeout_seconds is None:
             return
 
         elapsed = time.monotonic() - self.start_time
@@ -134,7 +139,7 @@ class LimitEnforcer:
                     "agent execution time"
                 ),
                 elapsed_seconds=elapsed,
-                timeout_seconds=self.timeout_seconds,
+                timeout_seconds=float(self.timeout_seconds),
                 current_agent=self.current_agent,
             )
 
@@ -148,12 +153,15 @@ class LimitEnforcer:
             return 0.0
         return time.monotonic() - self.start_time
 
-    def get_remaining_timeout(self) -> float:
+    def get_remaining_timeout(self) -> float | None:
         """Get the remaining time before timeout.
 
         Returns:
-            Remaining time in seconds, or full timeout if not started.
+            Remaining time in seconds, full timeout if not started,
+            or None if no timeout is set.
         """
+        if self.timeout_seconds is None:
+            return None
         if self.start_time is None:
             return float(self.timeout_seconds)
         elapsed = time.monotonic() - self.start_time
@@ -166,6 +174,8 @@ class LimitEnforcer:
         Uses asyncio.timeout() to enforce the timeout limit. If the
         timeout is exceeded, converts the asyncio.TimeoutError to a
         ConductorTimeoutError with context information.
+        
+        If timeout_seconds is None, no timeout is enforced.
 
         Usage:
             async with enforcer.timeout_context():
@@ -180,6 +190,11 @@ class LimitEnforcer:
         if self.start_time is None:
             self.start()
 
+        # No timeout if not set
+        if self.timeout_seconds is None:
+            yield
+            return
+
         try:
             async with asyncio.timeout(self.timeout_seconds):
                 yield
@@ -192,6 +207,6 @@ class LimitEnforcer:
                     "agent execution time"
                 ),
                 elapsed_seconds=elapsed,
-                timeout_seconds=self.timeout_seconds,
+                timeout_seconds=float(self.timeout_seconds),
                 current_agent=self.current_agent,
             ) from None

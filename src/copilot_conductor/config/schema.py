@@ -142,11 +142,11 @@ class ContextConfig(BaseModel):
 class LimitsConfig(BaseModel):
     """Safety limits for workflow execution."""
 
-    max_iterations: int = Field(default=10, ge=1, le=100)
+    max_iterations: int = Field(default=10, ge=1, le=500)
     """Maximum number of agent executions before forced termination."""
 
-    timeout_seconds: int = Field(default=600, ge=1, le=3600)
-    """Maximum wall-clock time for entire workflow."""
+    timeout_seconds: int | None = Field(default=None, ge=1)
+    """Maximum wall-clock time for entire workflow. None means unlimited."""
 
 
 class HooksConfig(BaseModel):
@@ -210,6 +210,43 @@ class AgentDef(BaseModel):
         return self
 
 
+class MCPServerDef(BaseModel):
+    """Definition for an MCP server."""
+
+    type: Literal["stdio", "http", "sse"] = "stdio"
+    """Type of MCP server: 'stdio' for command-based, 'http' or 'sse' for remote."""
+
+    command: str | None = None
+    """Command to run the MCP server (required for stdio type)."""
+
+    args: list[str] = Field(default_factory=list)
+    """Command-line arguments for the MCP server (stdio type only)."""
+
+    env: dict[str, str] = Field(default_factory=dict)
+    """Environment variables for the MCP server (stdio type only)."""
+
+    url: str | None = None
+    """URL for the MCP server (required for http/sse type)."""
+
+    headers: dict[str, str] = Field(default_factory=dict)
+    """HTTP headers for the MCP server (http/sse type only)."""
+
+    timeout: int | None = None
+    """Timeout in milliseconds for the MCP server."""
+
+    tools: list[str] = Field(default_factory=lambda: ["*"])
+    """List of tools to enable. ["*"] means all tools."""
+
+    @model_validator(mode="after")
+    def validate_type_requirements(self) -> MCPServerDef:
+        """Ensure required fields are set based on type."""
+        if self.type == "stdio" and not self.command:
+            raise ValueError("'command' is required for stdio type MCP servers")
+        if self.type in ("http", "sse") and not self.url:
+            raise ValueError("'url' is required for http/sse type MCP servers")
+        return self
+
+
 class RuntimeConfig(BaseModel):
     """Provider and runtime configuration."""
 
@@ -218,6 +255,9 @@ class RuntimeConfig(BaseModel):
 
     default_model: str | None = None
     """Default model for agents that don't specify one."""
+
+    mcp_servers: dict[str, MCPServerDef] = Field(default_factory=dict)
+    """MCP server configurations keyed by server name."""
 
 
 class WorkflowDef(BaseModel):

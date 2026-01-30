@@ -205,8 +205,8 @@ class TestVerboseLogging:
         finally:
             verbose_mode.reset(token)
 
-    def test_verbose_log_section_truncates_long_content(self) -> None:
-        """Test that verbose_log_section truncates long content."""
+    def test_verbose_log_section_shows_full_content(self) -> None:
+        """Test that verbose_log_section shows full content without truncation."""
         from io import StringIO
 
         from rich.console import Console
@@ -222,9 +222,12 @@ class TestVerboseLogging:
                 Console(file=output, force_terminal=True),
             ):
                 long_content = "x" * 1000
-                verbose_log_section("Long Section", long_content, max_length=100)
+                verbose_log_section("Long Section", long_content)
                 output_text = output.getvalue()
-                # Content should be truncated
-                assert "..." in output_text
+                # Full content should be shown (no truncation indicator)
+                assert "..." not in output_text
+                # Count total x's in output (content is wrapped across lines)
+                x_count = output_text.count("x")
+                assert x_count == 1000, f"Expected 1000 x's, got {x_count}"
         finally:
             verbose_mode.reset(token)

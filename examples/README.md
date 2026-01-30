@@ -49,6 +49,38 @@ conductor run examples/research-assistant.yaml --input topic="AI in healthcare"
 conductor run examples/research-assistant.yaml --input topic="Quantum computing" --input depth="comprehensive"
 ```
 
+### design.yaml
+
+A solution design workflow with architect and reviewer agents. Demonstrates:
+- Architect agent for creating comprehensive solution designs
+- Reviewer agent for quality assessment with scoring
+- Loop-back pattern for iterative refinement
+- Quality threshold gate (score >= 90 to pass)
+- Structured design document output
+
+```bash
+conductor run examples/design.yaml --input purpose="Build a user authentication system with OAuth2"
+
+# With verbose output
+conductor -V run examples/design.yaml --input purpose="Add caching layer to API"
+```
+
+### plan.yaml
+
+An implementation planning workflow with architect and reviewer agents. Demonstrates:
+- Architect agent for creating detailed implementation plans
+- Reviewer agent for plan quality assessment
+- Loop-back pattern until quality threshold is met
+- Structured output with epics, tasks, and file changes
+- Traceability between requirements and implementation tasks
+
+```bash
+conductor run examples/plan.yaml --input design="Build a REST API with CRUD operations for users"
+
+# With verbose output
+conductor -V run examples/plan.yaml --input design="./docs/my-feature.design.md"
+```
+
 ## Running Examples
 
 ### Prerequisites
@@ -81,7 +113,7 @@ conductor run examples/simple-qa.yaml --dry-run
 See detailed execution progress:
 
 ```bash
-conductor run examples/simple-qa.yaml --input question="Hello" --verbose
+conductor -V run examples/simple-qa.yaml --input question="Hello"
 ```
 
 ## Creating Your Own Workflows

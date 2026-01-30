@@ -39,7 +39,7 @@ class TestLimitEnforcerBasic:
         """Test default limit values."""
         enforcer = LimitEnforcer()
         assert enforcer.max_iterations == 10
-        assert enforcer.timeout_seconds == 600
+        assert enforcer.timeout_seconds is None  # Unlimited by default
 
     def test_custom_limits(self) -> None:
         """Test custom limit values."""
@@ -304,7 +304,7 @@ class TestWorkflowEngineLimits:
 
         # Check default limits are set
         assert engine.limits.max_iterations == 10
-        assert engine.limits.timeout_seconds == 600
+        assert engine.limits.timeout_seconds is None  # Unlimited by default
 
         # Execute should work normally
         result = await engine.run({})

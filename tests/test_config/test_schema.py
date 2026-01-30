@@ -199,7 +199,7 @@ class TestLimitsConfig:
         """Test default limits configuration."""
         config = LimitsConfig()
         assert config.max_iterations == 10
-        assert config.timeout_seconds == 600
+        assert config.timeout_seconds is None  # Unlimited by default
 
     def test_custom_limits(self) -> None:
         """Test custom limits."""
@@ -218,10 +218,11 @@ class TestLimitsConfig:
     def test_timeout_bounds(self) -> None:
         """Test timeout_seconds bounds validation."""
         with pytest.raises(ValidationError):
-            LimitsConfig(timeout_seconds=0)  # Below minimum
+            LimitsConfig(timeout_seconds=0)  # Below minimum (must be >= 1 when set)
 
-        with pytest.raises(ValidationError):
-            LimitsConfig(timeout_seconds=3601)  # Above maximum
+        # No upper bound - large values are allowed (unlimited when None)
+        config = LimitsConfig(timeout_seconds=3601)
+        assert config.timeout_seconds == 3601
 
 
 class TestHooksConfig:

@@ -4,6 +4,7 @@
 # It shows:
 # - Multiple specialized agents
 # - Tool configuration at workflow and agent levels
+# - MCP server configuration for web search
 # - Conditional routing based on research quality
 # - Context passing between agents
 # - Output schema validation
@@ -31,6 +32,11 @@ workflow:
   runtime:
     provider: copilot
     default_model: gpt-4
+    mcp_servers:
+      web-search:
+        command: sh
+        args: ["-c", "MODE=stdio DEFAULT_SEARCH_ENGINE=duckduckgo exec npx -y open-websearch@latest"]
+        tools: ["*"]
 
   context:
     mode: explicit  # Only declared inputs are available

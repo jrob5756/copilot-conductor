@@ -6,7 +6,7 @@ the appropriate AgentProvider based on the requested provider type.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from copilot_conductor.exceptions import ProviderError
 from copilot_conductor.providers.base import AgentProvider
@@ -16,6 +16,7 @@ from copilot_conductor.providers.copilot import CopilotProvider
 async def create_provider(
     provider_type: Literal["copilot", "openai-agents", "claude"] = "copilot",
     validate: bool = True,
+    mcp_servers: dict[str, Any] | None = None,
 ) -> AgentProvider:
     """Factory function to create the appropriate provider.
 
@@ -28,6 +29,7 @@ async def create_provider(
             is fully implemented.
         validate: Whether to validate connection on creation. If True,
             calls validate_connection() and raises ProviderError on failure.
+        mcp_servers: MCP server configurations to pass to the provider.
 
     Returns:
         Configured AgentProvider instance.
@@ -42,7 +44,7 @@ async def create_provider(
     """
     match provider_type:
         case "copilot":
-            provider = CopilotProvider()
+            provider = CopilotProvider(mcp_servers=mcp_servers)
         case "openai-agents":
             raise ProviderError(
                 "OpenAI Agents provider not yet implemented",

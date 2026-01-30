@@ -46,14 +46,14 @@ agents:
 
       Requirement: {{ workflow.input.requirement }}
 
-      {% if reviewer.output %}
+      {% if reviewer is defined and reviewer.output %}
       Previous Review Feedback:
       {{ reviewer.output.feedback }}
 
       Please revise your design to address this feedback.
       {% endif %}
 
-      {% if human_approval.output and human_approval.output.feedback %}
+      {% if human_approval is defined and human_approval.output and human_approval.output.feedback %}
       Human Feedback:
       {{ human_approval.output.feedback }}
 

@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 from copilot_conductor.exceptions import ProviderError
 from copilot_conductor.providers.base import AgentOutput, AgentProvider
 
+
 if TYPE_CHECKING:
     from copilot_conductor.config.schema import AgentDef
 
@@ -75,6 +76,7 @@ class CopilotProvider(AgentProvider):
         mock_handler: Callable[[AgentDef, str, dict[str, Any]], dict[str, Any]] | None = None,
         retry_config: RetryConfig | None = None,
         model: str | None = None,
+        mcp_servers: dict[str, Any] | None = None,
     ) -> None:
         """Initialize the Copilot provider.
 
@@ -83,6 +85,7 @@ class CopilotProvider(AgentProvider):
                          and returns a dict output. Used for testing.
             retry_config: Optional retry configuration. Uses default if not provided.
             model: Default model to use if not specified in agent. Defaults to "gpt-4o".
+            mcp_servers: MCP server configurations to pass to the SDK.
         """
         self._client: Any = None  # Will hold Copilot SDK client
         self._mock_handler = mock_handler
@@ -90,6 +93,7 @@ class CopilotProvider(AgentProvider):
         self._retry_config = retry_config or RetryConfig()
         self._retry_history: list[dict[str, Any]] = []  # For testing retries
         self._default_model = model or "gpt-4o"
+        self._mcp_servers = mcp_servers or {}
         self._started = False
 
     async def execute(
@@ -261,21 +265,42 @@ class CopilotProvider(AgentProvider):
         # If agent has output schema, instruct to respond in JSON
         if agent.output:
             schema_desc = json.dumps(
-                {name: field.type for name, field in agent.output.items()},
+                {
+                    name: {
+                        "type": field.type,
+                        "description": field.description or f"The {name} field",
+                    }
+                    for name, field in agent.output.items()
+                },
                 indent=2,
             )
             full_prompt += (
-                f"\n\nRespond with a JSON object matching this schema:\n{schema_desc}"
+                f"\n\n**IMPORTANT: You MUST respond with a JSON object matching this schema:**\n"
+                f"```json\n{schema_desc}\n```\n"
+                f"Return ONLY the JSON object, no other text."
             )
 
         try:
+            # Build session config with MCP servers from workflow configuration
+            session_config: dict[str, Any] = {
+                "model": model,
+            }
+
+            # Add MCP servers if configured
+            if self._mcp_servers:
+                session_config["mcp_servers"] = self._mcp_servers
+
             # Create a session and send the prompt
-            session = await self._client.create_session({"model": model})
+            session = await self._client.create_session(session_config)
 
             # Collect response using event handler
             response_content = ""
             done = asyncio.Event()
             error_message: str | None = None
+            
+            # Capture verbose state before callback (contextvars don't propagate to sync callbacks)
+            from copilot_conductor.cli.app import is_verbose
+            verbose_enabled = is_verbose()
 
             def on_event(event: Any) -> None:
                 nonlocal response_content, error_message
@@ -285,23 +310,20 @@ class CopilotProvider(AgentProvider):
                     response_content = event.data.content
                 elif event_type == "session.idle":
                     done.set()
-                elif event_type == "error":
+                elif event_type == "error" or event_type == "session.error":
                     error_message = getattr(event.data, "message", str(event.data))
                     done.set()
+
+                # Verbose logging for intermediate progress
+                if verbose_enabled:
+                    self._log_event_verbose(event_type, event)
 
             session.on(on_event)
             await session.send({"prompt": full_prompt})
 
-            # Wait for completion with timeout
-            try:
-                await asyncio.wait_for(done.wait(), timeout=120.0)
-            except asyncio.TimeoutError:
-                await session.destroy()
-                raise ProviderError(
-                    "Copilot SDK request timed out after 120 seconds",
-                    suggestion="Try a simpler prompt or check your connection",
-                    is_retryable=True,
-                )
+            # Wait for completion - no timeout at SDK level
+            # The workflow-level timeout will enforce overall limits
+            await done.wait()
 
             await session.destroy()
 
@@ -317,8 +339,16 @@ class CopilotProvider(AgentProvider):
                     # Try to extract JSON from the response
                     return self._extract_json(response_content)
                 except (json.JSONDecodeError, ValueError) as e:
-                    # Return as string result if JSON parsing fails
-                    return {"result": response_content, "_parse_error": str(e)}
+                    # Provide better error for structured output parsing failures
+                    expected_fields = list(agent.output.keys())
+                    raise ProviderError(
+                        f"Failed to parse structured output from agent response: {e}",
+                        suggestion=(
+                            f"Agent was expected to return JSON with fields: {expected_fields}. "
+                            f"Response started with: {response_content[:200]}..."
+                        ),
+                        is_retryable=True,
+                    ) from e
 
             return {"result": response_content}
 
@@ -371,6 +401,44 @@ class CopilotProvider(AgentProvider):
                 pass
 
         raise ValueError(f"Could not extract JSON from response: {content[:200]}...")
+
+    def _log_event_verbose(self, event_type: str, event: Any) -> None:
+        """Log SDK events in verbose mode for progress visibility.
+        
+        Note: Caller must check is_verbose() before calling - contextvars
+        don't propagate to sync callbacks from the SDK.
+
+        Args:
+            event_type: The event type string.
+            event: The event object.
+        """
+        import sys
+
+        # Log interesting events
+        if event_type == "tool.execution_start":
+            tool_name = getattr(event.data, "tool_name", None) or getattr(event.data, "name", "unknown")
+            print(f"    🔧 Tool call: {tool_name}", file=sys.stderr)
+        elif event_type == "tool.execution_complete":
+            # tool.execution_complete may not have tool name, just acknowledge completion
+            tool_name = getattr(event.data, "tool_name", None) or getattr(event.data, "name", None)
+            if tool_name:
+                print(f"    ✓ Tool done: {tool_name}", file=sys.stderr)
+            # Skip logging if we don't have a tool name - the start event already logged it
+        elif event_type == "assistant.reasoning":
+            # Show reasoning/thinking (truncated)
+            reasoning = getattr(event.data, "content", "")
+            if reasoning:
+                preview = reasoning[:100] + "..." if len(reasoning) > 100 else reasoning
+                preview = preview.replace("\n", " ")
+                print(f"    💭 {preview}", file=sys.stderr)
+        elif event_type == "subagent.started":
+            agent_name = getattr(event.data, "name", "unknown")
+            print(f"    🤖 Sub-agent: {agent_name}", file=sys.stderr)
+        elif event_type == "subagent.completed":
+            agent_name = getattr(event.data, "name", "unknown")
+            print(f"    ✓ Sub-agent done: {agent_name}", file=sys.stderr)
+        elif event_type == "assistant.turn_start":
+            print("    ⏳ Processing...", file=sys.stderr)
 
     async def _ensure_client_started(self) -> None:
         """Ensure the Copilot client is started."""

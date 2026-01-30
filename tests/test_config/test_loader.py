@@ -245,7 +245,7 @@ agents:
         # Check defaults
         assert config.workflow.runtime.provider == "copilot"
         assert config.workflow.limits.max_iterations == 10
-        assert config.workflow.limits.timeout_seconds == 600
+        assert config.workflow.limits.timeout_seconds is None  # Unlimited by default
         assert config.workflow.context.mode == "accumulate"
 
     def test_load_workflow_with_empty_output(self) -> None:

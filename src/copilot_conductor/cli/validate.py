@@ -153,7 +153,8 @@ def display_validation_success(
     if human_gate_count > 0:
         table.add_row("Human Gates", str(human_gate_count))
     table.add_row("Max Iterations", str(config.workflow.limits.max_iterations))
-    table.add_row("Timeout", f"{config.workflow.limits.timeout_seconds}s")
+    timeout_val = config.workflow.limits.timeout_seconds
+    table.add_row("Timeout", f"{timeout_val}s" if timeout_val else "unlimited")
     if patterns:
         table.add_row("Patterns", ", ".join(patterns))
 

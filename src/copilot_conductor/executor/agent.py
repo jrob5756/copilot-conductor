@@ -13,6 +13,18 @@ from copilot_conductor.executor.output import parse_json_output, validate_output
 from copilot_conductor.executor.template import TemplateRenderer
 from copilot_conductor.providers.base import AgentOutput
 
+
+def _verbose_log(message: str, style: str = "dim") -> None:
+    """Lazy import wrapper for verbose_log to avoid circular imports."""
+    from copilot_conductor.cli.run import verbose_log
+    verbose_log(message, style)
+
+
+def _verbose_log_section(title: str, content: str) -> None:
+    """Lazy import wrapper for verbose_log_section to avoid circular imports."""
+    from copilot_conductor.cli.run import verbose_log_section
+    verbose_log_section(title, content)
+
 if TYPE_CHECKING:
     from copilot_conductor.config.schema import AgentDef
     from copilot_conductor.providers.base import AgentProvider
@@ -119,6 +131,12 @@ class AgentExecutor:
         # Render prompt with context
         rendered_prompt = self.renderer.render(agent.prompt, context)
 
+        # Verbose: Log rendered prompt
+        _verbose_log_section(
+            f"Prompt for '{agent.name}'",
+            rendered_prompt,
+        )
+
         # Render system prompt if present (used by some providers)
         # Note: System prompt support will be fully utilized in later EPICs
         if agent.system_prompt:
@@ -126,6 +144,10 @@ class AgentExecutor:
 
         # Resolve tools for this agent
         resolved_tools = resolve_agent_tools(agent.tools, self.workflow_tools)
+
+        # Verbose: Log resolved tools
+        if resolved_tools:
+            _verbose_log(f"  Tools: {resolved_tools}")
 
         # Execute via provider
         output = await self.provider.execute(

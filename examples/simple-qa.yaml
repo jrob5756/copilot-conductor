@@ -6,6 +6,7 @@
 # - Input parameters
 # - Output schema validation
 # - Simple routing to $end
+# - MCP server configuration for web search
 #
 # Usage:
 #   conductor run examples/simple-qa.yaml --input question="What is Python?"
@@ -15,6 +16,26 @@ workflow:
   description: A simple question-answering workflow with a single agent
   version: "1.0.0"
   entry_point: answerer
+  
+  runtime:
+    provider: copilot
+    mcp_servers:
+      web-search:
+        command: sh
+        args: ["-c", "MODE=stdio DEFAULT_SEARCH_ENGINE=bing exec npx -y open-websearch@latest"]
+        tools: ["*"]
+      context7:
+        command: npx
+        args: ["-y", "@upstash/context7-mcp@latest"]
+        tools: ["*"]
+      enghub:
+        command: node
+        args: ["/Users/jason/src/enghub-mcp-server-tools/dist/index.js"]
+        tools: ["*"]
+      s360:
+        type: http
+        url: https://mcp.vnext.s360.msftcloudes.com/
+        tools: ["*"]
 
   input:
     question:
@@ -25,7 +46,7 @@ workflow:
 agents:
   - name: answerer
     description: Answers the user's question clearly and concisely
-    model: gpt-4
+    model: haiku-4.5
     prompt: |
       You are a helpful assistant. Please answer the following question 
       clearly and concisely:

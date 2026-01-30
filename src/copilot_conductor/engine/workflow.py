@@ -17,6 +17,18 @@ from copilot_conductor.executor.agent import AgentExecutor
 from copilot_conductor.executor.template import TemplateRenderer
 from copilot_conductor.gates.human import GateResult, HumanGateHandler
 
+
+def _verbose_log(message: str, style: str = "dim") -> None:
+    """Lazy import wrapper for verbose_log to avoid circular imports."""
+    from copilot_conductor.cli.run import verbose_log
+    verbose_log(message, style)
+
+
+def _verbose_log_timing(operation: str, elapsed: float) -> None:
+    """Lazy import wrapper for verbose_log_timing to avoid circular imports."""
+    from copilot_conductor.cli.run import verbose_log_timing
+    verbose_log_timing(operation, elapsed)
+
 if TYPE_CHECKING:
     from copilot_conductor.config.schema import AgentDef, WorkflowConfig
     from copilot_conductor.providers.base import AgentProvider
@@ -84,8 +96,8 @@ class ExecutionPlan:
     max_iterations: int = 10
     """Maximum iterations configured."""
 
-    timeout_seconds: int = 600
-    """Timeout configured."""
+    timeout_seconds: int | None = None
+    """Timeout configured. None means unlimited."""
 
     possible_paths: list[list[str]] = field(default_factory=list)
     """Possible execution paths through the workflow."""
@@ -159,7 +171,9 @@ class WorkflowEngine:
             ValidationError: If agent output doesn't match schema.
             TemplateError: If template rendering fails.
         """
-        self.context.set_workflow_inputs(inputs)
+        # Apply defaults from input schema for optional inputs not provided
+        merged_inputs = self._apply_input_defaults(inputs)
+        self.context.set_workflow_inputs(merged_inputs)
         self.limits.start()
         current_agent_name = self.config.workflow.entry_point
 
@@ -178,6 +192,13 @@ class WorkflowEngine:
 
                     # Check iteration limit before executing
                     self.limits.check_iteration(current_agent_name)
+
+                    # Verbose: Log agent execution start (1-indexed for user display)
+                    iteration = self.limits.current_iteration + 1
+                    _verbose_log(
+                        f"\n[Iteration {iteration}] Executing agent: {current_agent_name}",
+                        style="cyan bold",
+                    )
 
                     # Trim context if max_tokens is configured
                     self._trim_context_if_needed()
@@ -216,7 +237,21 @@ class WorkflowEngine:
                     )
 
                     # Execute agent
+                    import time as _time
+                    _agent_start = _time.time()
                     output = await self.executor.execute(agent, agent_context)
+                    _agent_elapsed = _time.time() - _agent_start
+
+                    # Verbose: Log agent output summary
+                    _verbose_log_timing(f"Agent '{agent.name}' execution", _agent_elapsed)
+                    if output.model:
+                        _verbose_log(f"  Model: {output.model}")
+                    if output.tokens_used:
+                        _verbose_log(f"  Tokens: {output.tokens_used}")
+                    
+                    # Log output keys (not full content, which may be large)
+                    output_keys = list(output.content.keys()) if isinstance(output.content, dict) else []
+                    _verbose_log(f"  Output keys: {output_keys}")
 
                     # Store output
                     self.context.store(agent.name, output.content)
@@ -229,6 +264,9 @@ class WorkflowEngine:
 
                     # Evaluate routes using the Router
                     route_result = self._evaluate_routes(agent, output.content)
+
+                    # Verbose: Log routing decision
+                    _verbose_log(f"  Route: → {route_result.target}", style="yellow")
 
                     if route_result.target == "$end":
                         result = self._build_final_output(route_result.output_transform)
@@ -245,6 +283,31 @@ class WorkflowEngine:
             # Execute on_error hook for unexpected errors
             self._execute_hook("on_error", error=e)
             raise
+
+    def _apply_input_defaults(self, inputs: dict[str, Any]) -> dict[str, Any]:
+        """Apply default values from input schema for missing optional inputs.
+
+        This ensures all defined inputs are present in the context, either
+        with provided values or their schema defaults (None if no default).
+
+        Args:
+            inputs: The input values provided at runtime.
+
+        Returns:
+            Dictionary with all defined inputs, including defaults for missing optionals.
+        """
+        merged = inputs.copy()
+
+        for name, input_def in self.config.workflow.input.items():
+            if name not in merged:
+                # Input not provided - check if it has a default or is optional
+                if input_def.default is not None:
+                    merged[name] = input_def.default
+                elif not input_def.required:
+                    # Optional with no default - set to None so templates can check it
+                    merged[name] = None
+
+        return merged
 
     def _execute_hook(
         self,

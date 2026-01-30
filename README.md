@@ -251,6 +251,8 @@ See the [`examples/`](./examples/) directory for complete workflow examples:
 - [`simple-qa.yaml`](./examples/simple-qa.yaml) - Simple question-answering workflow
 - [`design-review.yaml`](./examples/design-review.yaml) - Loop pattern with human gate
 - [`research-assistant.yaml`](./examples/research-assistant.yaml) - Multi-agent workflow with tools
+- [`design.yaml`](./examples/design.yaml) - Solution design workflow with architect/reviewer loop
+- [`plan.yaml`](./examples/plan.yaml) - Implementation planning workflow with quality gates
 
 ## Development
 

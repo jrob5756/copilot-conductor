@@ -19,6 +19,7 @@ from rich.table import Table
 
 from copilot_conductor.config.loader import load_config
 from copilot_conductor.engine.workflow import ExecutionPlan, WorkflowEngine
+from copilot_conductor.mcp_auth import resolve_mcp_server_auth
 from copilot_conductor.providers.factory import create_provider
 
 if TYPE_CHECKING:
@@ -41,19 +42,16 @@ def verbose_log(message: str, style: str = "dim") -> None:
         _verbose_console.print(f"[{style}]{message}[/{style}]")
 
 
-def verbose_log_section(title: str, content: str, max_length: int = 500) -> None:
+def verbose_log_section(title: str, content: str) -> None:
     """Log a section with title if verbose mode is enabled.
 
     Args:
         title: Section title.
-        content: Section content (will be truncated if too long).
-        max_length: Maximum content length before truncation.
+        content: Section content.
     """
     from copilot_conductor.cli.app import is_verbose
 
     if is_verbose():
-        if len(content) > max_length:
-            content = content[:max_length] + "..."
         _verbose_console.print(
             Panel(content, title=f"[cyan]{title}[/cyan]", border_style="dim")
         )
@@ -245,9 +243,45 @@ async def run_workflow_async(
         verbose_log(f"Provider override: {provider_override}", style="yellow")
         config.workflow.runtime.provider = provider_override  # type: ignore[assignment]
 
+    # Convert MCP servers from workflow config to SDK format
+    mcp_servers: dict[str, Any] | None = None
+    if config.workflow.runtime.mcp_servers:
+        mcp_servers = {}
+        for name, server in config.workflow.runtime.mcp_servers.items():
+            # Convert Pydantic model to dict for SDK
+            if server.type in ("http", "sse"):
+                server_config: dict[str, Any] = {
+                    "type": server.type,
+                    "url": server.url,
+                    "tools": server.tools,
+                }
+                if server.headers:
+                    server_config["headers"] = server.headers
+                if server.timeout:
+                    server_config["timeout"] = server.timeout
+                # Resolve OAuth authentication for HTTP/SSE servers
+                server_config = await resolve_mcp_server_auth(name, server_config)
+            else:
+                # stdio/local type
+                server_config = {
+                    "type": "stdio",
+                    "command": server.command,
+                    "args": server.args,
+                    "tools": server.tools,
+                }
+                if server.env:
+                    server_config["env"] = server.env
+                if server.timeout:
+                    server_config["timeout"] = server.timeout
+            mcp_servers[name] = server_config
+        verbose_log(f"MCP servers configured: {list(mcp_servers.keys())}")
+
     # Create provider
     verbose_log(f"Creating provider: {config.workflow.runtime.provider}")
-    provider = await create_provider(config.workflow.runtime.provider)
+    provider = await create_provider(
+        config.workflow.runtime.provider,
+        mcp_servers=mcp_servers,
+    )
 
     try:
         # Create and run workflow engine
@@ -303,11 +337,12 @@ def display_execution_plan(plan: ExecutionPlan, console: Console | None = None) 
     output_console = console if console is not None else Console()
 
     # Header panel with workflow metadata
+    timeout_display = f"{plan.timeout_seconds}s" if plan.timeout_seconds else "unlimited"
     header_content = (
         f"[bold]Workflow:[/bold] {plan.workflow_name}\n"
         f"[bold]Entry Point:[/bold] {plan.entry_point}\n"
         f"[bold]Max Iterations:[/bold] {plan.max_iterations}\n"
-        f"[bold]Timeout:[/bold] {plan.timeout_seconds}s"
+        f"[bold]Timeout:[/bold] {timeout_display}"
     )
     output_console.print(Panel(header_content, title="[cyan]Execution Plan (Dry Run)[/cyan]"))
 
