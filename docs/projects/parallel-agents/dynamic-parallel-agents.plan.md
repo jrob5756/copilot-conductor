@@ -1086,23 +1086,25 @@ def _find_for_each_group(self, name: str) -> ForEachDef | None:
 
 **Prerequisites**: Epic 5
 
+**Status**: DONE
+
 **Tasks**:
 | Task ID | Type | Description | Files | Status |
 |---------|------|-------------|-------|--------|
-| E6-T1 | IMPL | Implement list-based output aggregation (default) | `src/copilot_conductor/engine/workflow.py` | TO DO |
-| E6-T2 | IMPL | Implement dict-based output aggregation (with `key_by`) | `src/copilot_conductor/engine/workflow.py` | TO DO |
-| E6-T3 | IMPL | Implement `_extract_key_from_item()` method | `src/copilot_conductor/engine/workflow.py` | TO DO |
-| E6-T4 | IMPL | Add fallback to index when key extraction fails | `src/copilot_conductor/engine/workflow.py` | TO DO |
-| E6-T5 | IMPL | Store aggregated output in WorkflowContext | `src/copilot_conductor/engine/workflow.py` | TO DO |
-| E6-T6 | TEST | Test index-based output access (`outputs[0]`) | `tests/test_integration/test_for_each.py` | TO DO |
-| E6-T7 | TEST | Test key-based output access (`outputs["key"]`) | `tests/test_integration/test_for_each.py` | TO DO |
-| E6-T8 | TEST | Test key extraction fallback logic | `tests/test_engine/test_workflow.py` | TO DO |
+| E6-T1 | IMPL | Implement list-based output aggregation (default) | `src/copilot_conductor/engine/workflow.py` | DONE |
+| E6-T2 | IMPL | Implement dict-based output aggregation (with `key_by`) | `src/copilot_conductor/engine/workflow.py` | DONE |
+| E6-T3 | IMPL | Implement `_extract_key_from_item()` method | `src/copilot_conductor/engine/workflow.py` | DONE |
+| E6-T4 | IMPL | Add fallback to index when key extraction fails | `src/copilot_conductor/engine/workflow.py` | DONE |
+| E6-T5 | IMPL | Store aggregated output in WorkflowContext | `src/copilot_conductor/engine/workflow.py` | DONE |
+| E6-T6 | TEST | Test index-based output access (`outputs[0]`) | `tests/test_integration/test_for_each.py` | DONE |
+| E6-T7 | TEST | Test key-based output access (`outputs["key"]`) | `tests/test_integration/test_for_each.py` | DONE |
+| E6-T8 | TEST | Test key extraction fallback logic | `tests/test_engine/test_workflow.py` | DONE |
 
 **Acceptance Criteria**:
-- [ ] Index-based access works without `key_by`
-- [ ] Key-based access works with `key_by`
-- [ ] Fallback to index when key extraction fails
-- [ ] All tests pass
+- [x] Index-based access works without `key_by`
+- [x] Key-based access works with `key_by`
+- [x] Fallback to index when key extraction fails
+- [x] All tests pass
 
 ---
 

@@ -889,3 +889,392 @@ class TestForEachExecution:
         assert "For-each group 'processors' failed" in str(exc_info.value)
         assert "4 succeeded, 1 failed" in str(exc_info.value)
         assert "all_or_nothing mode" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+class TestForEachOutputAccess:
+    """Tests for accessing for-each outputs in downstream agents.
+    
+    These tests verify:
+    - Index-based output access (outputs[0])
+    - Key-based output access (outputs["key"])
+    - Output access patterns from downstream agents
+    """
+
+    async def test_index_based_output_access(self):
+        """Test accessing for-each outputs by index in downstream agent."""
+        from unittest.mock import AsyncMock, MagicMock
+        from copilot_conductor.providers.base import AgentOutput
+        
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="index-output-test",
+                entry_point="finder",
+                runtime=RuntimeConfig(provider="copilot"),
+                context=ContextConfig(mode="accumulate"),
+                limits=LimitsConfig(max_iterations=50),
+            ),
+            agents=[
+                AgentDef(
+                    name="finder",
+                    model="gpt-4",
+                    prompt="Find items",
+                    output={"items": OutputField(type="array")},
+                    routes=[RouteDef(to="processors")],
+                ),
+                AgentDef(
+                    name="summarizer",
+                    model="gpt-4",
+                    prompt="First: {{ processors.outputs[0].result }}, Last: {{ processors.outputs[2].result }}",
+                    output={"summary": OutputField(type="string")},
+                    routes=[RouteDef(to="$end")],
+                ),
+            ],
+            for_each=[
+                ForEachDef.model_validate({
+                    "name": "processors",
+                    "type": "for_each",
+                    "source": "finder.output.items",
+                    "as": "item",
+                    "agent": {
+                        "name": "processor",
+                        "model": "gpt-4",
+                        "prompt": "Process {{ item }}",
+                        "output": {"result": {"type": "string"}},
+                    },
+                    "routes": [{"to": "summarizer"}],
+                }),
+            ],
+            output={},
+        )
+        
+        provider = MagicMock()
+        provider.execute = AsyncMock()
+        
+        # Setup: finder returns 3 items, all succeed
+        provider.execute.side_effect = [
+            AgentOutput(
+                content={"items": ["A", "B", "C"]},
+                raw_response={},
+                model="gpt-4",
+                tokens_used=20,
+            ),
+            AgentOutput(content={"result": "result_A"}, raw_response={}, model="gpt-4", tokens_used=10),
+            AgentOutput(content={"result": "result_B"}, raw_response={}, model="gpt-4", tokens_used=10),
+            AgentOutput(content={"result": "result_C"}, raw_response={}, model="gpt-4", tokens_used=10),
+            AgentOutput(content={"summary": "done"}, raw_response={}, model="gpt-4", tokens_used=10),
+        ]
+        
+        engine = WorkflowEngine(config, provider)
+        result = await engine.run({})
+        
+        # Verify that the workflow completed successfully
+        # The fact that it didn't raise an error means the template was rendered correctly
+        assert result == {}
+        
+        # Verify all agents were called (finder + 3 processors + summarizer)
+        assert provider.execute.call_count == 5
+
+    async def test_key_based_output_access(self):
+        """Test accessing for-each outputs by key when key_by is specified."""
+        from unittest.mock import AsyncMock, MagicMock
+        from copilot_conductor.providers.base import AgentOutput
+        
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="key-output-test",
+                entry_point="finder",
+                runtime=RuntimeConfig(provider="copilot"),
+                context=ContextConfig(mode="accumulate"),
+                limits=LimitsConfig(max_iterations=50),
+            ),
+            agents=[
+                AgentDef(
+                    name="finder",
+                    model="gpt-4",
+                    prompt="Find KPIs",
+                    output={"kpis": OutputField(type="array")},
+                    routes=[RouteDef(to="analyzers")],
+                ),
+                AgentDef(
+                    name="reporter",
+                    model="gpt-4",
+                    prompt="Revenue: {{ analyzers.outputs['REV001'].status }}, Profit: {{ analyzers.outputs['PROF001'].status }}",
+                    output={"report": OutputField(type="string")},
+                    routes=[RouteDef(to="$end")],
+                ),
+            ],
+            for_each=[
+                ForEachDef.model_validate({
+                    "name": "analyzers",
+                    "type": "for_each",
+                    "source": "finder.output.kpis",
+                    "as": "kpi",
+                    "key_by": "kpi_id",
+                    "agent": {
+                        "name": "analyzer",
+                        "model": "gpt-4",
+                        "prompt": "Analyze {{ kpi.kpi_id }}",
+                        "output": {"status": {"type": "string"}},
+                    },
+                    "routes": [{"to": "reporter"}],
+                }),
+            ],
+            output={},
+        )
+        
+        provider = MagicMock()
+        provider.execute = AsyncMock()
+        
+        # Setup: finder returns KPIs with kpi_id keys
+        provider.execute.side_effect = [
+            AgentOutput(
+                content={"kpis": [
+                    {"kpi_id": "REV001", "name": "Revenue"},
+                    {"kpi_id": "PROF001", "name": "Profit"},
+                    {"kpi_id": "COST001", "name": "Cost"},
+                ]},
+                raw_response={},
+                model="gpt-4",
+                tokens_used=20,
+            ),
+            AgentOutput(content={"status": "good"}, raw_response={}, model="gpt-4", tokens_used=10),
+            AgentOutput(content={"status": "excellent"}, raw_response={}, model="gpt-4", tokens_used=10),
+            AgentOutput(content={"status": "ok"}, raw_response={}, model="gpt-4", tokens_used=10),
+            AgentOutput(content={"report": "done"}, raw_response={}, model="gpt-4", tokens_used=10),
+        ]
+        
+        engine = WorkflowEngine(config, provider)
+        result = await engine.run({})
+        
+        # Verify that the workflow completed successfully
+        # The fact that it didn't raise an error means the template was rendered correctly
+        assert result == {}
+        
+        # Verify all agents were called (finder + 3 analyzers + reporter)
+        assert provider.execute.call_count == 5
+
+    async def test_iterate_over_outputs(self):
+        """Test iterating over for-each outputs in downstream agent template."""
+        from unittest.mock import AsyncMock, MagicMock
+        from copilot_conductor.providers.base import AgentOutput
+        
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="iterate-output-test",
+                entry_point="finder",
+                runtime=RuntimeConfig(provider="copilot"),
+                context=ContextConfig(mode="accumulate"),
+                limits=LimitsConfig(max_iterations=50),
+            ),
+            agents=[
+                AgentDef(
+                    name="finder",
+                    model="gpt-4",
+                    prompt="Find items",
+                    output={"items": OutputField(type="array")},
+                    routes=[RouteDef(to="processors")],
+                ),
+                AgentDef(
+                    name="collector",
+                    model="gpt-4",
+                    prompt="Results: {% for result in processors.outputs %}{{ result.status }}{% if not loop.last %}, {% endif %}{% endfor %}",
+                    output={"collection": OutputField(type="string")},
+                    routes=[RouteDef(to="$end")],
+                ),
+            ],
+            for_each=[
+                ForEachDef.model_validate({
+                    "name": "processors",
+                    "type": "for_each",
+                    "source": "finder.output.items",
+                    "as": "item",
+                    "agent": {
+                        "name": "processor",
+                        "model": "gpt-4",
+                        "prompt": "Process {{ item }}",
+                        "output": {"status": {"type": "string"}},
+                    },
+                    "routes": [{"to": "collector"}],
+                }),
+            ],
+            output={},
+        )
+        
+        provider = MagicMock()
+        provider.execute = AsyncMock()
+        
+        # Setup
+        provider.execute.side_effect = [
+            AgentOutput(
+                content={"items": ["X", "Y", "Z"]},
+                raw_response={},
+                model="gpt-4",
+                tokens_used=20,
+            ),
+            AgentOutput(content={"status": "ok_X"}, raw_response={}, model="gpt-4", tokens_used=10),
+            AgentOutput(content={"status": "ok_Y"}, raw_response={}, model="gpt-4", tokens_used=10),
+            AgentOutput(content={"status": "ok_Z"}, raw_response={}, model="gpt-4", tokens_used=10),
+            AgentOutput(content={"collection": "done"}, raw_response={}, model="gpt-4", tokens_used=10),
+        ]
+        
+        engine = WorkflowEngine(config, provider)
+        result = await engine.run({})
+        
+        # Verify that the workflow completed successfully
+        # The fact that it didn't raise an error means the template was rendered correctly
+        assert result == {}
+        
+        # Verify all agents were called (finder + 3 processors + collector)
+        assert provider.execute.call_count == 5
+
+    async def test_empty_outputs_structure(self):
+        """Test that empty arrays produce correct empty output structures."""
+        from unittest.mock import AsyncMock, MagicMock
+        from copilot_conductor.providers.base import AgentOutput
+        
+        # Test both list and dict outputs with empty arrays
+        for key_by in [None, "item_id"]:
+            config = WorkflowConfig(
+                workflow=WorkflowDef(
+                    name="empty-structure-test",
+                    entry_point="finder",
+                    runtime=RuntimeConfig(provider="copilot"),
+                    context=ContextConfig(mode="accumulate"),
+                    limits=LimitsConfig(max_iterations=50),
+                ),
+                agents=[
+                    AgentDef(
+                        name="finder",
+                        model="gpt-4",
+                        prompt="Find items",
+                        output={"items": OutputField(type="array")},
+                        routes=[RouteDef(to="processors")],
+                    ),
+                    AgentDef(
+                        name="checker",
+                        model="gpt-4",
+                        prompt="Count: {{ processors.count }}",
+                        output={"result": OutputField(type="string")},
+                        routes=[RouteDef(to="$end")],
+                    ),
+                ],
+                for_each=[
+                    ForEachDef.model_validate({
+                        "name": "processors",
+                        "type": "for_each",
+                        "source": "finder.output.items",
+                        "as": "item",
+                        "key_by": key_by,
+                        "agent": {
+                            "name": "processor",
+                            "model": "gpt-4",
+                            "prompt": "Process",
+                            "output": {"status": {"type": "string"}},
+                        },
+                        "routes": [{"to": "checker"}],
+                    }),
+                ],
+                output={},
+            )
+            
+            provider = MagicMock()
+            provider.execute = AsyncMock()
+            
+            # Setup: finder returns empty array
+            provider.execute.side_effect = [
+                AgentOutput(
+                    content={"items": []},
+                    raw_response={},
+                    model="gpt-4",
+                    tokens_used=20,
+                ),
+                AgentOutput(content={"result": "done"}, raw_response={}, model="gpt-4", tokens_used=10),
+            ]
+            
+            engine = WorkflowEngine(config, provider)
+            result = await engine.run({})
+            
+            # Verify that the workflow completed successfully
+            # The fact that it didn't raise an error means the template was rendered correctly
+            assert result == {}
+            
+            # Verify both agents were called (finder + checker, no processors)
+            assert provider.execute.call_count == 2
+
+    async def test_access_errors_in_downstream_agent(self):
+        """Test accessing for-each errors in downstream agent with continue_on_error."""
+        from unittest.mock import AsyncMock, MagicMock
+        from copilot_conductor.providers.base import AgentOutput
+        from copilot_conductor.exceptions import ExecutionError as ExecError
+        
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="errors-access-test",
+                entry_point="finder",
+                runtime=RuntimeConfig(provider="copilot"),
+                context=ContextConfig(mode="accumulate"),
+                limits=LimitsConfig(max_iterations=50),
+            ),
+            agents=[
+                AgentDef(
+                    name="finder",
+                    model="gpt-4",
+                    prompt="Find items",
+                    output={"items": OutputField(type="array")},
+                    routes=[RouteDef(to="processors")],
+                ),
+                AgentDef(
+                    name="error_checker",
+                    model="gpt-4",
+                    prompt="Error count: {{ processors.errors | length }}",
+                    output={"report": OutputField(type="string")},
+                    routes=[RouteDef(to="$end")],
+                ),
+            ],
+            for_each=[
+                ForEachDef.model_validate({
+                    "name": "processors",
+                    "type": "for_each",
+                    "source": "finder.output.items",
+                    "as": "item",
+                    "failure_mode": "continue_on_error",
+                    "agent": {
+                        "name": "processor",
+                        "model": "gpt-4",
+                        "prompt": "Process {{ item }}",
+                        "output": {"result": {"type": "string"}},
+                    },
+                    "routes": [{"to": "error_checker"}],
+                }),
+            ],
+            output={},
+        )
+        
+        provider = MagicMock()
+        provider.execute = AsyncMock()
+        
+        # Setup: 3 items, 1 fails
+        provider.execute.side_effect = [
+            AgentOutput(
+                content={"items": ["A", "B", "C"]},
+                raw_response={},
+                model="gpt-4",
+                tokens_used=20,
+            ),
+            AgentOutput(content={"result": "ok"}, raw_response={}, model="gpt-4", tokens_used=10),
+            ExecError("Failed to process B"),
+            AgentOutput(content={"result": "ok"}, raw_response={}, model="gpt-4", tokens_used=10),
+            AgentOutput(content={"report": "done"}, raw_response={}, model="gpt-4", tokens_used=10),
+        ]
+        
+        engine = WorkflowEngine(config, provider)
+        result = await engine.run({})
+        
+        # Verify that the workflow completed successfully
+        # The fact that it didn't raise an error means the template was rendered correctly
+        assert result == {}
+        
+        # Verify all agents were called (finder + 3 processors + error_checker)
+        assert provider.execute.call_count == 5
+

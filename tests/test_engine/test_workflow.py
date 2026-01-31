@@ -1879,3 +1879,111 @@ class TestInjectLoopVariables:
         assert "_key" in context
         assert context["_key"] == ""
 
+
+class TestExtractKeyFromItem:
+    """Tests for _extract_key_from_item() method."""
+
+    @pytest.fixture
+    def workflow_engine(self) -> WorkflowEngine:
+        """Create a basic WorkflowEngine for testing."""
+        from unittest.mock import MagicMock
+        mock_provider = MagicMock()
+
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="test-workflow",
+                entry_point="test",
+                runtime=RuntimeConfig(provider="copilot"),
+                context=ContextConfig(mode="accumulate"),
+                limits=LimitsConfig(max_iterations=10),
+            ),
+            agents=[
+                AgentDef(
+                    name="test",
+                    model="gpt-4",
+                    prompt="Test",
+                    output={"result": OutputField(type="string")},
+                ),
+            ],
+        )
+        return WorkflowEngine(config, mock_provider)
+
+    def test_extract_key_from_dict_item(self, workflow_engine: WorkflowEngine):
+        """Test extracting key from dict item."""
+        item = {"kpi_id": "K123", "name": "Revenue"}
+        key = workflow_engine._extract_key_from_item(item, "kpi_id", fallback_index=0)
+        assert key == "K123"
+
+    def test_extract_key_from_nested_dict(self, workflow_engine: WorkflowEngine):
+        """Test extracting key from nested dict using dotted path."""
+        item = {
+            "kpi": {
+                "kpi_id": "REV001",
+                "metadata": {"type": "financial"}
+            }
+        }
+        key = workflow_engine._extract_key_from_item(item, "kpi.kpi_id", fallback_index=5)
+        assert key == "REV001"
+
+    def test_extract_key_from_object_attribute(self, workflow_engine: WorkflowEngine):
+        """Test extracting key from object with attributes."""
+        from dataclasses import dataclass
+
+        @dataclass
+        class KPI:
+            kpi_id: str
+            value: int
+
+        item = KPI(kpi_id="COST001", value=100)
+        key = workflow_engine._extract_key_from_item(item, "kpi_id", fallback_index=2)
+        assert key == "COST001"
+
+    def test_extract_key_converts_to_string(self, workflow_engine: WorkflowEngine):
+        """Test that extracted key is converted to string."""
+        item = {"id": 12345}
+        key = workflow_engine._extract_key_from_item(item, "id", fallback_index=0)
+        assert key == "12345"
+        assert isinstance(key, str)
+
+    def test_extract_key_fallback_on_missing_key(self, workflow_engine: WorkflowEngine):
+        """Test fallback to index when key field is missing."""
+        item = {"name": "Revenue"}  # Missing kpi_id field
+        key = workflow_engine._extract_key_from_item(item, "kpi_id", fallback_index=7)
+        assert key == "7"
+
+    def test_extract_key_fallback_on_nested_missing(self, workflow_engine: WorkflowEngine):
+        """Test fallback when nested path doesn't exist."""
+        item = {"kpi": {"name": "Revenue"}}  # Missing kpi.kpi_id
+        key = workflow_engine._extract_key_from_item(item, "kpi.kpi_id", fallback_index=3)
+        assert key == "3"
+
+    def test_extract_key_fallback_on_type_mismatch(self, workflow_engine: WorkflowEngine):
+        """Test fallback when item type doesn't support requested access."""
+        item = "simple_string"  # Not a dict or object
+        key = workflow_engine._extract_key_from_item(item, "kpi_id", fallback_index=9)
+        assert key == "9"
+
+    def test_extract_key_from_deeply_nested_path(self, workflow_engine: WorkflowEngine):
+        """Test extracting key from deeply nested structure."""
+        item = {
+            "data": {
+                "metrics": {
+                    "financial": {
+                        "id": "DEEP123"
+                    }
+                }
+            }
+        }
+        key = workflow_engine._extract_key_from_item(
+            item, "data.metrics.financial.id", fallback_index=0
+        )
+        assert key == "DEEP123"
+
+    def test_extract_key_fallback_returns_string(self, workflow_engine: WorkflowEngine):
+        """Test that fallback index is returned as string."""
+        item = {}
+        key = workflow_engine._extract_key_from_item(item, "missing", fallback_index=42)
+        assert key == "42"
+        assert isinstance(key, str)
+
+

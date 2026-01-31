@@ -1148,6 +1148,38 @@ class WorkflowEngine:
 
         return parallel_output
 
+    def _extract_key_from_item(
+        self, item: Any, key_by_path: str, fallback_index: int
+    ) -> str:
+        """Extract a key from an item using a dotted path.
+
+        Args:
+            item: The item to extract the key from.
+            key_by_path: Dotted path to the key field (e.g., "kpi.kpi_id").
+            fallback_index: Index to use as fallback if extraction fails.
+
+        Returns:
+            The extracted key as a string, or the fallback index as a string if extraction fails.
+        """
+        try:
+            # Navigate key_by path (e.g., "kpi.kpi_id")
+            key_parts = key_by_path.split(".")
+            current = item
+            for part in key_parts:
+                if isinstance(current, dict):
+                    current = current[part]
+                else:
+                    current = getattr(current, part)
+            return str(current)
+        except (KeyError, AttributeError, IndexError) as e:
+            # Fallback to index-based key if extraction fails
+            _verbose_log(
+                f"Warning: Failed to extract key from item {fallback_index} using '{key_by_path}': {e}. "
+                f"Falling back to index-based key.",
+                style="dim yellow"
+            )
+            return str(fallback_index)
+
     async def _execute_for_each_group(
         self, for_each_group: ForEachDef
     ) -> ForEachGroupOutput:
@@ -1204,24 +1236,9 @@ class WorkflowEngine:
         item_keys: list[str] = []
         if for_each_group.key_by:
             for idx, item in enumerate(items):
-                try:
-                    # Navigate key_by path (e.g., "kpi.kpi_id")
-                    key_parts = for_each_group.key_by.split(".")
-                    current = item
-                    for part in key_parts:
-                        if isinstance(current, dict):
-                            current = current[part]
-                        else:
-                            current = getattr(current, part)
-                    item_keys.append(str(current))
-                except (KeyError, AttributeError, IndexError) as e:
-                    # Fallback to index-based key if extraction fails
-                    _verbose_log(
-                        f"Warning: Failed to extract key from item {idx} using '{for_each_group.key_by}': {e}. "
-                        f"Falling back to index-based key.",
-                        style="dim yellow"
-                    )
-                    item_keys.append(str(idx))
+                item_keys.append(
+                    self._extract_key_from_item(item, for_each_group.key_by, idx)
+                )
         else:
             # Use index-based keys
             item_keys = [str(i) for i in range(len(items))]
