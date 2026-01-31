@@ -136,6 +136,125 @@ class ParallelGroup(BaseModel):
         return v
 
 
+class ForEachDef(BaseModel):
+    """Definition for a dynamic parallel (for-each) agent group.
+
+    For-each groups spawn N parallel agent instances at runtime based on
+    an array resolved from workflow context (e.g., a previous agent's output).
+
+    Example:
+        ```yaml
+        for_each:
+          - name: analyzers
+            type: for_each
+            source: finder.output.kpis
+            as: kpi
+            max_concurrent: 5
+            agent:
+              model: opus-4.5
+              prompt: "Analyze {{ kpi.kpi_id }}"
+              output:
+                success: { type: boolean }
+        ```
+    """
+
+    name: str
+    """Unique identifier for this for-each group."""
+
+    description: str | None = None
+    """Human-readable description."""
+
+    type: Literal["for_each"]
+    """Discriminator for union types in routing."""
+
+    source: str
+    """Reference to array in context (e.g., 'finder.output.kpis').
+    Must resolve to a list at runtime. Uses dotted path notation."""
+
+    as_: str = Field(..., serialization_alias="as", validation_alias="as")
+    """Loop variable name (e.g., 'kpi').
+    Accessible in templates as {{ kpi }}.
+    Note: Uses as_ internally to avoid Python keyword conflict.
+    Pydantic aliases ensure YAML uses 'as' while Python uses 'as_'."""
+
+    agent: AgentDef
+    """Inline agent definition used as template for each item.
+    Each instance gets a copy with loop variables injected into context."""
+
+    max_concurrent: int = 10
+    """Maximum number of concurrent executions per batch.
+    Items are processed in sequential batches of this size.
+    Default: 10 (prevents unbounded parallelism)."""
+
+    failure_mode: Literal["fail_fast", "continue_on_error", "all_or_nothing"] = "fail_fast"
+    """Failure handling strategy:
+    - fail_fast: Stop on first error, raise immediately
+    - continue_on_error: Continue all items, fail only if ALL fail
+    - all_or_nothing: Continue all items, fail if ANY fail"""
+
+    key_by: str | None = None
+    """Optional: Path to extract key from each item for dict-based outputs.
+    Example: 'kpi.kpi_id' → outputs becomes {kpi_id: {...}, ...}
+    instead of [{...}, ...]. Enables key-based access: outputs["KPI123"]."""
+
+    routes: list[RouteDef] = Field(default_factory=list)
+    """Routing rules evaluated after for-each execution.
+    Routes have access to aggregated outputs via {{ analyzers.outputs }}."""
+
+    @field_validator("as_")
+    @classmethod
+    def validate_loop_variable(cls, v: str) -> str:
+        """Ensure loop variable doesn't conflict with reserved names.
+
+        Reserved names: workflow, context, output, _index, _key
+        These are reserved for workflow internals.
+        """
+        reserved = {"workflow", "context", "output", "_index", "_key"}
+        if v in reserved:
+            raise ValueError(
+                f"Loop variable '{v}' conflicts with reserved name. "
+                f"Reserved names: {reserved}"
+            )
+        # Also validate it's a valid Python identifier
+        if not v.isidentifier():
+            raise ValueError(
+                f"Loop variable '{v}' must be a valid Python identifier"
+            )
+        return v
+
+    @field_validator("source")
+    @classmethod
+    def validate_source_format(cls, v: str) -> str:
+        """Validate source reference format (agent_name.output.field).
+
+        This is a basic format check - actual resolution happens at runtime.
+        """
+        parts = v.split(".")
+        if len(parts) < 3:
+            raise ValueError(
+                f"Invalid source format: '{v}'. "
+                f"Expected format: 'agent_name.output.field' (minimum 3 parts)"
+            )
+        # First part should be a valid identifier
+        if not parts[0].isidentifier():
+            raise ValueError(
+                f"Invalid agent name in source: '{parts[0]}' is not a valid identifier"
+            )
+        return v
+
+    @field_validator("max_concurrent")
+    @classmethod
+    def validate_max_concurrent(cls, v: int) -> int:
+        """Ensure max_concurrent is reasonable."""
+        if v < 1:
+            raise ValueError("max_concurrent must be at least 1")
+        if v > 100:
+            raise ValueError(
+                "max_concurrent cannot exceed 100 (consider batching for larger arrays)"
+            )
+        return v
+
+
 class GateOption(BaseModel):
     """Option presented in a human gate."""
 
@@ -338,6 +457,9 @@ class WorkflowConfig(BaseModel):
     parallel: list[ParallelGroup] = Field(default_factory=list)
     """Parallel execution group definitions."""
 
+    for_each: list[ForEachDef] = Field(default_factory=list)
+    """Dynamic parallel (for-each) group definitions."""
+
     output: dict[str, str] = Field(default_factory=dict)
     """Final output template expressions."""
 
@@ -346,28 +468,57 @@ class WorkflowConfig(BaseModel):
         """Validate all agent references exist."""
         agent_names = {a.name for a in self.agents}
         parallel_names = {p.name for p in self.parallel}
-        
-        # Validate entry_point exists in agents or parallel groups
-        all_names = agent_names | parallel_names
+        for_each_names = {f.name for f in self.for_each}
+
+        # Validate entry_point exists
+        all_names = agent_names | parallel_names | for_each_names
         if self.workflow.entry_point not in all_names:
             raise ValueError(
-                f"entry_point '{self.workflow.entry_point}' not found in agents or parallel groups"
+                f"entry_point '{self.workflow.entry_point}' not found in "
+                f"agents, parallel groups, or for-each groups"
             )
 
-        # Validate route targets exist in agents or parallel groups
+        # Validate route targets exist
         for agent in self.agents:
             for route in agent.routes:
                 if route.to != "$end" and route.to not in all_names:
                     raise ValueError(
-                        f"Agent '{agent.name}' routes to unknown agent or parallel group '{route.to}'"
+                        f"Agent '{agent.name}' routes to unknown agent, "
+                        f"parallel group, or for-each group '{route.to}'"
                     )
-        
+
         # Validate parallel group agent references exist
         for parallel_group in self.parallel:
             for agent_name in parallel_group.agents:
                 if agent_name not in agent_names:
                     raise ValueError(
-                        f"Parallel group '{parallel_group.name}' references unknown agent '{agent_name}'"
+                        f"Parallel group '{parallel_group.name}' "
+                        f"references unknown agent '{agent_name}'"
+                    )
+            # Validate parallel group route targets
+            for route in parallel_group.routes:
+                if route.to != "$end" and route.to not in all_names:
+                    raise ValueError(
+                        f"Parallel group '{parallel_group.name}' "
+                        f"routes to unknown target '{route.to}'"
+                    )
+
+        # Validate for-each group route targets and nested prohibition
+        for for_each_group in self.for_each:
+            # Check for nested for-each groups
+            if for_each_group.agent.name in for_each_names:
+                raise ValueError(
+                    f"Nested for-each groups are not allowed. "
+                    f"For-each group '{for_each_group.name}' references "
+                    f"another for-each group '{for_each_group.agent.name}'"
+                )
+
+            # Validate for-each group route targets
+            for route in for_each_group.routes:
+                if route.to != "$end" and route.to not in all_names:
+                    raise ValueError(
+                        f"For-each group '{for_each_group.name}' "
+                        f"routes to unknown target '{route.to}'"
                     )
 
         return self

@@ -953,25 +953,27 @@ def _find_for_each_group(self, name: str) -> ForEachDef | None:
 ### Epic 1: Schema Definition and Validation
 **Goal**: Define `ForEachDef` schema with complete validation
 
+**Status**: DONE
+
 **Prerequisites**: Epic 0
 
 **Tasks**:
 | Task ID | Type | Description | Files | Status |
 |---------|------|-------------|-------|--------|
-| E1-T1 | IMPL | Define `ForEachDef` class with Pydantic v2 field aliases | `src/copilot_conductor/config/schema.py` | TO DO |
-| E1-T2 | IMPL | Update `WorkflowConfig.for_each` field and validation logic | `src/copilot_conductor/config/schema.py` | TO DO |
-| E1-T3 | IMPL | Add loop variable name validation (reserved names check) | `src/copilot_conductor/config/schema.py` | TO DO |
-| E1-T4 | IMPL | Add source format validation | `src/copilot_conductor/config/schema.py` | TO DO |
-| E1-T5 | TEST | Unit tests for `ForEachDef` validation (valid/invalid cases) | `tests/test_config/test_schema.py` | TO DO |
-| E1-T6 | TEST | Test Pydantic v2 `as` field alias roundtrip serialization | `tests/test_config/test_schema.py` | TO DO |
-| E1-T7 | TEST | Test reserved name validation | `tests/test_config/test_schema.py` | TO DO |
+| E1-T1 | IMPL | Define `ForEachDef` class with Pydantic v2 field aliases | `src/copilot_conductor/config/schema.py` | DONE |
+| E1-T2 | IMPL | Update `WorkflowConfig.for_each` field and validation logic | `src/copilot_conductor/config/schema.py` | DONE |
+| E1-T3 | IMPL | Add loop variable name validation (reserved names check) | `src/copilot_conductor/config/schema.py` | DONE |
+| E1-T4 | IMPL | Add source format validation | `src/copilot_conductor/config/schema.py` | DONE |
+| E1-T5 | TEST | Unit tests for `ForEachDef` validation (valid/invalid cases) | `tests/test_config/test_schema.py` | DONE |
+| E1-T6 | TEST | Test Pydantic v2 `as` field alias roundtrip serialization | `tests/test_config/test_schema.py` | DONE |
+| E1-T7 | TEST | Test reserved name validation | `tests/test_config/test_schema.py` | DONE |
 
 **Acceptance Criteria**:
-- [ ] `ForEachDef` defined with all fields
-- [ ] `as` field uses both `validation_alias` and `serialization_alias`
-- [ ] Loop variable validation catches reserved name conflicts at load time
-- [ ] All validation tests pass
-- [ ] YAML with `for_each:` section loads successfully
+- [x] `ForEachDef` defined with all fields
+- [x] `as` field uses both `validation_alias` and `serialization_alias`
+- [x] Loop variable validation catches reserved name conflicts at load time
+- [x] All validation tests pass
+- [x] YAML with `for_each:` section loads successfully
 
 ---
 

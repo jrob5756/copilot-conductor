@@ -1,0 +1,38 @@
+workflow:
+  name: for-each-simple
+  description: Simple for-each example
+  entry_point: finder
+  runtime:
+    provider: copilot
+    default_model: claude-sonnet-4
+
+agents:
+  - name: finder
+    prompt: "Find some items"
+    output:
+      items:
+        type: array
+        description: List of items
+    routes:
+      - to: processors
+
+  - name: processor
+    prompt: "Process {{ item }}"
+    output:
+      result:
+        type: string
+
+for_each:
+  - name: processors
+    type: for_each
+    source: finder.output.items
+    as: item
+    agent:
+      name: processor
+      model: claude-sonnet-4
+      prompt: "Process {{ item }}"
+      output:
+        result:
+          type: string
+    routes:
+      - to: $end

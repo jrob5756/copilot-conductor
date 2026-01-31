@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from copilot_conductor.config.schema import (
     AgentDef,
     ContextConfig,
+    ForEachDef,
     GateOption,
     HooksConfig,
     InputDef,
@@ -469,7 +470,7 @@ class TestParallelGroup:
     def test_valid_parallel_group(self) -> None:
         """Test creating a valid parallel group."""
         from copilot_conductor.config.schema import ParallelGroup
-        
+
         group = ParallelGroup(
             name="research_group",
             agents=["agent1", "agent2"],
@@ -483,14 +484,14 @@ class TestParallelGroup:
     def test_parallel_group_default_failure_mode(self) -> None:
         """Test that failure_mode defaults to fail_fast."""
         from copilot_conductor.config.schema import ParallelGroup
-        
+
         group = ParallelGroup(name="test", agents=["a1", "a2"])
         assert group.failure_mode == "fail_fast"
 
     def test_parallel_group_all_failure_modes(self) -> None:
         """Test all valid failure modes."""
         from copilot_conductor.config.schema import ParallelGroup
-        
+
         for mode in ["fail_fast", "continue_on_error", "all_or_nothing"]:
             group = ParallelGroup(name="test", agents=["a1", "a2"], failure_mode=mode)
             assert group.failure_mode == mode
@@ -498,7 +499,7 @@ class TestParallelGroup:
     def test_parallel_group_invalid_failure_mode(self) -> None:
         """Test that invalid failure mode raises error."""
         from copilot_conductor.config.schema import ParallelGroup
-        
+
         with pytest.raises(ValidationError) as exc_info:
             ParallelGroup(name="test", agents=["a1", "a2"], failure_mode="invalid")
         assert "failure_mode" in str(exc_info.value)
@@ -506,7 +507,7 @@ class TestParallelGroup:
     def test_parallel_group_minimum_agents_validation(self) -> None:
         """Test that parallel groups require at least 2 agents."""
         from copilot_conductor.config.schema import ParallelGroup
-        
+
         with pytest.raises(ValidationError) as exc_info:
             ParallelGroup(name="test", agents=["only_one"])
         assert "at least 2 agents" in str(exc_info.value)
@@ -514,7 +515,7 @@ class TestParallelGroup:
     def test_parallel_group_empty_agents(self) -> None:
         """Test that parallel groups cannot have empty agents list."""
         from copilot_conductor.config.schema import ParallelGroup
-        
+
         with pytest.raises(ValidationError) as exc_info:
             ParallelGroup(name="test", agents=[])
         assert "at least 2 agents" in str(exc_info.value)
@@ -522,7 +523,7 @@ class TestParallelGroup:
     def test_parallel_group_many_agents(self) -> None:
         """Test parallel group with many agents."""
         from copilot_conductor.config.schema import ParallelGroup
-        
+
         agents = [f"agent{i}" for i in range(10)]
         group = ParallelGroup(name="big_group", agents=agents)
         assert len(group.agents) == 10
@@ -534,7 +535,7 @@ class TestWorkflowConfigWithParallel:
     def test_workflow_with_parallel_group(self) -> None:
         """Test workflow configuration with parallel group."""
         from copilot_conductor.config.schema import ParallelGroup
-        
+
         config = WorkflowConfig(
             workflow=WorkflowDef(name="test", entry_point="parallel_group"),
             agents=[
@@ -551,7 +552,7 @@ class TestWorkflowConfigWithParallel:
     def test_workflow_parallel_group_agent_validation(self) -> None:
         """Test that parallel groups must reference existing agents."""
         from copilot_conductor.config.schema import ParallelGroup
-        
+
         with pytest.raises(ValidationError) as exc_info:
             WorkflowConfig(
                 workflow=WorkflowDef(name="test", entry_point="agent1"),
@@ -567,11 +568,11 @@ class TestWorkflowConfigWithParallel:
     def test_workflow_route_to_parallel_group(self) -> None:
         """Test routing from agent to parallel group."""
         from copilot_conductor.config.schema import ParallelGroup
-        
+
         config = WorkflowConfig(
             workflow=WorkflowDef(name="test", entry_point="starter"),
             agents=[
-                AgentDef(name="starter", model="gpt-4", prompt="Start", 
+                AgentDef(name="starter", model="gpt-4", prompt="Start",
                         routes=[RouteDef(to="pg")]),
                 AgentDef(name="agent1", model="gpt-4", prompt="Task 1"),
                 AgentDef(name="agent2", model="gpt-4", prompt="Task 2"),
@@ -585,7 +586,7 @@ class TestWorkflowConfigWithParallel:
     def test_workflow_entry_point_can_be_parallel_group(self) -> None:
         """Test that entry_point can be a parallel group."""
         from copilot_conductor.config.schema import ParallelGroup
-        
+
         config = WorkflowConfig(
             workflow=WorkflowDef(name="test", entry_point="pg"),
             agents=[
@@ -597,4 +598,396 @@ class TestWorkflowConfigWithParallel:
             ],
         )
         assert config.workflow.entry_point == "pg"
+
+
+class TestForEachDef:
+    """Tests for ForEachDef model."""
+
+    def test_minimal_for_each(self) -> None:
+        """Test creating a minimal for-each group."""
+
+        for_each = ForEachDef(
+            name="analyzers",
+            type="for_each",
+            source="finder.output.kpis",
+            **{"as": "kpi"},  # Using dict unpacking to work with Python keyword
+            agent=AgentDef(name="analyzer", model="gpt-4", prompt="Analyze {{ kpi }}"),
+        )
+        assert for_each.name == "analyzers"
+        assert for_each.type == "for_each"
+        assert for_each.source == "finder.output.kpis"
+        assert for_each.as_ == "kpi"
+        assert for_each.agent.name == "analyzer"
+        assert for_each.max_concurrent == 10  # Default
+        assert for_each.failure_mode == "fail_fast"  # Default
+        assert for_each.key_by is None
+        assert for_each.routes == []
+
+    def test_for_each_with_all_fields(self) -> None:
+        """Test for-each group with all fields populated."""
+
+        for_each = ForEachDef(
+            name="processors",
+            description="Process all items",
+            type="for_each",
+            source="collector.output.items",
+            **{"as": "item"},
+            agent=AgentDef(
+                name="processor",
+                model="gpt-4",
+                prompt="Process {{ item.id }}",
+                output={"result": OutputField(type="string")},
+            ),
+            max_concurrent=5,
+            failure_mode="continue_on_error",
+            key_by="item.id",
+            routes=[RouteDef(to="next_step")],
+        )
+        assert for_each.description == "Process all items"
+        assert for_each.max_concurrent == 5
+        assert for_each.failure_mode == "continue_on_error"
+        assert for_each.key_by == "item.id"
+        assert len(for_each.routes) == 1
+
+    def test_as_field_alias_serialization(self) -> None:
+        """Test that 'as' field uses proper Pydantic v2 aliases."""
+
+        for_each = ForEachDef(
+            name="test",
+            type="for_each",
+            source="a.output.b",
+            **{"as": "item"},
+            agent=AgentDef(name="a", model="gpt-4", prompt="test"),
+        )
+
+        # Check that serialization uses "as" not "as_"
+        serialized = for_each.model_dump(by_alias=True)
+        assert "as" in serialized
+        assert "as_" not in serialized
+        assert serialized["as"] == "item"
+
+        # Check that internal access uses as_
+        assert for_each.as_ == "item"
+
+    def test_as_field_alias_deserialization(self) -> None:
+        """Test that 'as' field can be loaded from YAML-like dict."""
+
+        # Simulate YAML loading with "as" key
+        data = {
+            "name": "test",
+            "type": "for_each",
+            "source": "a.output.b",
+            "as": "item",  # This should map to as_ field
+            "agent": {
+                "name": "a",
+                "model": "gpt-4",
+                "prompt": "test",
+            },
+        }
+
+        for_each = ForEachDef(**data)
+        assert for_each.as_ == "item"
+
+    def test_reserved_loop_variable_names_rejected(self) -> None:
+        """Test that reserved loop variable names are rejected."""
+
+        reserved_names = ["workflow", "context", "output", "_index", "_key"]
+
+        for reserved in reserved_names:
+            with pytest.raises(ValidationError) as exc_info:
+                ForEachDef(
+                    name="test",
+                    type="for_each",
+                    source="a.output.b",
+                    **{"as": reserved},
+                    agent=AgentDef(name="a", model="gpt-4", prompt="test"),
+                )
+            assert "conflicts with reserved name" in str(exc_info.value).lower()
+            assert reserved in str(exc_info.value)
+
+    def test_invalid_loop_variable_identifier(self) -> None:
+        """Test that invalid Python identifiers are rejected for loop variables."""
+
+        invalid_identifiers = ["123item", "item-name", "item name", ""]
+
+        for invalid in invalid_identifiers:
+            with pytest.raises(ValidationError) as exc_info:
+                ForEachDef(
+                    name="test",
+                    type="for_each",
+                    source="a.output.b",
+                    **{"as": invalid},
+                    agent=AgentDef(name="a", model="gpt-4", prompt="test"),
+                )
+            assert "valid Python identifier" in str(exc_info.value)
+
+    def test_valid_loop_variable_names(self) -> None:
+        """Test that valid loop variable names are accepted."""
+
+        valid_names = ["item", "kpi", "user", "data_point", "x", "i"]
+
+        for valid_name in valid_names:
+            for_each = ForEachDef(
+                name="test",
+                type="for_each",
+                source="a.output.b",
+                **{"as": valid_name},
+                agent=AgentDef(name="a", model="gpt-4", prompt="test"),
+            )
+            assert for_each.as_ == valid_name
+
+    def test_source_format_validation_valid(self) -> None:
+        """Test that valid source formats are accepted."""
+
+        valid_sources = [
+            "finder.output.kpis",
+            "agent1.output.items",
+            "collector.output.data.nested.field",
+        ]
+
+        for source in valid_sources:
+            for_each = ForEachDef(
+                name="test",
+                type="for_each",
+                source=source,
+                **{"as": "item"},
+                agent=AgentDef(name="a", model="gpt-4", prompt="test"),
+            )
+            assert for_each.source == source
+
+    def test_source_format_validation_invalid(self) -> None:
+        """Test that invalid source formats are rejected."""
+
+        # Too few parts (need at least 3)
+        invalid_sources = [
+            "finder",  # 1 part
+            "finder.output",  # 2 parts
+            "123invalid.output.field",  # Invalid identifier
+        ]
+
+        for invalid_source in invalid_sources:
+            with pytest.raises(ValidationError) as exc_info:
+                ForEachDef(
+                    name="test",
+                    type="for_each",
+                    source=invalid_source,
+                    **{"as": "item"},
+                    agent=AgentDef(name="a", model="gpt-4", prompt="test"),
+                )
+            assert "invalid source format" in str(exc_info.value).lower() or \
+                   "not a valid identifier" in str(exc_info.value).lower()
+
+    def test_max_concurrent_validation(self) -> None:
+        """Test max_concurrent bounds validation."""
+
+        # Too low
+        with pytest.raises(ValidationError) as exc_info:
+            ForEachDef(
+                name="test",
+                type="for_each",
+                source="a.output.b",
+                **{"as": "item"},
+                agent=AgentDef(name="a", model="gpt-4", prompt="test"),
+                max_concurrent=0,
+            )
+        assert "must be at least 1" in str(exc_info.value)
+
+        # Too high
+        with pytest.raises(ValidationError) as exc_info:
+            ForEachDef(
+                name="test",
+                type="for_each",
+                source="a.output.b",
+                **{"as": "item"},
+                agent=AgentDef(name="a", model="gpt-4", prompt="test"),
+                max_concurrent=101,
+            )
+        assert "cannot exceed 100" in str(exc_info.value)
+
+        # Valid range
+        for valid_max in [1, 10, 50, 100]:
+            for_each = ForEachDef(
+                name="test",
+                type="for_each",
+                source="a.output.b",
+                **{"as": "item"},
+                agent=AgentDef(name="a", model="gpt-4", prompt="test"),
+                max_concurrent=valid_max,
+            )
+            assert for_each.max_concurrent == valid_max
+
+    def test_failure_modes(self) -> None:
+        """Test all failure modes are accepted."""
+
+        failure_modes = ["fail_fast", "continue_on_error", "all_or_nothing"]
+
+        for mode in failure_modes:
+            for_each = ForEachDef(
+                name="test",
+                type="for_each",
+                source="a.output.b",
+                **{"as": "item"},
+                agent=AgentDef(name="a", model="gpt-4", prompt="test"),
+                failure_mode=mode,  # type: ignore
+            )
+            assert for_each.failure_mode == mode
+
+    def test_invalid_failure_mode(self) -> None:
+        """Test that invalid failure modes are rejected."""
+
+        with pytest.raises(ValidationError):
+            ForEachDef(
+                name="test",
+                type="for_each",
+                source="a.output.b",
+                **{"as": "item"},
+                agent=AgentDef(name="a", model="gpt-4", prompt="test"),
+                failure_mode="invalid_mode",  # type: ignore
+            )
+
+
+class TestWorkflowConfigWithForEach:
+    """Tests for WorkflowConfig with for-each groups."""
+
+    def test_workflow_with_for_each_group(self) -> None:
+        """Test creating workflow with for-each group."""
+
+        config = WorkflowConfig(
+            workflow=WorkflowDef(name="test", entry_point="finder"),
+            agents=[
+                AgentDef(name="finder", model="gpt-4", prompt="Find items",
+                        routes=[RouteDef(to="processors")]),
+                AgentDef(name="processor", model="gpt-4", prompt="Process {{ item }}"),
+            ],
+            for_each=[
+                ForEachDef(
+                    name="processors",
+                    type="for_each",
+                    source="finder.output.items",
+                    **{"as": "item"},
+                    agent=AgentDef(name="processor", model="gpt-4", prompt="Process"),
+                ),
+            ],
+        )
+        assert len(config.for_each) == 1
+        assert config.for_each[0].name == "processors"
+
+    def test_entry_point_can_be_for_each_group(self) -> None:
+        """Test that entry_point can be a for-each group."""
+
+        config = WorkflowConfig(
+            workflow=WorkflowDef(name="test", entry_point="processors"),
+            agents=[
+                AgentDef(name="finder", model="gpt-4", prompt="Find"),
+                AgentDef(name="processor", model="gpt-4", prompt="Process {{ item }}"),
+            ],
+            for_each=[
+                ForEachDef(
+                    name="processors",
+                    type="for_each",
+                    source="workflow.input.items",
+                    **{"as": "item"},
+                    agent=AgentDef(name="processor", model="gpt-4", prompt="Process"),
+                ),
+            ],
+        )
+        assert config.workflow.entry_point == "processors"
+
+    def test_route_to_for_each_group(self) -> None:
+        """Test routing from agent to for-each group."""
+
+        config = WorkflowConfig(
+            workflow=WorkflowDef(name="test", entry_point="finder"),
+            agents=[
+                AgentDef(name="finder", model="gpt-4", prompt="Find",
+                        routes=[RouteDef(to="processors")]),
+                AgentDef(name="processor", model="gpt-4", prompt="Process"),
+            ],
+            for_each=[
+                ForEachDef(
+                    name="processors",
+                    type="for_each",
+                    source="finder.output.items",
+                    **{"as": "item"},
+                    agent=AgentDef(name="processor", model="gpt-4", prompt="Process"),
+                ),
+            ],
+        )
+        assert config.agents[0].routes[0].to == "processors"
+
+    def test_route_from_for_each_group(self) -> None:
+        """Test routing from for-each group to agent."""
+
+        config = WorkflowConfig(
+            workflow=WorkflowDef(name="test", entry_point="processors"),
+            agents=[
+                AgentDef(name="finder", model="gpt-4", prompt="Find"),
+                AgentDef(name="aggregator", model="gpt-4", prompt="Aggregate"),
+            ],
+            for_each=[
+                ForEachDef(
+                    name="processors",
+                    type="for_each",
+                    source="workflow.input.items",
+                    **{"as": "item"},
+                    agent=AgentDef(name="processor", model="gpt-4", prompt="Process"),
+                    routes=[RouteDef(to="aggregator")],
+                ),
+            ],
+        )
+        assert config.for_each[0].routes[0].to == "aggregator"
+
+    def test_invalid_route_target_from_for_each(self) -> None:
+        """Test that invalid route targets from for-each groups are rejected."""
+
+        with pytest.raises(ValidationError) as exc_info:
+            WorkflowConfig(
+                workflow=WorkflowDef(name="test", entry_point="processors"),
+                agents=[
+                    AgentDef(name="processor", model="gpt-4", prompt="Process"),
+                ],
+                for_each=[
+                    ForEachDef(
+                        name="processors",
+                        type="for_each",
+                        source="workflow.input.items",
+                        **{"as": "item"},
+                        agent=AgentDef(name="processor", model="gpt-4", prompt="Process"),
+                        routes=[RouteDef(to="nonexistent")],
+                    ),
+                ],
+            )
+        assert "unknown target" in str(exc_info.value).lower()
+
+    def test_nested_for_each_prohibited(self) -> None:
+        """Test that nested for-each groups are prohibited."""
+
+        # This should fail because inner_processors is a for-each group
+        # and we're trying to reference it in another for-each group's agent
+        with pytest.raises(ValidationError) as exc_info:
+            WorkflowConfig(
+                workflow=WorkflowDef(name="test", entry_point="outer"),
+                agents=[
+                    AgentDef(name="processor", model="gpt-4", prompt="Process"),
+                ],
+                for_each=[
+                    ForEachDef(
+                        name="outer",
+                        type="for_each",
+                        source="workflow.input.items",
+                        **{"as": "item"},
+                        # Trying to use another for-each group as the agent
+                        agent=AgentDef(name="inner_processors", model="gpt-4", prompt="Process"),
+                    ),
+                    ForEachDef(
+                        name="inner_processors",
+                        type="for_each",
+                        source="workflow.input.items",
+                        **{"as": "inner"},
+                        agent=AgentDef(name="processor", model="gpt-4", prompt="Process"),
+                    ),
+                ],
+            )
+        assert "nested for-each groups are not allowed" in str(exc_info.value).lower()
+
 
