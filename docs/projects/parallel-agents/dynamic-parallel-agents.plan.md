@@ -1006,23 +1006,25 @@ def _find_for_each_group(self, name: str) -> ForEachDef | None:
 ### Epic 3: Template Variable Injection
 **Goal**: Inject loop variables into agent context
 
+**Status**: DONE
+
 **Prerequisites**: Epic 2
 
 **Tasks**:
 | Task ID | Type | Description | Files | Status |
 |---------|------|-------------|-------|--------|
-| E3-T1 | IMPL | Extend context building to support loop variable injection | `src/copilot_conductor/engine/workflow.py` | TO DO |
-| E3-T2 | IMPL | Add `_inject_loop_variables()` helper method | `src/copilot_conductor/engine/workflow.py` | TO DO |
-| E3-T3 | IMPL | Inject `{{ <var> }}`, `{{ _index }}`, `{{ _key }}` | `src/copilot_conductor/engine/workflow.py` | TO DO |
-| E3-T4 | TEST | Unit tests for variable injection | `tests/test_engine/test_workflow.py` | TO DO |
-| E3-T5 | TEST | Integration test: render template with loop variables | `tests/test_integration/test_for_each.py` | TO DO |
+| E3-T1 | IMPL | Extend context building to support loop variable injection | `src/copilot_conductor/engine/workflow.py` | DONE |
+| E3-T2 | IMPL | Add `_inject_loop_variables()` helper method | `src/copilot_conductor/engine/workflow.py` | DONE |
+| E3-T3 | IMPL | Inject `{{ <var> }}`, `{{ _index }}`, `{{ _key }}` | `src/copilot_conductor/engine/workflow.py` | DONE |
+| E3-T4 | TEST | Unit tests for variable injection | `tests/test_engine/test_workflow.py` | DONE |
+| E3-T5 | TEST | Integration test: render template with loop variables | `tests/test_integration/test_for_each.py` | DONE |
 
 **Acceptance Criteria**:
-- [ ] Loop variables available in agent templates
-- [ ] `{{ <var> }}` resolves to current item
-- [ ] `{{ _index }}` resolves to zero-based index
-- [ ] `{{ _key }}` resolves to extracted key (if `key_by` specified)
-- [ ] All tests pass
+- [x] Loop variables available in agent templates
+- [x] `{{ <var> }}` resolves to current item
+- [x] `{{ _index }}` resolves to zero-based index
+- [x] `{{ _key }}` resolves to extracted key (if `key_by` specified)
+- [x] All tests pass
 
 ---
 

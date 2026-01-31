@@ -698,6 +698,52 @@ class WorkflowEngine:
 
         return current
 
+    def _inject_loop_variables(
+        self,
+        context: dict[str, Any],
+        var_name: str,
+        item: Any,
+        index: int,
+        key: str | None = None,
+    ) -> None:
+        """Inject loop variables into an agent's context dictionary.
+
+        This method modifies the context dictionary in-place to add loop variables
+        that are accessible in agent templates during for-each execution.
+
+        Loop variables injected:
+        - {{ <var_name> }}: The current item from the array
+        - {{ _index }}: Zero-based index of the current item
+        - {{ _key }}: Extracted key value (if key_by is specified in ForEachDef)
+
+        Example:
+            For-each definition: `for_each.as_="kpi"`, item={kpi_id: "K1"}, index=0
+            After injection, templates can use:
+            - {{ kpi.kpi_id }} → "K1"
+            - {{ _index }} → 0
+            - {{ _key }} → "K1" (if key_by="kpi.kpi_id")
+
+        Args:
+            context: The context dictionary to inject variables into (modified in-place).
+            var_name: The loop variable name (from ForEachDef.as_).
+            item: The current array item being processed.
+            index: Zero-based index of the current item in the source array.
+            key: Optional extracted key value (if key_by is specified).
+
+        Note:
+            This method assumes var_name has already been validated to not conflict
+            with reserved names (workflow, context, output, _index, _key).
+        """
+        # Inject the loop variable (e.g., {{ kpi }})
+        context[var_name] = item
+
+        # Inject the index variable (e.g., {{ _index }})
+        context["_index"] = index
+
+        # Inject the key variable if provided (e.g., {{ _key }})
+        if key is not None:
+            context["_key"] = key
+
     async def _execute_parallel_group(
         self, parallel_group: ParallelGroup
     ) -> ParallelGroupOutput:

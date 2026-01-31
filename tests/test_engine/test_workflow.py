@@ -1650,3 +1650,246 @@ class TestResolveArrayReference:
         assert isinstance(result, tuple)
         assert len(result) == 3
         assert result == ("item1", "item2", "item3")
+
+
+class TestInjectLoopVariables:
+    """Tests for _inject_loop_variables() method."""
+
+    @pytest.fixture
+    def workflow_engine(self) -> WorkflowEngine:
+        """Create a basic WorkflowEngine for testing."""
+        from unittest.mock import MagicMock
+        mock_provider = MagicMock()
+
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="test-workflow",
+                entry_point="test",
+                runtime=RuntimeConfig(provider="copilot"),
+                context=ContextConfig(mode="accumulate"),
+                limits=LimitsConfig(max_iterations=10),
+            ),
+            agents=[
+                AgentDef(
+                    name="test",
+                    model="gpt-4",
+                    prompt="Test",
+                    output={"result": OutputField(type="string")},
+                ),
+            ],
+        )
+        return WorkflowEngine(config, mock_provider)
+
+    def test_inject_basic_loop_variables(self, workflow_engine: WorkflowEngine):
+        """Test injection of basic loop variables (item, index)."""
+        context = {
+            "workflow": {"input": {"goal": "test"}},
+            "context": {"iteration": 1},
+        }
+        
+        item = {"kpi_id": "K1", "name": "Revenue"}
+        workflow_engine._inject_loop_variables(
+            context=context,
+            var_name="kpi",
+            item=item,
+            index=0,
+        )
+        
+        # Verify loop variable was injected
+        assert "kpi" in context
+        assert context["kpi"] == {"kpi_id": "K1", "name": "Revenue"}
+        
+        # Verify _index was injected
+        assert "_index" in context
+        assert context["_index"] == 0
+        
+        # Verify _key was not injected (not provided)
+        assert "_key" not in context
+        
+        # Verify original context keys were preserved
+        assert "workflow" in context
+        assert context["workflow"]["input"]["goal"] == "test"
+
+    def test_inject_loop_variables_with_key(self, workflow_engine: WorkflowEngine):
+        """Test injection with key extraction enabled."""
+        context = {
+            "workflow": {"input": {}},
+            "context": {"iteration": 1},
+        }
+        
+        item = {"kpi_id": "KPI_123", "value": 100}
+        workflow_engine._inject_loop_variables(
+            context=context,
+            var_name="kpi",
+            item=item,
+            index=5,
+            key="KPI_123",
+        )
+        
+        # Verify all three variables were injected
+        assert context["kpi"] == {"kpi_id": "KPI_123", "value": 100}
+        assert context["_index"] == 5
+        assert context["_key"] == "KPI_123"
+
+    def test_inject_loop_variables_with_string_item(self, workflow_engine: WorkflowEngine):
+        """Test injection when item is a simple string (not a dict)."""
+        context = {}
+        
+        workflow_engine._inject_loop_variables(
+            context=context,
+            var_name="color",
+            item="red",
+            index=2,
+        )
+        
+        assert context["color"] == "red"
+        assert context["_index"] == 2
+        assert "_key" not in context
+
+    def test_inject_loop_variables_with_number_item(self, workflow_engine: WorkflowEngine):
+        """Test injection when item is a number."""
+        context = {}
+        
+        workflow_engine._inject_loop_variables(
+            context=context,
+            var_name="value",
+            item=42,
+            index=10,
+        )
+        
+        assert context["value"] == 42
+        assert context["_index"] == 10
+
+    def test_inject_loop_variables_with_list_item(self, workflow_engine: WorkflowEngine):
+        """Test injection when item is a list (nested array)."""
+        context = {}
+        
+        workflow_engine._inject_loop_variables(
+            context=context,
+            var_name="batch",
+            item=["a", "b", "c"],
+            index=3,
+        )
+        
+        assert context["batch"] == ["a", "b", "c"]
+        assert context["_index"] == 3
+
+    def test_inject_loop_variables_overwrites_existing(self, workflow_engine: WorkflowEngine):
+        """Test that injection overwrites existing variables in context."""
+        context = {
+            "kpi": "old_value",
+            "_index": 999,
+            "_key": "old_key",
+        }
+        
+        workflow_engine._inject_loop_variables(
+            context=context,
+            var_name="kpi",
+            item={"new": "value"},
+            index=0,
+            key="new_key",
+        )
+        
+        # All should be overwritten
+        assert context["kpi"] == {"new": "value"}
+        assert context["_index"] == 0
+        assert context["_key"] == "new_key"
+
+    def test_inject_loop_variables_zero_index(self, workflow_engine: WorkflowEngine):
+        """Test that zero index is properly injected (not treated as falsy)."""
+        context = {}
+        
+        workflow_engine._inject_loop_variables(
+            context=context,
+            var_name="item",
+            item="first",
+            index=0,
+        )
+        
+        assert context["_index"] == 0
+        assert context["_index"] is not None
+
+    def test_inject_loop_variables_preserves_agent_outputs(self, workflow_engine: WorkflowEngine):
+        """Test that injection doesn't interfere with agent outputs in context."""
+        context = {
+            "workflow": {"input": {"goal": "test"}},
+            "finder": {"output": {"kpis": ["K1", "K2"]}},
+            "analyzer": {"output": {"results": [1, 2]}},
+            "context": {"iteration": 2},
+        }
+        
+        workflow_engine._inject_loop_variables(
+            context=context,
+            var_name="kpi",
+            item={"kpi_id": "K1"},
+            index=0,
+            key="K1",
+        )
+        
+        # Verify loop variables were injected
+        assert context["kpi"] == {"kpi_id": "K1"}
+        assert context["_index"] == 0
+        assert context["_key"] == "K1"
+        
+        # Verify existing context was preserved
+        assert context["workflow"]["input"]["goal"] == "test"
+        assert context["finder"]["output"]["kpis"] == ["K1", "K2"]
+        assert context["analyzer"]["output"]["results"] == [1, 2]
+        assert context["context"]["iteration"] == 2
+
+    def test_inject_loop_variables_complex_nested_item(self, workflow_engine: WorkflowEngine):
+        """Test injection with a complex nested item structure."""
+        context = {}
+        
+        complex_item = {
+            "kpi": {
+                "id": "revenue",
+                "metrics": {
+                    "current": 1000,
+                    "target": 1500,
+                },
+                "tags": ["financial", "quarterly"],
+            }
+        }
+        
+        workflow_engine._inject_loop_variables(
+            context=context,
+            var_name="kpi_data",
+            item=complex_item,
+            index=7,
+        )
+        
+        assert context["kpi_data"] == complex_item
+        assert context["kpi_data"]["kpi"]["metrics"]["current"] == 1000
+        assert context["_index"] == 7
+
+    def test_inject_loop_variables_none_key(self, workflow_engine: WorkflowEngine):
+        """Test that None key is explicitly not injected."""
+        context = {}
+        
+        workflow_engine._inject_loop_variables(
+            context=context,
+            var_name="item",
+            item="value",
+            index=0,
+            key=None,
+        )
+        
+        assert "_key" not in context
+
+    def test_inject_loop_variables_empty_string_key(self, workflow_engine: WorkflowEngine):
+        """Test that empty string key is injected (it's a valid key)."""
+        context = {}
+        
+        workflow_engine._inject_loop_variables(
+            context=context,
+            var_name="item",
+            item="value",
+            index=0,
+            key="",
+        )
+        
+        # Empty string is a valid key, should be injected
+        assert "_key" in context
+        assert context["_key"] == ""
+
