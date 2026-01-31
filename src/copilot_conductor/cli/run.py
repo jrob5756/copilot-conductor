@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     pass
 
 # Verbose console for logging (stderr)
-_verbose_console = Console(stderr=True)
+_verbose_console = Console(stderr=True, highlight=False)
 
 
 def verbose_log(message: str, style: str = "dim") -> None:
@@ -40,6 +40,87 @@ def verbose_log(message: str, style: str = "dim") -> None:
 
     if is_verbose():
         _verbose_console.print(f"[{style}]{message}[/{style}]")
+
+
+def verbose_log_agent_start(agent_name: str, iteration: int) -> None:
+    """Log agent execution start with visual formatting.
+
+    Args:
+        agent_name: Name of the agent being executed.
+        iteration: Current iteration number (1-indexed).
+    """
+    from rich.text import Text
+
+    from copilot_conductor.cli.app import is_verbose
+
+    if is_verbose():
+        _verbose_console.print()  # Empty line before agent
+        text = Text()
+        text.append("┌─ ", style="cyan")
+        text.append("Agent: ", style="cyan")
+        text.append(agent_name, style="cyan bold")
+        text.append(f" [iter {iteration}]", style="dim")
+        _verbose_console.print(text)
+
+
+def verbose_log_agent_complete(
+    agent_name: str,
+    elapsed: float,
+    *,
+    model: str | None = None,
+    tokens: int | None = None,
+    output_keys: list[str] | None = None,
+) -> None:
+    """Log agent completion with summary info.
+
+    Args:
+        agent_name: Name of the agent that completed.
+        elapsed: Elapsed time in seconds.
+        model: Model used (if any).
+        tokens: Tokens used (if any).
+        output_keys: List of output keys (if dict output).
+    """
+    from rich.text import Text
+
+    from copilot_conductor.cli.app import is_verbose
+
+    if is_verbose():
+        # Build summary line
+        parts = [f"{elapsed:.2f}s"]
+        if model:
+            parts.append(model)
+        if tokens:
+            parts.append(f"{tokens} tokens")
+        if output_keys:
+            parts.append(f"→ {output_keys}")
+
+        text = Text()
+        text.append("└─ ", style="green")
+        text.append("✓ ", style="green")
+        text.append(agent_name, style="green")
+        text.append(f"  ({', '.join(parts)})", style="dim")
+        _verbose_console.print(text)
+
+
+def verbose_log_route(target: str) -> None:
+    """Log routing decision.
+
+    Args:
+        target: The routing target.
+    """
+    from rich.text import Text
+
+    from copilot_conductor.cli.app import is_verbose
+
+    if is_verbose():
+        text = Text()
+        text.append("   → ", style="yellow")
+        if target == "$end":
+            text.append("$end", style="yellow bold")
+        else:
+            text.append("next: ", style="dim")
+            text.append(target, style="yellow")
+        _verbose_console.print(text)
 
 
 def verbose_log_section(title: str, content: str, truncate: bool = True) -> None:

@@ -102,9 +102,12 @@ agents:
       2. **Determine Scope**
          - If a specific epic was requested, focus only on that epic
          - If continuing from a previous epic, implement the next epic
-         - Otherwise, identify all epics that are NOT marked as DONE
+         - Otherwise, find the FIRST epic that is NOT marked as DONE
+           - Scan epics in order (EPIC-001, EPIC-002, etc.)
+           - Select the first one with status "NOT STARTED" or "IN PROGRESS"
+           - Skip any epics already marked as "DONE"
          - Check prerequisites/dependencies between epics
-         - Identify the next epic to implement based on dependencies
+         - Verify all prerequisite epics are DONE before starting
 
       3. **Deep Codebase Research**
          - Analyze the codebase to understand existing patterns and conventions
@@ -298,12 +301,7 @@ agents:
 
       ## COMMIT AND UPDATE TASKS
 
-      1. **Create Git Commit**
-         - Stage all modified files
-         - Create a clear commit message starting with the epic ID
-         - Example: "EPIC-001: Implement user authentication flow"
-
-      2. **Update Plan Document**
+      1. **Update Plan Document**
          Open the plan document and make the following updates:
 
          a. **Update Epic Status**
@@ -325,10 +323,24 @@ agents:
 
          Save the updated plan document.
 
+      2. **Create Git Commit**
+         - Stage all modified files INCLUDING the updated plan document
+         - Create a clear commit message starting with the epic ID
+         - Example: "EPIC-001: Implement user authentication flow"
+
       3. **Determine Next Steps**
-         - Check if there are more epics in scope
-         - If yes, identify the next epic to implement
-         - If all epics are done, signal completion
+         - Re-read the plan document after updating it
+         - Scan ALL epics in order (EPIC-001, EPIC-002, etc.)
+         - Build a list of remaining epics that are NOT marked as "DONE"
+         - If there are remaining epics:
+           - Set `all_complete` to FALSE
+           - Set `next_epic` to the FIRST remaining epic (by ID order)
+           - Set `remaining_epics` to the full list of non-DONE epics
+         - ONLY set `all_complete` to TRUE if EVERY epic in the plan is marked as "DONE"
+
+      **IMPORTANT:** Do NOT set `all_complete` to true unless you have verified that
+      ALL epics in the entire plan document are marked as DONE. When in doubt, 
+      set `all_complete` to false and specify the next epic to implement.
 
       Commit the changes and update the plan.
     output:
@@ -343,13 +355,13 @@ agents:
         description: Whether the plan document was updated
       remaining_epics:
         type: array
-        description: List of remaining epics to implement
+        description: List of ALL remaining epics (not marked DONE) in the plan, in order
       all_complete:
         type: boolean
-        description: Whether all epics have been implemented
+        description: TRUE only if EVERY epic in the plan is marked DONE. FALSE if any epic remains.
       next_epic:
         type: string
-        description: The next epic to implement, if any
+        description: The FIRST remaining epic to implement (by ID order). Empty only if all_complete is true.
     routes:
       - to: coder
         when: "{{ not output.all_complete }}"

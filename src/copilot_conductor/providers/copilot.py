@@ -16,7 +16,6 @@ from typing import TYPE_CHECKING, Any
 from copilot_conductor.exceptions import ProviderError
 from copilot_conductor.providers.base import AgentOutput, AgentProvider
 
-
 if TYPE_CHECKING:
     from copilot_conductor.config.schema import AgentDef
 
@@ -297,7 +296,7 @@ class CopilotProvider(AgentProvider):
             response_content = ""
             done = asyncio.Event()
             error_message: str | None = None
-            
+
             # Capture verbose state before callback (contextvars don't propagate to sync callbacks)
             from copilot_conductor.cli.app import is_full, is_verbose
             verbose_enabled = is_verbose()
@@ -405,7 +404,7 @@ class CopilotProvider(AgentProvider):
 
     def _log_event_verbose(self, event_type: str, event: Any, full_mode: bool) -> None:
         """Log SDK events in verbose mode for progress visibility.
-        
+
         Note: Caller must check is_verbose() before calling - contextvars
         don't propagate to sync callbacks from the SDK.
 
@@ -414,56 +413,107 @@ class CopilotProvider(AgentProvider):
             event: The event object.
             full_mode: If True, show full details (args, results, reasoning).
         """
-        import sys
+        from rich.console import Console
+        from rich.text import Text
 
-        # Log interesting events
+        console = Console(stderr=True, highlight=False)
+
+        # Log interesting events with Rich styling
         if event_type == "tool.execution_start":
-            tool_name = getattr(event.data, "tool_name", None) or getattr(event.data, "name", "unknown")
-            print(f"    🔧 Tool call: {tool_name}", file=sys.stderr)
-            
+            tool_name = (
+                getattr(event.data, "tool_name", None)
+                or getattr(event.data, "name", "unknown")
+            )
+
+            text = Text()
+            text.append("    ├─ ", style="dim")
+            text.append("🔧 ", style="")
+            text.append(tool_name, style="cyan bold")
+            console.print(text)
+
             # In full mode, try to show arguments
             if full_mode:
                 args = getattr(event.data, "arguments", None) or getattr(event.data, "args", None)
                 if args:
                     args_str = str(args)
                     args_preview = args_str[:200] + "..." if len(args_str) > 200 else args_str
-                    print(f"       Args: {args_preview}", file=sys.stderr)
-                    
+                    arg_text = Text()
+                    arg_text.append("    │     ", style="dim")
+                    arg_text.append("args: ", style="dim italic")
+                    arg_text.append(args_preview, style="dim")
+                    console.print(arg_text)
+
         elif event_type == "tool.execution_complete":
             # tool.execution_complete may not have tool name, just acknowledge completion
             tool_name = getattr(event.data, "tool_name", None) or getattr(event.data, "name", None)
             if tool_name:
-                print(f"    ✓ Tool done: {tool_name}", file=sys.stderr)
-            # Skip logging if we don't have a tool name - the start event already logged it
-            
+                text = Text()
+                text.append("    │  ", style="dim")
+                text.append("✓ ", style="green")
+                text.append(tool_name, style="dim")
+                console.print(text)
+
             # In full mode, try to show result preview
             if full_mode:
-                result = getattr(event.data, "result", None) or getattr(event.data, "output", None)
+                result = (
+                    getattr(event.data, "result", None)
+                    or getattr(event.data, "output", None)
+                )
                 if result:
                     result_str = str(result)
-                    result_preview = result_str[:200] + "..." if len(result_str) > 200 else result_str
-                    print(f"       Result: {result_preview}", file=sys.stderr)
-                    
+                    if len(result_str) > 200:
+                        result_preview = result_str[:200] + "..."
+                    else:
+                        result_preview = result_str
+                    result_text = Text()
+                    result_text.append("    │     ", style="dim")
+                    result_text.append("result: ", style="dim italic")
+                    result_text.append(result_preview, style="dim")
+                    console.print(result_text)
+
         elif event_type == "assistant.reasoning":
             # Only show reasoning in full mode
             if full_mode:
                 reasoning = getattr(event.data, "content", "")
                 if reasoning:
-                    # In full mode, show full reasoning (just clean up newlines for readability)
-                    print(f"    💭 {reasoning}", file=sys.stderr)
-                    
+                    # Truncate long reasoning for readability
+                    if len(reasoning) > 150:
+                        display_reasoning = reasoning[:150] + "..."
+                    else:
+                        display_reasoning = reasoning
+                    text = Text()
+                    text.append("    │  ", style="dim")
+                    text.append("💭 ", style="")
+                    text.append(display_reasoning.replace("\n", " "), style="italic dim")
+                    console.print(text)
+
         elif event_type == "subagent.started":
             agent_name = getattr(event.data, "name", "unknown")
-            print(f"    🤖 Sub-agent: {agent_name}", file=sys.stderr)
+            text = Text()
+            text.append("    ├─ ", style="dim")
+            text.append("🤖 ", style="")
+            text.append("Sub-agent: ", style="dim")
+            text.append(agent_name, style="magenta bold")
+            console.print(text)
+
         elif event_type == "subagent.completed":
             agent_name = getattr(event.data, "name", "unknown")
-            print(f"    ✓ Sub-agent done: {agent_name}", file=sys.stderr)
+            text = Text()
+            text.append("    │  ", style="dim")
+            text.append("✓ ", style="green")
+            text.append(f"Sub-agent done: {agent_name}", style="dim")
+            console.print(text)
+
         elif event_type == "assistant.turn_start":
             # Only show processing indicator in full mode
             if full_mode:
                 turn = getattr(event.data, "turn", None)
                 turn_info = f" (turn {turn})" if turn else ""
-                print(f"    ⏳ Processing...{turn_info}", file=sys.stderr)
+                text = Text()
+                text.append("    │  ", style="dim")
+                text.append("⏳ ", style="yellow")
+                text.append(f"Processing{turn_info}...", style="dim italic")
+                console.print(text)
 
     async def _ensure_client_started(self) -> None:
         """Ensure the Copilot client is started."""

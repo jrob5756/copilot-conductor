@@ -29,6 +29,33 @@ def _verbose_log_timing(operation: str, elapsed: float) -> None:
     from copilot_conductor.cli.run import verbose_log_timing
     verbose_log_timing(operation, elapsed)
 
+
+def _verbose_log_agent_start(agent_name: str, iteration: int) -> None:
+    """Lazy import wrapper for verbose_log_agent_start to avoid circular imports."""
+    from copilot_conductor.cli.run import verbose_log_agent_start
+    verbose_log_agent_start(agent_name, iteration)
+
+
+def _verbose_log_agent_complete(
+    agent_name: str,
+    elapsed: float,
+    *,
+    model: str | None = None,
+    tokens: int | None = None,
+    output_keys: list[str] | None = None,
+) -> None:
+    """Lazy import wrapper for verbose_log_agent_complete to avoid circular imports."""
+    from copilot_conductor.cli.run import verbose_log_agent_complete
+    verbose_log_agent_complete(
+        agent_name, elapsed, model=model, tokens=tokens, output_keys=output_keys
+    )
+
+
+def _verbose_log_route(target: str) -> None:
+    """Lazy import wrapper for verbose_log_route to avoid circular imports."""
+    from copilot_conductor.cli.run import verbose_log_route
+    verbose_log_route(target)
+
 if TYPE_CHECKING:
     from copilot_conductor.config.schema import AgentDef, WorkflowConfig
     from copilot_conductor.providers.base import AgentProvider
@@ -195,10 +222,7 @@ class WorkflowEngine:
 
                     # Verbose: Log agent execution start (1-indexed for user display)
                     iteration = self.limits.current_iteration + 1
-                    _verbose_log(
-                        f"\n[Iteration {iteration}] Executing agent: {current_agent_name}",
-                        style="cyan bold",
-                    )
+                    _verbose_log_agent_start(current_agent_name, iteration)
 
                     # Trim context if max_tokens is configured
                     self._trim_context_if_needed()
@@ -243,15 +267,18 @@ class WorkflowEngine:
                     _agent_elapsed = _time.time() - _agent_start
 
                     # Verbose: Log agent output summary
-                    _verbose_log_timing(f"Agent '{agent.name}' execution", _agent_elapsed)
-                    if output.model:
-                        _verbose_log(f"  Model: {output.model}")
-                    if output.tokens_used:
-                        _verbose_log(f"  Tokens: {output.tokens_used}")
-                    
-                    # Log output keys (not full content, which may be large)
-                    output_keys = list(output.content.keys()) if isinstance(output.content, dict) else []
-                    _verbose_log(f"  Output keys: {output_keys}")
+                    output_keys = (
+                        list(output.content.keys())
+                        if isinstance(output.content, dict)
+                        else []
+                    )
+                    _verbose_log_agent_complete(
+                        agent.name,
+                        _agent_elapsed,
+                        model=output.model,
+                        tokens=output.tokens_used,
+                        output_keys=output_keys,
+                    )
 
                     # Store output
                     self.context.store(agent.name, output.content)
@@ -266,7 +293,7 @@ class WorkflowEngine:
                     route_result = self._evaluate_routes(agent, output.content)
 
                     # Verbose: Log routing decision
-                    _verbose_log(f"  Route: → {route_result.target}", style="yellow")
+                    _verbose_log_route(route_result.target)
 
                     if route_result.target == "$end":
                         result = self._build_final_output(route_result.output_transform)
