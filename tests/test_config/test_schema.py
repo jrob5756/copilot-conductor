@@ -461,3 +461,140 @@ class TestWorkflowConfig:
             },
         )
         assert len(config.output) == 2
+
+
+class TestParallelGroup:
+    """Tests for ParallelGroup model."""
+
+    def test_valid_parallel_group(self) -> None:
+        """Test creating a valid parallel group."""
+        from copilot_conductor.config.schema import ParallelGroup
+        
+        group = ParallelGroup(
+            name="research_group",
+            agents=["agent1", "agent2"],
+            description="Parallel research agents"
+        )
+        assert group.name == "research_group"
+        assert len(group.agents) == 2
+        assert group.failure_mode == "fail_fast"
+        assert group.description == "Parallel research agents"
+
+    def test_parallel_group_default_failure_mode(self) -> None:
+        """Test that failure_mode defaults to fail_fast."""
+        from copilot_conductor.config.schema import ParallelGroup
+        
+        group = ParallelGroup(name="test", agents=["a1", "a2"])
+        assert group.failure_mode == "fail_fast"
+
+    def test_parallel_group_all_failure_modes(self) -> None:
+        """Test all valid failure modes."""
+        from copilot_conductor.config.schema import ParallelGroup
+        
+        for mode in ["fail_fast", "continue_on_error", "all_or_nothing"]:
+            group = ParallelGroup(name="test", agents=["a1", "a2"], failure_mode=mode)
+            assert group.failure_mode == mode
+
+    def test_parallel_group_invalid_failure_mode(self) -> None:
+        """Test that invalid failure mode raises error."""
+        from copilot_conductor.config.schema import ParallelGroup
+        
+        with pytest.raises(ValidationError) as exc_info:
+            ParallelGroup(name="test", agents=["a1", "a2"], failure_mode="invalid")
+        assert "failure_mode" in str(exc_info.value)
+
+    def test_parallel_group_minimum_agents_validation(self) -> None:
+        """Test that parallel groups require at least 2 agents."""
+        from copilot_conductor.config.schema import ParallelGroup
+        
+        with pytest.raises(ValidationError) as exc_info:
+            ParallelGroup(name="test", agents=["only_one"])
+        assert "at least 2 agents" in str(exc_info.value)
+
+    def test_parallel_group_empty_agents(self) -> None:
+        """Test that parallel groups cannot have empty agents list."""
+        from copilot_conductor.config.schema import ParallelGroup
+        
+        with pytest.raises(ValidationError) as exc_info:
+            ParallelGroup(name="test", agents=[])
+        assert "at least 2 agents" in str(exc_info.value)
+
+    def test_parallel_group_many_agents(self) -> None:
+        """Test parallel group with many agents."""
+        from copilot_conductor.config.schema import ParallelGroup
+        
+        agents = [f"agent{i}" for i in range(10)]
+        group = ParallelGroup(name="big_group", agents=agents)
+        assert len(group.agents) == 10
+
+
+class TestWorkflowConfigWithParallel:
+    """Tests for WorkflowConfig with parallel groups."""
+
+    def test_workflow_with_parallel_group(self) -> None:
+        """Test workflow configuration with parallel group."""
+        from copilot_conductor.config.schema import ParallelGroup
+        
+        config = WorkflowConfig(
+            workflow=WorkflowDef(name="test", entry_point="parallel_group"),
+            agents=[
+                AgentDef(name="agent1", model="gpt-4", prompt="Task 1"),
+                AgentDef(name="agent2", model="gpt-4", prompt="Task 2"),
+            ],
+            parallel=[
+                ParallelGroup(name="parallel_group", agents=["agent1", "agent2"])
+            ],
+        )
+        assert len(config.parallel) == 1
+        assert config.parallel[0].name == "parallel_group"
+
+    def test_workflow_parallel_group_agent_validation(self) -> None:
+        """Test that parallel groups must reference existing agents."""
+        from copilot_conductor.config.schema import ParallelGroup
+        
+        with pytest.raises(ValidationError) as exc_info:
+            WorkflowConfig(
+                workflow=WorkflowDef(name="test", entry_point="agent1"),
+                agents=[
+                    AgentDef(name="agent1", model="gpt-4", prompt="Task 1"),
+                ],
+                parallel=[
+                    ParallelGroup(name="pg", agents=["agent1", "nonexistent"])
+                ],
+            )
+        assert "unknown agent 'nonexistent'" in str(exc_info.value).lower()
+
+    def test_workflow_route_to_parallel_group(self) -> None:
+        """Test routing from agent to parallel group."""
+        from copilot_conductor.config.schema import ParallelGroup
+        
+        config = WorkflowConfig(
+            workflow=WorkflowDef(name="test", entry_point="starter"),
+            agents=[
+                AgentDef(name="starter", model="gpt-4", prompt="Start", 
+                        routes=[RouteDef(to="pg")]),
+                AgentDef(name="agent1", model="gpt-4", prompt="Task 1"),
+                AgentDef(name="agent2", model="gpt-4", prompt="Task 2"),
+            ],
+            parallel=[
+                ParallelGroup(name="pg", agents=["agent1", "agent2"])
+            ],
+        )
+        assert config.agents[0].routes[0].to == "pg"
+
+    def test_workflow_entry_point_can_be_parallel_group(self) -> None:
+        """Test that entry_point can be a parallel group."""
+        from copilot_conductor.config.schema import ParallelGroup
+        
+        config = WorkflowConfig(
+            workflow=WorkflowDef(name="test", entry_point="pg"),
+            agents=[
+                AgentDef(name="agent1", model="gpt-4", prompt="Task 1"),
+                AgentDef(name="agent2", model="gpt-4", prompt="Task 2"),
+            ],
+            parallel=[
+                ParallelGroup(name="pg", agents=["agent1", "agent2"])
+            ],
+        )
+        assert config.workflow.entry_point == "pg"
+

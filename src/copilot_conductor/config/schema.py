@@ -104,6 +104,35 @@ class RouteDef(BaseModel):
         return v
 
 
+class ParallelGroup(BaseModel):
+    """Definition for a parallel agent execution group."""
+
+    name: str
+    """Unique identifier for this parallel group."""
+
+    description: str | None = None
+    """Human-readable description of the parallel group's purpose."""
+
+    agents: list[str]
+    """Names of agents to execute in parallel."""
+
+    failure_mode: Literal["fail_fast", "continue_on_error", "all_or_nothing"] = "fail_fast"
+    """
+    Failure handling mode:
+    - fail_fast: Stop immediately on first agent failure (default)
+    - continue_on_error: Continue if at least one agent succeeds
+    - all_or_nothing: All agents must succeed or entire group fails
+    """
+
+    @field_validator("agents")
+    @classmethod
+    def validate_agents_count(cls, v: list[str]) -> list[str]:
+        """Ensure at least 2 agents in parallel group."""
+        if len(v) < 2:
+            raise ValueError("Parallel groups must contain at least 2 agents")
+        return v
+
+
 class GateOption(BaseModel):
     """Option presented in a human gate."""
 
@@ -303,6 +332,9 @@ class WorkflowConfig(BaseModel):
     agents: list[AgentDef]
     """Agent definitions."""
 
+    parallel: list[ParallelGroup] = Field(default_factory=list)
+    """Parallel execution group definitions."""
+
     output: dict[str, str] = Field(default_factory=dict)
     """Final output template expressions."""
 
@@ -310,19 +342,29 @@ class WorkflowConfig(BaseModel):
     def validate_references(self) -> WorkflowConfig:
         """Validate all agent references exist."""
         agent_names = {a.name for a in self.agents}
-
-        # Validate entry_point
-        if self.workflow.entry_point not in agent_names:
+        parallel_names = {p.name for p in self.parallel}
+        
+        # Validate entry_point exists in agents or parallel groups
+        all_names = agent_names | parallel_names
+        if self.workflow.entry_point not in all_names:
             raise ValueError(
-                f"entry_point '{self.workflow.entry_point}' not found in agents"
+                f"entry_point '{self.workflow.entry_point}' not found in agents or parallel groups"
             )
 
-        # Validate route targets
+        # Validate route targets exist in agents or parallel groups
         for agent in self.agents:
             for route in agent.routes:
-                if route.to != "$end" and route.to not in agent_names:
+                if route.to != "$end" and route.to not in all_names:
                     raise ValueError(
-                        f"Agent '{agent.name}' routes to unknown agent '{route.to}'"
+                        f"Agent '{agent.name}' routes to unknown agent or parallel group '{route.to}'"
+                    )
+        
+        # Validate parallel group agent references exist
+        for parallel_group in self.parallel:
+            for agent_name in parallel_group.agents:
+                if agent_name not in agent_names:
+                    raise ValueError(
+                        f"Parallel group '{parallel_group.name}' references unknown agent '{agent_name}'"
                     )
 
         return self

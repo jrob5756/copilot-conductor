@@ -408,26 +408,28 @@ None.
 
 ### Epic 1: Schema & Configuration Support
 
+**Status**: DONE
+
 **Goal**: Enable workflow files to define parallel groups and load successfully.
 
 **Prerequisites**: None
 
 **Tasks**:
 
-| Task ID | Type | Description | Files | Estimate |
-|---------|------|-------------|-------|----------|
-| PE-1.1 | IMPL | Add `ParallelGroup` Pydantic model to schema.py | `config/schema.py` | S |
-| PE-1.2 | IMPL | Add `parallel` field to `WorkflowConfig` | `config/schema.py` | S |
-| PE-1.3 | IMPL | Add model validator to `AgentDef` to detect if agent is in parallel group (store in instance) | `config/schema.py` | M |
-| PE-1.4 | TEST | Unit tests for `ParallelGroup` model validation | `tests/test_config/test_schema.py` | S |
-| PE-1.5 | TEST | Test workflow loading with parallel groups | `tests/test_config/test_loader.py` | S |
-| PE-1.6 | IMPL | Update YAML loader to handle `parallel:` field | `config/loader.py` | S |
+| Task ID | Type | Description | Files | Estimate | Status |
+|---------|------|-------------|-------|----------|--------|
+| PE-1.1 | IMPL | Add `ParallelGroup` Pydantic model to schema.py | `config/schema.py` | S | DONE |
+| PE-1.2 | IMPL | Add `parallel` field to `WorkflowConfig` | `config/schema.py` | S | DONE |
+| PE-1.3 | IMPL | Add model validator to `AgentDef` to detect if agent is in parallel group (store in instance) | `config/schema.py` | M | DONE |
+| PE-1.4 | TEST | Unit tests for `ParallelGroup` model validation | `tests/test_config/test_schema.py` | S | DONE |
+| PE-1.5 | TEST | Test workflow loading with parallel groups | `tests/test_config/test_loader.py` | S | DONE |
+| PE-1.6 | IMPL | Update YAML loader to handle `parallel:` field | `config/loader.py` | S | DONE |
 
 **Acceptance Criteria**:
-- [ ] YAML workflows with `parallel:` blocks load without errors
-- [ ] `ParallelGroup` validates minimum 2 agents
-- [ ] `failure_mode` defaults to `fail_fast`
-- [ ] Invalid parallel group configs raise clear errors at load time
+- [x] YAML workflows with `parallel:` blocks load without errors
+- [x] `ParallelGroup` validates minimum 2 agents
+- [x] `failure_mode` defaults to `fail_fast`
+- [x] Invalid parallel group configs raise clear errors at load time
 
 ---
 

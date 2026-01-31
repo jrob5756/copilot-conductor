@@ -300,3 +300,184 @@ agents:
 """
         config = load_config_string(yaml_content)
         assert config.agents[0].routes[0].to == "$end"
+
+
+class TestParallelGroupLoading:
+    """Tests for loading workflows with parallel groups."""
+
+    def test_load_workflow_with_parallel_group(self) -> None:
+        """Test loading a workflow with a parallel group."""
+        yaml_content = """
+workflow:
+  name: parallel-test
+  entry_point: parallel_group
+
+agents:
+  - name: agent1
+    model: gpt-4
+    prompt: "Task 1"
+  - name: agent2
+    model: gpt-4
+    prompt: "Task 2"
+
+parallel:
+  - name: parallel_group
+    agents:
+      - agent1
+      - agent2
+    failure_mode: fail_fast
+"""
+        config = load_config_string(yaml_content)
+        assert len(config.parallel) == 1
+        assert config.parallel[0].name == "parallel_group"
+        assert len(config.parallel[0].agents) == 2
+        assert config.parallel[0].failure_mode == "fail_fast"
+
+    def test_load_parallel_group_with_description(self) -> None:
+        """Test loading parallel group with description."""
+        yaml_content = """
+workflow:
+  name: parallel-test
+  entry_point: pg
+
+agents:
+  - name: agent1
+    model: gpt-4
+    prompt: "Task 1"
+  - name: agent2
+    model: gpt-4
+    prompt: "Task 2"
+
+parallel:
+  - name: pg
+    description: "Research agents running in parallel"
+    agents:
+      - agent1
+      - agent2
+"""
+        config = load_config_string(yaml_content)
+        assert config.parallel[0].description == "Research agents running in parallel"
+
+    def test_load_multiple_parallel_groups(self) -> None:
+        """Test loading workflow with multiple parallel groups."""
+        yaml_content = """
+workflow:
+  name: multi-parallel
+  entry_point: pg1
+
+agents:
+  - name: agent1
+    model: gpt-4
+    prompt: "Task 1"
+  - name: agent2
+    model: gpt-4
+    prompt: "Task 2"
+  - name: agent3
+    model: gpt-4
+    prompt: "Task 3"
+  - name: agent4
+    model: gpt-4
+    prompt: "Task 4"
+
+parallel:
+  - name: pg1
+    agents: [agent1, agent2]
+  - name: pg2
+    agents: [agent3, agent4]
+"""
+        config = load_config_string(yaml_content)
+        assert len(config.parallel) == 2
+        assert config.parallel[0].name == "pg1"
+        assert config.parallel[1].name == "pg2"
+
+    def test_load_parallel_group_all_failure_modes(self) -> None:
+        """Test loading parallel groups with different failure modes."""
+        for mode in ["fail_fast", "continue_on_error", "all_or_nothing"]:
+            yaml_content = f"""
+workflow:
+  name: test
+  entry_point: pg
+
+agents:
+  - name: agent1
+    model: gpt-4
+    prompt: "Task 1"
+  - name: agent2
+    model: gpt-4
+    prompt: "Task 2"
+
+parallel:
+  - name: pg
+    agents: [agent1, agent2]
+    failure_mode: {mode}
+"""
+            config = load_config_string(yaml_content)
+            assert config.parallel[0].failure_mode == mode
+
+    def test_parallel_group_minimum_agents_error(self) -> None:
+        """Test that parallel groups with fewer than 2 agents fail to load."""
+        yaml_content = """
+workflow:
+  name: test
+  entry_point: pg
+
+agents:
+  - name: agent1
+    model: gpt-4
+    prompt: "Task 1"
+
+parallel:
+  - name: pg
+    agents: [agent1]
+"""
+        with pytest.raises(ConfigurationError) as exc_info:
+            load_config_string(yaml_content)
+        assert "at least 2 agents" in str(exc_info.value)
+
+    def test_parallel_group_unknown_agent_error(self) -> None:
+        """Test that parallel groups referencing unknown agents fail to load."""
+        yaml_content = """
+workflow:
+  name: test
+  entry_point: pg
+
+agents:
+  - name: agent1
+    model: gpt-4
+    prompt: "Task 1"
+
+parallel:
+  - name: pg
+    agents: [agent1, unknown_agent]
+"""
+        with pytest.raises(ConfigurationError) as exc_info:
+            load_config_string(yaml_content)
+        assert "unknown agent" in str(exc_info.value).lower()
+
+    def test_route_to_parallel_group(self) -> None:
+        """Test that agents can route to parallel groups."""
+        yaml_content = """
+workflow:
+  name: test
+  entry_point: starter
+
+agents:
+  - name: starter
+    model: gpt-4
+    prompt: "Start"
+    routes:
+      - to: pg
+  - name: agent1
+    model: gpt-4
+    prompt: "Task 1"
+  - name: agent2
+    model: gpt-4
+    prompt: "Task 2"
+
+parallel:
+  - name: pg
+    agents: [agent1, agent2]
+"""
+        config = load_config_string(yaml_content)
+        assert config.agents[0].routes[0].to == "pg"
+
