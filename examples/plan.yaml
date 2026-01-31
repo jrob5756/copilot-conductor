@@ -10,6 +10,9 @@
 # Usage:
 #   conductor run examples/plan.yaml --input purpose="Build a user authentication system with OAuth2"
 #
+# Resume from existing plan:
+#   conductor run examples/plan.yaml --input purpose="..." --input existing_plan="path/to/plan.md"
+#
 # With verbose output:
 #   conductor -V run examples/plan.yaml --input purpose="..."
 
@@ -36,6 +39,10 @@ workflow:
       type: string
       required: true
       description: A clear description of the feature, change, or initiative to design
+    existing_plan:
+      type: string
+      required: false
+      description: Optional path to an existing plan file to resume from
 
   context:
     mode: accumulate
@@ -50,6 +57,7 @@ agents:
     model: opus-4.5
     input:
       - workflow.input.purpose
+      - workflow.input.existing_plan?
       - reviewer.output?
     system_prompt: |
       You are a Software Architect agent. You analyze requirements deeply, design solutions, 
@@ -67,6 +75,12 @@ agents:
       Create a comprehensive solution design based on the following purpose:
 
       **Purpose:** {{ workflow.input.purpose }}
+
+      {% if workflow.input.existing_plan %}
+      **Existing Plan:** You have been provided with an existing plan to resume from.
+      Read the file at `{{ workflow.input.existing_plan }}` and use it as a starting point.
+      Review and refine the existing plan rather than starting from scratch.
+      {% endif %}
 
       {% if reviewer is defined and reviewer.output and reviewer.output.score < 90 %}
       **Previous Review Feedback (Score: {{ reviewer.output.score }}/100):**
@@ -159,6 +173,47 @@ agents:
         type: string
         description: Overall effort estimate (e.g., "2-3 weeks")
     routes:
+      - to: saver
+
+  - name: saver
+    description: Saves the design document to a file
+    model: sonnet
+    input:
+      - workflow.input.purpose
+      - architect.output
+    system_prompt: |
+      You are a document saver agent. Your only job is to save the design 
+      document to an appropriate file path based on the naming conventions provided.
+    prompt: |
+      Save the following design document to a file.
+
+      **Original Purpose Input:**
+      {{ workflow.input.purpose }}
+
+      **Design Document:**
+      {{ architect.output.design_document }}
+
+      ## FILE NAMING CONVENTION
+
+      - If the purpose input references a document path, derive the name from that document and save it in the same directory. Examples:
+        - `upgrade-database-v2.brainstorm.md` -> `upgrade-database-v2.plan.md`
+        - `add-user-authentication.md` -> `add-user-authentication.plan.md`
+      - Otherwise, use the following guidelines:
+        - Save the document in the current working directory.
+        - Use the following naming convention: `[purpose]-[component].plan.md`
+        - Examples:
+          - `upgrade-database-v2.plan.md`
+          - `add-user-authentication.plan.md`
+
+      Save the document now using the appropriate file path.
+    output:
+      file_path:
+        type: string
+        description: The path where the document was saved
+      success:
+        type: boolean
+        description: Whether the document was saved successfully
+    routes:
       - to: reviewer
 
   - name: reviewer
@@ -166,6 +221,7 @@ agents:
     model: opus-4.5
     input:
       - workflow.input.purpose
+      - saver.output.file_path
       - architect.output
     system_prompt: |
       You are a Reviewer agent specializing in design and implementation plan review.
@@ -173,13 +229,15 @@ agents:
       actionable, and properly structured for execution by development teams or AI systems.
       Be critical but fair, and provide specific, actionable feedback.
     prompt: |
-      Review the following solution design document for quality and completeness.
+      Review the solution design document for quality and completeness.
 
       **Original Purpose:**
       {{ workflow.input.purpose }}
 
-      **Design Document:**
-      {{ architect.output.design_document }}
+      **Design Document Location:**
+      {{ saver.output.file_path }}
+
+      Read the design document from the file path above and review it.
 
       **Key Components Identified:**
       {% for component in architect.output.key_components %}
@@ -231,56 +289,15 @@ agents:
         type: array
         description: List of critical issues that must be addressed
     routes:
-      - to: saver
+      - to: $end
         when: "{{ output.approved }}"
       - to: architect
         when: "score < 90"
-      - to: saver
-
-  - name: saver
-    description: Saves the design document to a file
-    model: sonnet
-    input:
-      - workflow.input.purpose
-      - architect.output
-    system_prompt: |
-      You are a document saver agent. Your only job is to save the design 
-      document to an appropriate file path based on the naming conventions provided.
-    prompt: |
-      Save the following design document to a file.
-
-      **Original Purpose Input:**
-      {{ workflow.input.purpose }}
-
-      **Design Document:**
-      {{ architect.output.design_document }}
-
-      ## FILE NAMING CONVENTION
-
-      - If the purpose input references a document path, derive the name from that document and save it in the same directory. Examples:
-        - `upgrade-database-v2.brainstorm.md` -> `upgrade-database-v2.plan.md`
-        - `add-user-authentication.md` -> `add-user-authentication.plan.md`
-      - Otherwise, use the following guidelines:
-        - Save the document in the current working directory.
-        - Use the following naming convention: `[purpose]-[component].plan.md`
-        - Examples:
-          - `upgrade-database-v2.plan.md`
-          - `add-user-authentication.plan.md`
-
-      Save the document now using the appropriate file path.
-    output:
-      file_path:
-        type: string
-        description: The path where the document was saved
-      success:
-        type: boolean
-        description: Whether the document was saved successfully
-    routes:
       - to: $end
 
 output:
   purpose: "{{ workflow.input.purpose }}"
-  design_document: "{{ architect.output.design_document }}"
+  plan_file: "{{ saver.output.file_path }}"
   problem_statement: "{{ architect.output.problem_statement }}"
   key_components: "{{ architect.output.key_components | json }}"
   risk_level: "{{ architect.output.risk_level }}"
@@ -289,4 +306,3 @@ output:
   estimated_effort: "{{ architect.output.estimated_effort }}"
   review_score: "{{ reviewer.output.score }}"
   iterations: "{{ context.iteration }}"
-  saved_to: "{{ saver.output.file_path }}"
