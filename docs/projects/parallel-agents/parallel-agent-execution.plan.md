@@ -469,34 +469,36 @@ None.
 
 ### Epic 3: Parallel Execution Engine
 
+**Status**: DONE
+
 **Goal**: Execute agents in parallel with context isolation and output aggregation.
 
 **Prerequisites**: Epic 1, Epic 2
 
 **Tasks**:
 
-| Task ID | Type | Description | Files | Estimate |
-|---------|------|-------------|-------|----------|
-| PE-3.1 | IMPL | Add `ParallelGroupOutput` and `ParallelAgentError` dataclasses | `engine/workflow.py` | S |
-| PE-3.2 | IMPL | Add `_find_parallel_group()` helper method | `engine/workflow.py` | S |
-| PE-3.3 | IMPL | Implement `_execute_parallel_group()` with context snapshot | `engine/workflow.py` | L |
-| PE-3.4 | IMPL | Update `run()` main loop to detect and route to parallel groups | `engine/workflow.py` | M |
-| PE-3.5 | IMPL | Implement `fail_fast` failure mode using `asyncio.gather()` | `engine/workflow.py` | M |
-| PE-3.6 | IMPL | Implement `continue_on_error` mode with `return_exceptions=True` | `engine/workflow.py` | M |
-| PE-3.7 | IMPL | Implement `all_or_nothing` mode with post-gather validation | `engine/workflow.py` | M |
-| PE-3.8 | IMPL | Add output aggregation logic (outputs + errors dicts) | `engine/workflow.py` | M |
-| PE-3.9 | TEST | Unit tests for `_execute_parallel_group()` | `tests/test_engine/test_parallel.py` | L |
-| PE-3.10 | TEST | Test all three failure modes with mocked agents | `tests/test_engine/test_parallel.py` | L |
-| PE-3.11 | TEST | Test context isolation (verify no shared state) | `tests/test_engine/test_parallel.py` | M |
+| Task ID | Type | Description | Files | Estimate | Status |
+|---------|------|-------------|-------|----------|--------|
+| PE-3.1 | IMPL | Add `ParallelGroupOutput` and `ParallelAgentError` dataclasses | `engine/workflow.py` | S | DONE |
+| PE-3.2 | IMPL | Add `_find_parallel_group()` helper method | `engine/workflow.py` | S | DONE |
+| PE-3.3 | IMPL | Implement `_execute_parallel_group()` with context snapshot | `engine/workflow.py` | L | DONE |
+| PE-3.4 | IMPL | Update `run()` main loop to detect and route to parallel groups | `engine/workflow.py` | M | DONE |
+| PE-3.5 | IMPL | Implement `fail_fast` failure mode using `asyncio.gather()` | `engine/workflow.py` | M | DONE |
+| PE-3.6 | IMPL | Implement `continue_on_error` mode with `return_exceptions=True` | `engine/workflow.py` | M | DONE |
+| PE-3.7 | IMPL | Implement `all_or_nothing` mode with post-gather validation | `engine/workflow.py` | M | DONE |
+| PE-3.8 | IMPL | Add output aggregation logic (outputs + errors dicts) | `engine/workflow.py` | M | DONE |
+| PE-3.9 | TEST | Unit tests for `_execute_parallel_group()` | `tests/test_engine/test_parallel.py` | L | DONE |
+| PE-3.10 | TEST | Test all three failure modes with mocked agents | `tests/test_engine/test_parallel.py` | L | DONE |
+| PE-3.11 | TEST | Test context isolation (verify no shared state) | `tests/test_engine/test_parallel.py` | M | DONE |
 
 **Acceptance Criteria**:
-- [ ] Parallel agents execute concurrently (verified with timing tests)
-- [ ] Each agent receives isolated context snapshot
-- [ ] `fail_fast` mode stops immediately on first failure
-- [ ] `continue_on_error` mode collects all errors and continues if ≥1 succeeds
-- [ ] `all_or_nothing` mode fails if any agent fails
-- [ ] Outputs aggregated correctly into `{outputs: {...}, errors: {...}}` structure
-- [ ] Parallel group output stored in context under group name
+- [x] Parallel agents execute concurrently (verified with timing tests)
+- [x] Each agent receives isolated context snapshot
+- [x] `fail_fast` mode stops immediately on first failure
+- [x] `continue_on_error` mode collects all errors and continues if ≥1 succeeds
+- [x] `all_or_nothing` mode fails if any agent fails
+- [x] Outputs aggregated correctly into `{outputs: {...}, errors: {...}}` structure
+- [x] Parallel group output stored in context under group name
 
 ---
 

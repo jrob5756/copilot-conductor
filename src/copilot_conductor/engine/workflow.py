@@ -6,6 +6,9 @@ multi-agent workflow execution.
 
 from __future__ import annotations
 
+import asyncio
+import copy
+import time as _time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -57,8 +60,53 @@ def _verbose_log_route(target: str) -> None:
     verbose_log_route(target)
 
 if TYPE_CHECKING:
-    from copilot_conductor.config.schema import AgentDef, WorkflowConfig
+    from copilot_conductor.config.schema import AgentDef, ParallelGroup, WorkflowConfig
     from copilot_conductor.providers.base import AgentProvider
+
+
+@dataclass
+class ParallelAgentError:
+    """Error information from a failed parallel agent execution.
+    
+    Attributes:
+        agent_name: Name of the agent that failed.
+        exception_type: Type of the exception (e.g., "ValidationError").
+        message: Error message.
+        suggestion: Optional suggestion for fixing the error.
+    
+    Example:
+        error = ParallelAgentError(
+            agent_name="validator",
+            exception_type="ValidationError",
+            message="Missing required field 'email'",
+            suggestion="Ensure all required fields are present"
+        )
+    """
+    
+    agent_name: str
+    exception_type: str
+    message: str
+    suggestion: str | None = None
+
+
+@dataclass
+class ParallelGroupOutput:
+    """Aggregated output from a parallel group execution.
+    
+    Attributes:
+        outputs: Dictionary mapping successful agent names to their outputs.
+        errors: Dictionary mapping failed agent names to their errors.
+    
+    Example:
+        output = ParallelGroupOutput(
+            outputs={"agent1": {"result": "success"}, "agent2": {"value": 42}},
+            errors={"agent3": ParallelAgentError(...)}
+        )
+        # Access via: output.outputs["agent1"]["result"]
+    """
+    
+    outputs: dict[str, Any] = field(default_factory=dict)
+    errors: dict[str, ParallelAgentError] = field(default_factory=dict)
 
 
 @dataclass
@@ -210,97 +258,161 @@ class WorkflowEngine:
         try:
             async with self.limits.timeout_context():
                 while True:
+                    # Try to find agent or parallel group
                     agent = self._find_agent(current_agent_name)
-                    if agent is None:
+                    parallel_group = self._find_parallel_group(current_agent_name)
+                    
+                    if agent is None and parallel_group is None:
                         raise ExecutionError(
-                            f"Agent not found: {current_agent_name}",
+                            f"Agent or parallel group not found: {current_agent_name}",
                             suggestion=f"Ensure '{current_agent_name}' is defined in the workflow",
                         )
-
-                    # Check iteration limit before executing
-                    self.limits.check_iteration(current_agent_name)
-
-                    # Verbose: Log agent execution start (1-indexed for user display)
-                    iteration = self.limits.current_iteration + 1
-                    _verbose_log_agent_start(current_agent_name, iteration)
-
-                    # Trim context if max_tokens is configured
-                    self._trim_context_if_needed()
-
-                    # Handle human gates
-                    if agent.type == "human_gate":
-                        # Build context for the gate prompt
-                        agent_context = self.context.get_for_template()
-
-                        # Use the gate handler for interaction
-                        gate_result: GateResult = await self.gate_handler.handle_gate(
-                            agent, agent_context
+                    
+                    # Handle parallel group execution
+                    if parallel_group is not None:
+                        # Check iteration limit before executing
+                        self.limits.check_iteration(current_agent_name)
+                        
+                        # Verbose: Log parallel group execution start
+                        iteration = self.limits.current_iteration + 1
+                        _verbose_log(
+                            f"[{iteration}] Executing parallel group: {parallel_group.name} "
+                            f"({len(parallel_group.agents)} agents, {parallel_group.failure_mode} mode)",
+                            style="bold cyan"
                         )
-
-                        # Store gate result in context
-                        self.context.store(agent.name, {
-                            "selected": gate_result.selected_option.value,
-                            **gate_result.additional_input,
-                        })
-
-                        # Record human gate as executed
-                        self.limits.record_execution(agent.name)
-
-                        if gate_result.route == "$end":
-                            result = self._build_final_output()
-                            self._execute_hook("on_complete", result=result)
-                            return result
-                        current_agent_name = gate_result.route
-                        continue
-
-                    # Build context for this agent
-                    agent_context = self.context.build_for_agent(
-                        agent.name,
-                        agent.input,
-                        mode=self.config.workflow.context.mode,
-                    )
-
-                    # Execute agent
-                    import time as _time
-                    _agent_start = _time.time()
-                    output = await self.executor.execute(agent, agent_context)
-                    _agent_elapsed = _time.time() - _agent_start
-
-                    # Verbose: Log agent output summary
-                    output_keys = (
-                        list(output.content.keys())
-                        if isinstance(output.content, dict)
-                        else []
-                    )
-                    _verbose_log_agent_complete(
-                        agent.name,
-                        _agent_elapsed,
-                        model=output.model,
-                        tokens=output.tokens_used,
-                        output_keys=output_keys,
-                    )
-
-                    # Store output
-                    self.context.store(agent.name, output.content)
-
-                    # Record successful execution
-                    self.limits.record_execution(agent.name)
-
-                    # Check timeout after each agent
-                    self.limits.check_timeout()
-
-                    # Evaluate routes using the Router
-                    route_result = self._evaluate_routes(agent, output.content)
-
-                    # Verbose: Log routing decision
-                    _verbose_log_route(route_result.target)
-
-                    if route_result.target == "$end":
-                        result = self._build_final_output(route_result.output_transform)
+                        
+                        # Trim context if max_tokens is configured
+                        self._trim_context_if_needed()
+                        
+                        # Execute parallel group
+                        _group_start = _time.time()
+                        parallel_output = await self._execute_parallel_group(parallel_group)
+                        _group_elapsed = _time.time() - _group_start
+                        
+                        # Verbose: Log parallel group completion
+                        _verbose_log_timing(
+                            f"Parallel group '{parallel_group.name}' completed",
+                            _group_elapsed
+                        )
+                        
+                        # Store parallel group output in context
+                        # Format: {outputs: {agent1: {...}, agent2: {...}}, errors: {agent1: {...}}}
+                        parallel_output_dict = {
+                            "outputs": parallel_output.outputs,
+                            "errors": {
+                                name: {
+                                    "agent_name": error.agent_name,
+                                    "exception_type": error.exception_type,
+                                    "message": error.message,
+                                    "suggestion": error.suggestion,
+                                }
+                                for name, error in parallel_output.errors.items()
+                            },
+                        }
+                        self.context.store(parallel_group.name, parallel_output_dict)
+                        
+                        # Record execution (count parallel group as single execution)
+                        self.limits.record_execution(parallel_group.name)
+                        
+                        # Check timeout after parallel group
+                        self.limits.check_timeout()
+                        
+                        # EPIC-3 LIMITATION: Parallel groups are terminal nodes
+                        # Routing from parallel groups will be implemented in Epic 6
+                        _verbose_log(
+                            f"Parallel group '{parallel_group.name}' completed as terminal node "
+                            "(routing not yet supported)",
+                            style="dim"
+                        )
+                        result = self._build_final_output()
                         self._execute_hook("on_complete", result=result)
                         return result
 
-                    current_agent_name = route_result.target
+                    # Handle regular agent execution
+                    if agent is not None:
+                        # Check iteration limit before executing
+                        self.limits.check_iteration(current_agent_name)
+
+                        # Verbose: Log agent execution start (1-indexed for user display)
+                        iteration = self.limits.current_iteration + 1
+                        _verbose_log_agent_start(current_agent_name, iteration)
+
+                        # Trim context if max_tokens is configured
+                        self._trim_context_if_needed()
+
+                        # Handle human gates
+                        if agent.type == "human_gate":
+                            # Build context for the gate prompt
+                            agent_context = self.context.get_for_template()
+
+                            # Use the gate handler for interaction
+                            gate_result: GateResult = await self.gate_handler.handle_gate(
+                                agent, agent_context
+                            )
+
+                            # Store gate result in context
+                            self.context.store(agent.name, {
+                                "selected": gate_result.selected_option.value,
+                                **gate_result.additional_input,
+                            })
+
+                            # Record human gate as executed
+                            self.limits.record_execution(agent.name)
+
+                            if gate_result.route == "$end":
+                                result = self._build_final_output()
+                                self._execute_hook("on_complete", result=result)
+                                return result
+                            current_agent_name = gate_result.route
+                            continue
+
+                        # Build context for this agent
+                        agent_context = self.context.build_for_agent(
+                            agent.name,
+                            agent.input,
+                            mode=self.config.workflow.context.mode,
+                        )
+
+                        # Execute agent
+                        _agent_start = _time.time()
+                        output = await self.executor.execute(agent, agent_context)
+                        _agent_elapsed = _time.time() - _agent_start
+
+                        # Verbose: Log agent output summary
+                        output_keys = (
+                            list(output.content.keys())
+                            if isinstance(output.content, dict)
+                            else []
+                        )
+                        _verbose_log_agent_complete(
+                            agent.name,
+                            _agent_elapsed,
+                            model=output.model,
+                            tokens=output.tokens_used,
+                            output_keys=output_keys,
+                        )
+
+                        # Store output
+                        self.context.store(agent.name, output.content)
+
+                        # Record successful execution
+                        self.limits.record_execution(agent.name)
+
+                        # Check timeout after each agent
+                        self.limits.check_timeout()
+
+                        # Evaluate routes using the Router
+                        route_result = self._evaluate_routes(agent, output.content)
+
+                        # Verbose: Log routing decision
+                        _verbose_log_route(route_result.target)
+
+                        if route_result.target == "$end":
+                            result = self._build_final_output(route_result.output_transform)
+                            self._execute_hook("on_complete", result=result)
+                            return result
+
+                        current_agent_name = route_result.target
 
         except ConductorError as e:
             # Execute on_error hook with error information
@@ -426,6 +538,216 @@ class WorkflowEngine:
             The agent definition if found, None otherwise.
         """
         return next((a for a in self.config.agents if a.name == name), None)
+
+    def _find_parallel_group(self, name: str) -> ParallelGroup | None:
+        """Find parallel group by name.
+
+        Args:
+            name: The parallel group name to find.
+
+        Returns:
+            The parallel group definition if found, None otherwise.
+        """
+        return next((p for p in self.config.parallel if p.name == name), None)
+
+    async def _execute_parallel_group(
+        self, parallel_group: ParallelGroup
+    ) -> ParallelGroupOutput:
+        """Execute agents in parallel with context isolation.
+
+        This method:
+        1. Creates an immutable context snapshot for all parallel agents
+        2. Executes all agents concurrently using asyncio.gather()
+        3. Aggregates successful outputs and errors
+        4. Applies the failure mode policy
+
+        Args:
+            parallel_group: The parallel group definition.
+
+        Returns:
+            ParallelGroupOutput with aggregated outputs and errors.
+
+        Raises:
+            ExecutionError: Based on failure_mode:
+                - fail_fast: Immediately on first agent failure
+                - all_or_nothing: If any agent fails after all complete
+                - continue_on_error: If all agents fail
+        """
+        # Create immutable context snapshot
+        context_snapshot = copy.deepcopy(self.context)
+
+        # Find and validate agents immediately
+        agent_names = parallel_group.agents
+        agents = []
+        for name in agent_names:
+            agent = self._find_agent(name)
+            if agent is None:
+                raise ExecutionError(
+                    f"Agent not found in parallel group: {name}",
+                    suggestion=f"Ensure '{name}' is defined in the workflow",
+                )
+            agents.append(agent)
+
+        async def execute_single_agent(agent: AgentDef) -> tuple[str, Any]:
+            """Execute a single agent with the context snapshot.
+
+            Returns:
+                Tuple of (agent_name, output_content)
+
+            Raises:
+                Exception: Any exception from agent execution (wrapped with agent context)
+            """
+            try:
+                # Build context for this agent using the snapshot
+                agent_context = context_snapshot.build_for_agent(
+                    agent.name,
+                    agent.input,
+                    mode=self.config.workflow.context.mode,
+                )
+
+                # Execute agent
+                _agent_start = _time.time()
+                output = await self.executor.execute(agent, agent_context)
+                _agent_elapsed = _time.time() - _agent_start
+
+                # Verbose: Log agent completion
+                output_keys = (
+                    list(output.content.keys())
+                    if isinstance(output.content, dict)
+                    else []
+                )
+                _verbose_log_agent_complete(
+                    agent.name,
+                    _agent_elapsed,
+                    model=output.model,
+                    tokens=output.tokens_used,
+                    output_keys=output_keys,
+                )
+
+                # Note: Execution count is recorded at the parallel group level,
+                # not for individual agents within the group
+                return (agent.name, output.content)
+            except Exception as e:
+                # Wrap exception with agent name for better error reporting
+                # This allows fail_fast mode to identify which agent failed
+                if not hasattr(e, '_parallel_agent_name'):
+                    e._parallel_agent_name = agent.name  # type: ignore
+                raise
+
+        # Execute based on failure mode
+        parallel_output = ParallelGroupOutput()
+
+        if parallel_group.failure_mode == "fail_fast":
+            # Fail immediately on first error
+            try:
+                results = await asyncio.gather(
+                    *[execute_single_agent(agent) for agent in agents],
+                    return_exceptions=False,
+                )
+                # All succeeded
+                for agent_name, output_content in results:
+                    parallel_output.outputs[agent_name] = output_content
+
+            except Exception as e:
+                # Extract agent name from wrapped exception
+                agent_name = getattr(e, '_parallel_agent_name', 'unknown')
+                
+                # Create error message
+                if agent_name != "unknown":
+                    error_msg = f"Agent '{agent_name}' in parallel group '{parallel_group.name}' failed"
+                else:
+                    error_msg = f"Parallel group '{parallel_group.name}' failed (fail_fast mode)"
+                
+                suggestion = getattr(e, "suggestion", None)
+                raise ExecutionError(
+                    error_msg,
+                    suggestion=suggestion or "Check agent configuration and inputs",
+                ) from e
+
+        elif parallel_group.failure_mode == "continue_on_error":
+            # Collect all results and exceptions
+            results = await asyncio.gather(
+                *[execute_single_agent(agent) for agent in agents],
+                return_exceptions=True,
+            )
+
+            # Separate successes and failures
+            for i, result in enumerate(results):
+                agent_name = agent_names[i]
+                
+                if isinstance(result, Exception):
+                    # Agent failed - store error
+                    parallel_output.errors[agent_name] = ParallelAgentError(
+                        agent_name=agent_name,
+                        exception_type=type(result).__name__,
+                        message=str(result),
+                        suggestion=getattr(result, "suggestion", None),
+                    )
+                else:
+                    # Agent succeeded - store output
+                    agent_name_from_result, output_content = result
+                    parallel_output.outputs[agent_name_from_result] = output_content
+
+            # Fail if ALL agents failed
+            if len(parallel_output.outputs) == 0:
+                error_details = []
+                for agent_name, error in parallel_output.errors.items():
+                    error_details.append(
+                        f"  - {agent_name}: {error.exception_type}: {error.message}"
+                    )
+                error_msg = (
+                    f"All agents in parallel group '{parallel_group.name}' failed:\n"
+                    + "\n".join(error_details)
+                )
+                raise ExecutionError(
+                    error_msg,
+                    suggestion="At least one agent must succeed in continue_on_error mode",
+                )
+
+        elif parallel_group.failure_mode == "all_or_nothing":
+            # Execute all agents and collect results
+            results = await asyncio.gather(
+                *[execute_single_agent(agent) for agent in agents],
+                return_exceptions=True,
+            )
+
+            # Separate successes and failures
+            for i, result in enumerate(results):
+                agent_name = agent_names[i]
+                
+                if isinstance(result, Exception):
+                    # Agent failed - store error
+                    parallel_output.errors[agent_name] = ParallelAgentError(
+                        agent_name=agent_name,
+                        exception_type=type(result).__name__,
+                        message=str(result),
+                        suggestion=getattr(result, "suggestion", None),
+                    )
+                else:
+                    # Agent succeeded - store output
+                    agent_name_from_result, output_content = result
+                    parallel_output.outputs[agent_name_from_result] = output_content
+
+            # Fail if ANY agent failed
+            if len(parallel_output.errors) > 0:
+                error_details = []
+                for agent_name, error in parallel_output.errors.items():
+                    error_details.append(
+                        f"  - {agent_name}: {error.exception_type}: {error.message}"
+                    )
+                success_count = len(parallel_output.outputs)
+                failure_count = len(parallel_output.errors)
+                error_msg = (
+                    f"Parallel group '{parallel_group.name}' failed "
+                    f"({success_count} succeeded, {failure_count} failed):\n"
+                    + "\n".join(error_details)
+                )
+                raise ExecutionError(
+                    error_msg,
+                    suggestion="All agents must succeed in all_or_nothing mode",
+                )
+
+        return parallel_output
 
     def _get_next_agent(self, agent: AgentDef, output: dict[str, Any]) -> str:
         """Get next agent from routes (legacy method, use _evaluate_routes instead).
