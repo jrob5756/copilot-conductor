@@ -294,3 +294,156 @@ class TestVerboseLogging:
             assert is_full() is False
         finally:
             full_mode.reset(token1)
+
+    def test_verbose_log_parallel_start(self) -> None:
+        """Test verbose_log_parallel_start function."""
+        from io import StringIO
+
+        from rich.console import Console
+
+        from copilot_conductor.cli.app import verbose_mode
+        from copilot_conductor.cli.run import verbose_log_parallel_start
+
+        output = StringIO()
+        token = verbose_mode.set(True)
+        try:
+            with patch(
+                "copilot_conductor.cli.run._verbose_console",
+                Console(file=output, force_terminal=True, no_color=True),
+            ):
+                verbose_log_parallel_start("test_group", 3)
+                output_text = output.getvalue()
+                assert "Parallel Group" in output_text
+                assert "test_group" in output_text
+                assert "3 agents" in output_text
+        finally:
+            verbose_mode.reset(token)
+
+    def test_verbose_log_parallel_agent_complete(self) -> None:
+        """Test verbose_log_parallel_agent_complete function."""
+        from io import StringIO
+
+        from rich.console import Console
+
+        from copilot_conductor.cli.app import verbose_mode
+        from copilot_conductor.cli.run import verbose_log_parallel_agent_complete
+
+        output = StringIO()
+        token = verbose_mode.set(True)
+        try:
+            with patch(
+                "copilot_conductor.cli.run._verbose_console",
+                Console(file=output, force_terminal=True, no_color=True),
+            ):
+                verbose_log_parallel_agent_complete(
+                    "test_agent", 1.234, model="gpt-4", tokens=100
+                )
+                output_text = output.getvalue()
+                assert "test_agent" in output_text
+                assert "1.23" in output_text
+                assert "gpt-4" in output_text
+                assert "100 tokens" in output_text
+        finally:
+            verbose_mode.reset(token)
+
+    def test_verbose_log_parallel_agent_failed(self) -> None:
+        """Test verbose_log_parallel_agent_failed function."""
+        from io import StringIO
+
+        from rich.console import Console
+
+        from copilot_conductor.cli.app import verbose_mode
+        from copilot_conductor.cli.run import verbose_log_parallel_agent_failed
+
+        output = StringIO()
+        token = verbose_mode.set(True)
+        try:
+            with patch(
+                "copilot_conductor.cli.run._verbose_console",
+                Console(file=output, force_terminal=True, no_color=True),
+            ):
+                verbose_log_parallel_agent_failed(
+                    "test_agent", 0.5, "ValidationError", "Missing required field"
+                )
+                output_text = output.getvalue()
+                assert "test_agent" in output_text
+                assert "0.50" in output_text
+                assert "ValidationError" in output_text
+                assert "Missing required field" in output_text
+        finally:
+            verbose_mode.reset(token)
+
+    def test_verbose_log_parallel_summary_success(self) -> None:
+        """Test verbose_log_parallel_summary for successful execution."""
+        from io import StringIO
+
+        from rich.console import Console
+
+        from copilot_conductor.cli.app import verbose_mode
+        from copilot_conductor.cli.run import verbose_log_parallel_summary
+
+        output = StringIO()
+        token = verbose_mode.set(True)
+        try:
+            with patch(
+                "copilot_conductor.cli.run._verbose_console",
+                Console(file=output, force_terminal=True, no_color=True),
+            ):
+                verbose_log_parallel_summary("test_group", 3, 0, 2.5)
+                output_text = output.getvalue()
+                assert "test_group" in output_text
+                assert "3/3 succeeded" in output_text
+                assert "2.50" in output_text
+        finally:
+            verbose_mode.reset(token)
+
+    def test_verbose_log_parallel_summary_partial_failure(self) -> None:
+        """Test verbose_log_parallel_summary for partial failure."""
+        from io import StringIO
+
+        from rich.console import Console
+
+        from copilot_conductor.cli.app import verbose_mode
+        from copilot_conductor.cli.run import verbose_log_parallel_summary
+
+        output = StringIO()
+        token = verbose_mode.set(True)
+        try:
+            with patch(
+                "copilot_conductor.cli.run._verbose_console",
+                Console(file=output, force_terminal=True, no_color=True),
+            ):
+                verbose_log_parallel_summary("test_group", 2, 1, 3.0)
+                output_text = output.getvalue()
+                assert "test_group" in output_text
+                assert "2 succeeded" in output_text
+                assert "1 failed" in output_text
+                assert "3.00" in output_text
+        finally:
+            verbose_mode.reset(token)
+
+    def test_verbose_log_parallel_summary_all_failed(self) -> None:
+        """Test verbose_log_parallel_summary for total failure."""
+        from io import StringIO
+
+        from rich.console import Console
+
+        from copilot_conductor.cli.app import verbose_mode
+        from copilot_conductor.cli.run import verbose_log_parallel_summary
+
+        output = StringIO()
+        token = verbose_mode.set(True)
+        try:
+            with patch(
+                "copilot_conductor.cli.run._verbose_console",
+                Console(file=output, force_terminal=True, no_color=True),
+            ):
+                verbose_log_parallel_summary("test_group", 0, 3, 1.5)
+                output_text = output.getvalue()
+                assert "test_group" in output_text
+                assert "0 succeeded" in output_text
+                assert "3 failed" in output_text
+                assert "1.50" in output_text
+        finally:
+            verbose_mode.reset(token)
+

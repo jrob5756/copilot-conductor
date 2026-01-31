@@ -157,6 +157,129 @@ def verbose_log_timing(operation: str, elapsed: float) -> None:
         _verbose_console.print(f"[dim]⏱ {operation}: {elapsed:.2f}s[/dim]")
 
 
+def verbose_log_parallel_start(group_name: str, agent_count: int) -> None:
+    """Log parallel group execution start.
+
+    Args:
+        group_name: Name of the parallel group.
+        agent_count: Number of agents in the group.
+    """
+    from rich.text import Text
+
+    from copilot_conductor.cli.app import is_verbose
+
+    if is_verbose():
+        text = Text()
+        text.append("┌─ ", style="magenta")
+        text.append("Parallel Group: ", style="magenta")
+        text.append(group_name, style="magenta bold")
+        text.append(f" ({agent_count} agents)", style="dim")
+        _verbose_console.print()
+        _verbose_console.print(text)
+
+
+def verbose_log_parallel_agent_complete(
+    agent_name: str,
+    elapsed: float,
+    *,
+    model: str | None = None,
+    tokens: int | None = None,
+) -> None:
+    """Log parallel agent completion.
+
+    Args:
+        agent_name: Name of the agent that completed.
+        elapsed: Elapsed time in seconds.
+        model: Model used (if any).
+        tokens: Tokens used (if any).
+    """
+    from rich.text import Text
+
+    from copilot_conductor.cli.app import is_verbose
+
+    if is_verbose():
+        parts = [f"{elapsed:.2f}s"]
+        if model:
+            parts.append(model)
+        if tokens:
+            parts.append(f"{tokens} tokens")
+
+        text = Text()
+        text.append("  ✓ ", style="green")
+        text.append(agent_name, style="green")
+        text.append(f"  ({', '.join(parts)})", style="dim")
+        _verbose_console.print(text)
+
+
+def verbose_log_parallel_agent_failed(
+    agent_name: str,
+    elapsed: float,
+    exception_type: str,
+    message: str,
+) -> None:
+    """Log parallel agent failure.
+
+    Args:
+        agent_name: Name of the agent that failed.
+        elapsed: Elapsed time in seconds.
+        exception_type: Type of exception.
+        message: Error message.
+    """
+    from rich.text import Text
+
+    from copilot_conductor.cli.app import is_verbose
+
+    if is_verbose():
+        text = Text()
+        text.append("  ✗ ", style="red")
+        text.append(agent_name, style="red")
+        text.append(f"  ({elapsed:.2f}s)", style="dim")
+        _verbose_console.print(text)
+        _verbose_console.print(
+            f"      {exception_type}: {message}", style="red dim"
+        )
+
+
+def verbose_log_parallel_summary(
+    group_name: str,
+    success_count: int,
+    failure_count: int,
+    total_elapsed: float,
+) -> None:
+    """Log parallel group execution summary.
+
+    Args:
+        group_name: Name of the parallel group.
+        success_count: Number of agents that succeeded.
+        failure_count: Number of agents that failed.
+        total_elapsed: Total elapsed time in seconds.
+    """
+    from rich.text import Text
+
+    from copilot_conductor.cli.app import is_verbose
+
+    if is_verbose():
+        text = Text()
+        text.append("└─ ", style="cyan")
+        
+        if failure_count == 0:
+            text.append("✓ ", style="green")
+            text.append(group_name, style="green")
+            text.append(f"  ({success_count}/{success_count} succeeded, {total_elapsed:.2f}s)", style="dim")
+        else:
+            status_parts = []
+            # Always show succeeded count even if 0
+            status_parts.append(f"{success_count} succeeded")
+            status_parts.append(f"{failure_count} failed")
+            
+            style = "yellow" if success_count > 0 else "red"
+            text.append("◆ ", style=style)
+            text.append(group_name, style=style)
+            text.append(f"  ({', '.join(status_parts)}, {total_elapsed:.2f}s)", style="dim")
+        
+        _verbose_console.print(text)
+
+
 def parse_input_flags(raw_inputs: list[str]) -> dict[str, Any]:
     """Parse --input.<name>=<value> flags into a dictionary.
 

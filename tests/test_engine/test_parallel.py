@@ -531,3 +531,214 @@ def test_parallel_group_output_dataclass():
     assert len(output.errors) == 1
     assert output.outputs["agent1"]["result"] == "Success"
     assert output.errors["agent2"].agent_name == "agent2"
+
+
+@pytest.mark.asyncio
+async def test_error_message_format_fail_fast_with_agent_name(
+    simple_parallel_workflow, mock_provider
+):
+    """Test error message format in fail_fast mode includes agent name."""
+    # First agent succeeds, second agent fails
+    mock_provider.execute.side_effect = [
+        AgentOutput(
+            content={"result": "Agent 1 result"},
+            raw_response={},
+            model="gpt-4",
+            tokens_used=100,
+        ),
+        Exception("Agent execution failed"),
+    ]
+
+    engine = WorkflowEngine(simple_parallel_workflow, mock_provider)
+
+    with pytest.raises(ExecutionError) as exc_info:
+        await engine.run({"question": "test"})
+
+    error_msg = str(exc_info.value)
+    # Should include the parallel group name
+    assert "parallel_group_1" in error_msg
+    # Should include "fail_fast mode"
+    assert "fail_fast" in error_msg
+    # Should include the agent name that failed
+    assert "agent" in error_msg.lower()
+
+
+@pytest.mark.asyncio
+async def test_error_message_format_continue_on_error_all_failed(
+    mock_provider,
+):
+    """Test error message format when all agents fail in continue_on_error mode."""
+    workflow = WorkflowConfig(
+        workflow=WorkflowDef(
+            name="parallel-test",
+            entry_point="parallel_group_1",
+            runtime=RuntimeConfig(provider="copilot"),
+            context=ContextConfig(mode="accumulate"),
+            limits=LimitsConfig(max_iterations=10),
+        ),
+        agents=[
+            AgentDef(
+                name="agent1",
+                model="gpt-4",
+                prompt="Task 1",
+                output={"result": OutputField(type="string")},
+            ),
+            AgentDef(
+                name="agent2",
+                model="gpt-4",
+                prompt="Task 2",
+                output={"result": OutputField(type="string")},
+            ),
+        ],
+        parallel=[
+            ParallelGroup(
+                name="parallel_group_1",
+                agents=["agent1", "agent2"],
+                failure_mode="continue_on_error",
+            ),
+        ],
+    )
+
+    # Both agents fail
+    mock_provider.execute.side_effect = [
+        Exception("Agent 1 failed"),
+        Exception("Agent 2 failed"),
+    ]
+
+    engine = WorkflowEngine(workflow, mock_provider)
+
+    with pytest.raises(ExecutionError) as exc_info:
+        await engine.run({})
+
+    error_msg = str(exc_info.value)
+    # Should include all failed agent names
+    assert "agent1" in error_msg
+    assert "agent2" in error_msg
+    # Should include error details
+    assert "Agent 1 failed" in error_msg
+    assert "Agent 2 failed" in error_msg
+    # Should mention that all agents failed
+    assert "All agents" in error_msg
+
+
+@pytest.mark.asyncio
+async def test_error_message_format_all_or_nothing_with_suggestions(
+    mock_provider,
+):
+    """Test error message format includes suggestions in all_or_nothing mode."""
+    workflow = WorkflowConfig(
+        workflow=WorkflowDef(
+            name="parallel-test",
+            entry_point="parallel_group_1",
+            runtime=RuntimeConfig(provider="copilot"),
+            context=ContextConfig(mode="accumulate"),
+            limits=LimitsConfig(max_iterations=10),
+        ),
+        agents=[
+            AgentDef(
+                name="agent1",
+                model="gpt-4",
+                prompt="Task 1",
+                output={"result": OutputField(type="string")},
+            ),
+            AgentDef(
+                name="agent2",
+                model="gpt-4",
+                prompt="Task 2",
+                output={"result": OutputField(type="string")},
+            ),
+        ],
+        parallel=[
+            ParallelGroup(
+                name="parallel_group_1",
+                agents=["agent1", "agent2"],
+                failure_mode="all_or_nothing",
+            ),
+        ],
+    )
+
+    # First succeeds, second fails with suggestion
+    error_with_suggestion = Exception("Validation failed")
+    error_with_suggestion.suggestion = "Check input schema"  # type: ignore
+
+    mock_provider.execute.side_effect = [
+        AgentOutput(
+            content={"result": "Success"},
+            raw_response={},
+            model="gpt-4",
+            tokens_used=100,
+        ),
+        error_with_suggestion,
+    ]
+
+    engine = WorkflowEngine(workflow, mock_provider)
+
+    with pytest.raises(ExecutionError) as exc_info:
+        await engine.run({})
+
+    error_msg = str(exc_info.value)
+    # Should include agent name and error
+    assert "agent2" in error_msg
+    assert "Validation failed" in error_msg
+    # Should include the suggestion
+    assert "Check input schema" in error_msg
+    # Should mention counts
+    assert "1 succeeded" in error_msg
+    assert "1 failed" in error_msg
+
+
+@pytest.mark.asyncio
+async def test_error_message_distinguishes_exception_types(
+    mock_provider,
+):
+    """Test that error messages show the exception type."""
+    workflow = WorkflowConfig(
+        workflow=WorkflowDef(
+            name="parallel-test",
+            entry_point="parallel_group_1",
+            runtime=RuntimeConfig(provider="copilot"),
+            context=ContextConfig(mode="accumulate"),
+            limits=LimitsConfig(max_iterations=10),
+        ),
+        agents=[
+            AgentDef(
+                name="agent1",
+                model="gpt-4",
+                prompt="Task 1",
+                output={"result": OutputField(type="string")},
+            ),
+            AgentDef(
+                name="agent2",
+                model="gpt-4",
+                prompt="Task 2",
+                output={"result": OutputField(type="string")},
+            ),
+        ],
+        parallel=[
+            ParallelGroup(
+                name="parallel_group_1",
+                agents=["agent1", "agent2"],
+                failure_mode="continue_on_error",
+            ),
+        ],
+    )
+
+    # Different exception types
+    mock_provider.execute.side_effect = [
+        ValueError("Invalid value"),
+        KeyError("Missing key"),
+    ]
+
+    engine = WorkflowEngine(workflow, mock_provider)
+
+    with pytest.raises(ExecutionError) as exc_info:
+        await engine.run({})
+
+    error_msg = str(exc_info.value)
+    # Should show exception types
+    assert "ValueError" in error_msg
+    assert "KeyError" in error_msg
+    # Should show messages
+    assert "Invalid value" in error_msg
+    assert "Missing key" in error_msg
+

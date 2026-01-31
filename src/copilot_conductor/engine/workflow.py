@@ -59,6 +59,52 @@ def _verbose_log_route(target: str) -> None:
     from copilot_conductor.cli.run import verbose_log_route
     verbose_log_route(target)
 
+
+def _verbose_log_parallel_start(group_name: str, agent_count: int) -> None:
+    """Lazy import wrapper for verbose_log_parallel_start to avoid circular imports."""
+    from copilot_conductor.cli.run import verbose_log_parallel_start
+    verbose_log_parallel_start(group_name, agent_count)
+
+
+def _verbose_log_parallel_agent_complete(
+    agent_name: str,
+    elapsed: float,
+    *,
+    model: str | None = None,
+    tokens: int | None = None,
+) -> None:
+    """Lazy import wrapper for verbose_log_parallel_agent_complete to avoid circular imports."""
+    from copilot_conductor.cli.run import verbose_log_parallel_agent_complete
+    verbose_log_parallel_agent_complete(
+        agent_name, elapsed, model=model, tokens=tokens
+    )
+
+
+def _verbose_log_parallel_agent_failed(
+    agent_name: str,
+    elapsed: float,
+    exception_type: str,
+    message: str,
+) -> None:
+    """Lazy import wrapper for verbose_log_parallel_agent_failed to avoid circular imports."""
+    from copilot_conductor.cli.run import verbose_log_parallel_agent_failed
+    verbose_log_parallel_agent_failed(
+        agent_name, elapsed, exception_type, message
+    )
+
+
+def _verbose_log_parallel_summary(
+    group_name: str,
+    success_count: int,
+    failure_count: int,
+    total_elapsed: float,
+) -> None:
+    """Lazy import wrapper for verbose_log_parallel_summary to avoid circular imports."""
+    from copilot_conductor.cli.run import verbose_log_parallel_summary
+    verbose_log_parallel_summary(
+        group_name, success_count, failure_count, total_elapsed
+    )
+
 if TYPE_CHECKING:
     from copilot_conductor.config.schema import AgentDef, ParallelGroup, WorkflowConfig
     from copilot_conductor.providers.base import AgentProvider
@@ -573,6 +619,12 @@ class WorkflowEngine:
                 - all_or_nothing: If any agent fails after all complete
                 - continue_on_error: If all agents fail
         """
+        # Verbose: Log parallel group start
+        _verbose_log_parallel_start(parallel_group.name, len(parallel_group.agents))
+        
+        # Track timing for summary
+        _group_start = _time.time()
+        
         # Create immutable context snapshot
         context_snapshot = copy.deepcopy(self.context)
 
@@ -592,11 +644,12 @@ class WorkflowEngine:
             """Execute a single agent with the context snapshot.
 
             Returns:
-                Tuple of (agent_name, output_content)
+                Tuple of (agent_name, output_content, elapsed, model, tokens)
 
             Raises:
-                Exception: Any exception from agent execution (wrapped with agent context)
+                Exception: Any exception from agent execution (wrapped with agent context and timing)
             """
+            _agent_start = _time.time()
             try:
                 # Build context for this agent using the snapshot
                 agent_context = context_snapshot.build_for_agent(
@@ -606,32 +659,36 @@ class WorkflowEngine:
                 )
 
                 # Execute agent
-                _agent_start = _time.time()
                 output = await self.executor.execute(agent, agent_context)
                 _agent_elapsed = _time.time() - _agent_start
 
                 # Verbose: Log agent completion
-                output_keys = (
-                    list(output.content.keys())
-                    if isinstance(output.content, dict)
-                    else []
-                )
-                _verbose_log_agent_complete(
+                _verbose_log_parallel_agent_complete(
                     agent.name,
                     _agent_elapsed,
                     model=output.model,
                     tokens=output.tokens_used,
-                    output_keys=output_keys,
                 )
 
                 # Note: Execution count is recorded at the parallel group level,
                 # not for individual agents within the group
                 return (agent.name, output.content)
             except Exception as e:
-                # Wrap exception with agent name for better error reporting
-                # This allows fail_fast mode to identify which agent failed
+                _agent_elapsed = _time.time() - _agent_start
+                
+                # Verbose: Log agent failure
+                _verbose_log_parallel_agent_failed(
+                    agent.name,
+                    _agent_elapsed,
+                    type(e).__name__,
+                    str(e),
+                )
+                
+                # Wrap exception with agent name and timing for better error reporting
                 if not hasattr(e, '_parallel_agent_name'):
                     e._parallel_agent_name = agent.name  # type: ignore
+                if not hasattr(e, '_parallel_agent_elapsed'):
+                    e._parallel_agent_elapsed = _agent_elapsed  # type: ignore
                 raise
 
         # Execute based on failure mode
@@ -649,20 +706,30 @@ class WorkflowEngine:
                     parallel_output.outputs[agent_name] = output_content
 
             except Exception as e:
-                # Extract agent name from wrapped exception
+                # Extract agent name and exception type from wrapped exception
                 agent_name = getattr(e, '_parallel_agent_name', 'unknown')
+                exception_type = type(e).__name__
                 
-                # Create error message
+                # Create error message with exception type and mode
                 if agent_name != "unknown":
-                    error_msg = f"Agent '{agent_name}' in parallel group '{parallel_group.name}' failed"
+                    error_msg = f"Agent '{agent_name}' in parallel group '{parallel_group.name}' failed (fail_fast mode): {exception_type}: {str(e)}"
                 else:
-                    error_msg = f"Parallel group '{parallel_group.name}' failed (fail_fast mode)"
+                    error_msg = f"Parallel group '{parallel_group.name}' failed (fail_fast mode): {exception_type}: {str(e)}"
                 
                 suggestion = getattr(e, "suggestion", None)
                 raise ExecutionError(
                     error_msg,
                     suggestion=suggestion or "Check agent configuration and inputs",
                 ) from e
+            finally:
+                # Verbose: Log summary even on failure
+                _group_elapsed = _time.time() - _group_start
+                _verbose_log_parallel_summary(
+                    parallel_group.name,
+                    len(parallel_output.outputs),
+                    len(parallel_output.errors),
+                    _group_elapsed,
+                )
 
         elif parallel_group.failure_mode == "continue_on_error":
             # Collect all results and exceptions
@@ -688,13 +755,23 @@ class WorkflowEngine:
                     agent_name_from_result, output_content = result
                     parallel_output.outputs[agent_name_from_result] = output_content
 
+            # Verbose: Log summary
+            _group_elapsed = _time.time() - _group_start
+            _verbose_log_parallel_summary(
+                parallel_group.name,
+                len(parallel_output.outputs),
+                len(parallel_output.errors),
+                _group_elapsed,
+            )
+
             # Fail if ALL agents failed
             if len(parallel_output.outputs) == 0:
                 error_details = []
                 for agent_name, error in parallel_output.errors.items():
-                    error_details.append(
-                        f"  - {agent_name}: {error.exception_type}: {error.message}"
-                    )
+                    error_line = f"  - {agent_name}: {error.exception_type}: {error.message}"
+                    if error.suggestion:
+                        error_line += f" (Suggestion: {error.suggestion})"
+                    error_details.append(error_line)
                 error_msg = (
                     f"All agents in parallel group '{parallel_group.name}' failed:\n"
                     + "\n".join(error_details)
@@ -728,13 +805,23 @@ class WorkflowEngine:
                     agent_name_from_result, output_content = result
                     parallel_output.outputs[agent_name_from_result] = output_content
 
+            # Verbose: Log summary
+            _group_elapsed = _time.time() - _group_start
+            _verbose_log_parallel_summary(
+                parallel_group.name,
+                len(parallel_output.outputs),
+                len(parallel_output.errors),
+                _group_elapsed,
+            )
+
             # Fail if ANY agent failed
             if len(parallel_output.errors) > 0:
                 error_details = []
                 for agent_name, error in parallel_output.errors.items():
-                    error_details.append(
-                        f"  - {agent_name}: {error.exception_type}: {error.message}"
-                    )
+                    error_line = f"  - {agent_name}: {error.exception_type}: {error.message}"
+                    if error.suggestion:
+                        error_line += f" (Suggestion: {error.suggestion})"
+                    error_details.append(error_line)
                 success_count = len(parallel_output.outputs)
                 failure_count = len(parallel_output.errors)
                 error_msg = (

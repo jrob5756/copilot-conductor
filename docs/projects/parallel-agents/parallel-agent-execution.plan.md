@@ -504,28 +504,30 @@ None.
 
 ### Epic 4: Error Handling & Reporting
 
+**Status**: DONE
+
 **Goal**: Provide clear, actionable error messages for parallel execution failures.
 
 **Prerequisites**: Epic 3
 
 **Tasks**:
 
-| Task ID | Type | Description | Files | Estimate |
-|---------|------|-------------|-------|----------|
-| PE-4.1 | IMPL | Format error messages with agent attribution | `engine/workflow.py` | M |
-| PE-4.2 | IMPL | Add verbose logging for parallel group execution start | `cli/run.py` | S |
-| PE-4.3 | IMPL | Add verbose logging for per-agent completion/failure with timing | `cli/run.py` | M |
-| PE-4.4 | IMPL | Add verbose logging for parallel group summary | `cli/run.py` | S |
-| PE-4.5 | IMPL | Include suggestions from agent errors in parallel error messages | `engine/workflow.py` | S |
-| PE-4.6 | TEST | Test error message formats for all failure modes | `tests/test_engine/test_parallel.py` | M |
-| PE-4.7 | TEST | Test verbose logging output | `tests/test_cli/test_verbose.py` | M |
+| Task ID | Type | Description | Files | Estimate | Status |
+|---------|------|-------------|-------|----------|--------|
+| PE-4.1 | IMPL | Format error messages with agent attribution | `engine/workflow.py` | M | DONE |
+| PE-4.2 | IMPL | Add verbose logging for parallel group execution start | `cli/run.py` | S | DONE |
+| PE-4.3 | IMPL | Add verbose logging for per-agent completion/failure with timing | `cli/run.py` | M | DONE |
+| PE-4.4 | IMPL | Add verbose logging for parallel group summary | `cli/run.py` | S | DONE |
+| PE-4.5 | IMPL | Include suggestions from agent errors in parallel error messages | `engine/workflow.py` | S | DONE |
+| PE-4.6 | TEST | Test error message formats for all failure modes | `tests/test_engine/test_parallel.py` | M | DONE |
+| PE-4.7 | TEST | Test verbose logging output | `tests/test_cli/test_verbose.py` | M | DONE |
 
 **Acceptance Criteria**:
-- [ ] Parallel failures identify which agent(s) failed
-- [ ] Error messages include exception type, message, and suggestion
-- [ ] Verbose mode shows parallel execution timeline with per-agent timing
-- [ ] Multiple concurrent errors are all displayed (not just first)
-- [ ] Error format distinguishes between normal and verbose modes
+- [x] Parallel failures identify which agent(s) failed
+- [x] Error messages include exception type, message, and suggestion
+- [x] Verbose mode shows parallel execution timeline with per-agent timing
+- [x] Multiple concurrent errors are all displayed (not just first)
+- [x] Error format distinguishes between normal and verbose modes
 
 ---
 
