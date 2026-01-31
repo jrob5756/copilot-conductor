@@ -42,7 +42,7 @@ workflow:
     mode: accumulate
 
   limits:
-    max_iterations: 25
+    max_iterations: 100
     # timeout_seconds is unlimited by default
 
 agents:
