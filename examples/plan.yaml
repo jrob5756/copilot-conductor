@@ -87,6 +87,10 @@ agents:
       {{ reviewer.output.feedback }}
 
       Please revise your design to address this feedback.
+      
+      **IMPORTANT:** You are revising an existing design. Do NOT create a new document.
+      Read the existing document at `{{ architect.output.file_path }}` and update it directly
+      to address the feedback. Preserve the existing structure and content that is satisfactory.
       {% endif %}
 
       **Research**
