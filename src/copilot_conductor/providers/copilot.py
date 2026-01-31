@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import random
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -50,6 +51,30 @@ class RetryConfig:
     max_parse_recovery_attempts: int = 5
 
 
+@dataclass
+class IdleRecoveryConfig:
+    """Configuration for idle detection and recovery behavior.
+
+    When a Copilot SDK session stops sending events for too long, this config
+    controls how we detect the idle state and attempt to recover by sending
+    a prompt asking the agent to continue.
+
+    Attributes:
+        idle_timeout_seconds: Time without any SDK events before considering session idle.
+        max_recovery_attempts: Maximum number of "continue" messages to send before failing.
+        recovery_prompt: Template for the recovery message sent to stuck sessions.
+            Use {last_activity} placeholder for context about what was happening.
+    """
+
+    idle_timeout_seconds: float = 300.0  # 5 minutes
+    max_recovery_attempts: int = 3
+    recovery_prompt: str = (
+        "It appears you may have gotten stuck or stopped responding. "
+        "Your last activity was: {last_activity}. "
+        "Please continue with your task from where you left off."
+    )
+
+
 class CopilotProvider(AgentProvider):
     """GitHub Copilot SDK provider.
 
@@ -80,6 +105,7 @@ class CopilotProvider(AgentProvider):
         retry_config: RetryConfig | None = None,
         model: str | None = None,
         mcp_servers: dict[str, Any] | None = None,
+        idle_recovery_config: IdleRecoveryConfig | None = None,
     ) -> None:
         """Initialize the Copilot provider.
 
@@ -89,6 +115,8 @@ class CopilotProvider(AgentProvider):
             retry_config: Optional retry configuration. Uses default if not provided.
             model: Default model to use if not specified in agent. Defaults to "gpt-4o".
             mcp_servers: MCP server configurations to pass to the SDK.
+            idle_recovery_config: Optional idle detection and recovery configuration.
+                                  Uses default if not provided.
         """
         self._client: Any = None  # Will hold Copilot SDK client
         self._mock_handler = mock_handler
@@ -98,6 +126,7 @@ class CopilotProvider(AgentProvider):
         self._default_model = model or "gpt-4o"
         self._mcp_servers = mcp_servers or {}
         self._started = False
+        self._idle_recovery_config = idle_recovery_config or IdleRecoveryConfig()
 
     async def execute(
         self,
@@ -387,15 +416,23 @@ class CopilotProvider(AgentProvider):
             The response content string.
 
         Raises:
-            ProviderError: If an error occurs during the SDK call.
+            ProviderError: If an error occurs during the SDK call or session gets stuck.
         """
         response_content = ""
         done = asyncio.Event()
         error_message: str | None = None
 
+        # Mutable container for last activity: [event_type, tool_call, timestamp]
+        # Using a list so the nested callback can mutate it
+        last_activity_ref: list[Any] = [None, None, time.monotonic()]
+
         def on_event(event: Any) -> None:
             nonlocal response_content, error_message
             event_type = event.type.value if hasattr(event.type, "value") else str(event.type)
+
+            # Update last activity on EVERY event (this is key for idle detection!)
+            last_activity_ref[0] = event_type
+            last_activity_ref[2] = time.monotonic()
 
             if event_type == "assistant.message":
                 response_content = event.data.content
@@ -404,6 +441,13 @@ class CopilotProvider(AgentProvider):
             elif event_type == "error" or event_type == "session.error":
                 error_message = getattr(event.data, "message", str(event.data))
                 done.set()
+            elif event_type == "tool.execution_start":
+                # Track which tool is executing for better recovery context
+                tool_name = (
+                    getattr(event.data, "tool_name", None)
+                    or getattr(event.data, "name", "unknown")
+                )
+                last_activity_ref[1] = tool_name
 
             # Verbose logging for intermediate progress
             if verbose_enabled:
@@ -412,9 +456,10 @@ class CopilotProvider(AgentProvider):
         session.on(on_event)
         await session.send({"prompt": prompt})
 
-        # Wait for completion - no timeout at SDK level
-        # The workflow-level timeout will enforce overall limits
-        await done.wait()
+        # Wait with idle detection and recovery
+        await self._wait_with_idle_detection(
+            done, session, verbose_enabled, full_enabled, last_activity_ref
+        )
 
         if error_message:
             raise ProviderError(
@@ -647,6 +692,165 @@ class CopilotProvider(AgentProvider):
                 text.append("⏳ ", style="yellow")
                 text.append(f"Processing{turn_info}...", style="dim italic")
                 console.print(text)
+
+    def _build_recovery_prompt(
+        self,
+        last_event_type: str | None,
+        last_tool_call: str | None,
+    ) -> str:
+        """Build a recovery prompt based on last activity.
+
+        Args:
+            last_event_type: The type of the last event received.
+            last_tool_call: The name of the last tool that was executing.
+
+        Returns:
+            A formatted recovery prompt to send to the stuck session.
+        """
+        if last_tool_call:
+            last_activity = f"executing tool '{last_tool_call}'"
+        elif last_event_type:
+            activity_map = {
+                "tool.execution_start": "starting a tool call",
+                "assistant.reasoning": "reasoning about the problem",
+                "assistant.turn_start": "beginning a response",
+                "assistant.message": "sending a message",
+            }
+            last_activity = activity_map.get(last_event_type, f"'{last_event_type}' event")
+        else:
+            last_activity = "unknown (no events received)"
+
+        return self._idle_recovery_config.recovery_prompt.format(last_activity=last_activity)
+
+    def _build_stuck_info(
+        self,
+        last_event_type: str | None,
+        last_tool_call: str | None,
+    ) -> str:
+        """Build a descriptive string about where the session got stuck.
+
+        Args:
+            last_event_type: The type of the last event received.
+            last_tool_call: The name of the last tool that was executing.
+
+        Returns:
+            A human-readable description of the last activity.
+        """
+        if last_tool_call:
+            return f"Last activity: tool '{last_tool_call}' was executing."
+        elif last_event_type:
+            return f"Last activity: '{last_event_type}' event."
+        else:
+            return "Last activity: unknown (no events received)."
+
+    def _log_recovery_attempt(
+        self,
+        attempt: int,
+        last_event_type: str | None,
+        last_tool_call: str | None,
+    ) -> None:
+        """Log a recovery attempt in verbose mode.
+
+        Args:
+            attempt: Current recovery attempt number (1-based).
+            last_event_type: The type of the last event received.
+            last_tool_call: The name of the last tool that was executing.
+        """
+        from rich.console import Console
+        from rich.text import Text
+
+        console = Console(stderr=True, highlight=False)
+
+        text = Text()
+        text.append("    ├─ ", style="dim")
+        text.append("⚠️ ", style="yellow")
+        text.append(
+            f"Idle Recovery {attempt}/{self._idle_recovery_config.max_recovery_attempts}",
+            style="yellow bold",
+        )
+
+        if last_tool_call:
+            text.append(f" - last: tool '{last_tool_call}'", style="dim italic")
+        elif last_event_type:
+            text.append(f" - last: {last_event_type}", style="dim italic")
+
+        console.print(text)
+
+    async def _wait_with_idle_detection(
+        self,
+        done: asyncio.Event,
+        session: Any,
+        verbose_enabled: bool,
+        full_enabled: bool,
+        last_activity_ref: list[Any],
+    ) -> None:
+        """Wait for session completion with idle detection and recovery.
+
+        This method replaces a simple `await done.wait()` with intelligent
+        idle detection. If no SDK events are received for the configured
+        idle timeout, it sends a recovery prompt to nudge the session to
+        continue.
+
+        Args:
+            done: Event that signals session completion.
+            session: The Copilot SDK session (for sending recovery messages).
+            verbose_enabled: Whether verbose logging is enabled.
+            full_enabled: Whether full logging mode is enabled.
+            last_activity_ref: Mutable [last_event_type, last_tool_call, timestamp]
+                              for tracking last activity.
+
+        Raises:
+            ProviderError: If all recovery attempts are exhausted.
+        """
+        recovery_attempts = 0
+
+        while True:
+            try:
+                # Wait for done with idle timeout
+                await asyncio.wait_for(
+                    done.wait(),
+                    timeout=self._idle_recovery_config.idle_timeout_seconds,
+                )
+                return  # Completed successfully
+
+            except asyncio.TimeoutError:
+                # No activity for idle_timeout_seconds - attempt recovery
+                recovery_attempts += 1
+
+                last_event_type = last_activity_ref[0]
+                last_tool_call = last_activity_ref[1]
+
+                if recovery_attempts > self._idle_recovery_config.max_recovery_attempts:
+                    # All recovery attempts exhausted
+                    stuck_info = self._build_stuck_info(last_event_type, last_tool_call)
+                    raise ProviderError(
+                        f"Session appears stuck after {recovery_attempts - 1} recovery attempts. "
+                        f"{stuck_info}",
+                        suggestion=(
+                            f"The agent did not respond for "
+                            f"{self._idle_recovery_config.idle_timeout_seconds}s "
+                            "despite recovery prompts. This may indicate a persistent issue "
+                            "with the SDK, network connection, or the agent's ability to "
+                            "complete the task. Check verbose output (-V) for details."
+                        ),
+                        is_retryable=False,  # Don't retry at provider level
+                    )
+
+                # Log recovery attempt
+                if verbose_enabled:
+                    self._log_recovery_attempt(
+                        recovery_attempts, last_event_type, last_tool_call
+                    )
+
+                # Send recovery message
+                recovery_prompt = self._build_recovery_prompt(
+                    last_event_type, last_tool_call
+                )
+                await session.send({"prompt": recovery_prompt})
+
+                # Reset the done event to wait again
+                # (it may have been set by a previous partial response)
+                done.clear()
 
     async def _ensure_client_started(self) -> None:
         """Ensure the Copilot client is started."""

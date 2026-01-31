@@ -297,7 +297,12 @@ class LimitsConfig(BaseModel):
     """Maximum number of agent executions before forced termination."""
 
     timeout_seconds: int | None = Field(default=None, ge=1)
-    """Maximum wall-clock time for entire workflow. None means unlimited."""
+    """Maximum wall-clock time for entire workflow in seconds.
+
+    Default is None (unlimited). Idle detection at the session level (5 min)
+    handles most stuck cases. Set an explicit value for workflows that need
+    a hard time limit.
+    """
 
 
 class HooksConfig(BaseModel):
