@@ -158,12 +158,37 @@ class WorkflowContext:
             if mode == "accumulate":
                 # All prior agent outputs available
                 for agent, output in self.agent_outputs.items():
-                    ctx[agent] = {"output": output}
+                    # Check if this is a parallel group output
+                    # (has 'outputs' and 'errors' keys at top level)
+                    is_parallel_group = (
+                        isinstance(output, dict)
+                        and "outputs" in output
+                        and "errors" in output
+                    )
+                    
+                    if is_parallel_group:
+                        # Parallel groups store their structure directly
+                        ctx[agent] = output
+                    else:
+                        # Regular agents wrap output in {"output": ...}
+                        ctx[agent] = {"output": output}
 
             elif mode == "last_only" and self.execution_history:
                 # Only the most recent agent's output
                 last_agent = self.execution_history[-1]
-                ctx[last_agent] = {"output": self.agent_outputs.get(last_agent, {})}
+                last_output = self.agent_outputs.get(last_agent, {})
+                
+                # Check if this is a parallel group output
+                is_parallel_group = (
+                    isinstance(last_output, dict)
+                    and "outputs" in last_output
+                    and "errors" in last_output
+                )
+                
+                if is_parallel_group:
+                    ctx[last_agent] = last_output
+                else:
+                    ctx[last_agent] = {"output": last_output}
 
         return ctx
 
@@ -178,6 +203,10 @@ class WorkflowContext:
         - agent_name.output - References an agent's entire output
         - agent_name.output.field - References a specific output field
         - agent_name.field - Shorthand for agent_name.output.field (deprecated but supported)
+        - parallel_group.outputs - References all parallel group outputs
+        - parallel_group.outputs.agent_name - References a specific parallel agent's output
+        - parallel_group.outputs.agent_name.field - References a specific field from a parallel agent
+        - parallel_group.errors - References all parallel group errors
         - Any reference with '?' suffix - Optional dependency
 
         Args:
@@ -216,43 +245,155 @@ class WorkflowContext:
                 else:
                     raise KeyError(f"Missing required workflow input: {param_name}")
         else:
-            # agent_name.output or agent_name.output.field or agent_name.field format
-            agent_name = parts[0]
+            # Could be agent_name.output or parallel_group.outputs
+            entity_name = parts[0]
 
-            if agent_name in self.agent_outputs:
-                # Ensure the agent context exists
-                if agent_name not in ctx:
-                    ctx[agent_name] = {"output": {}}
-                elif "output" not in ctx[agent_name]:
-                    ctx[agent_name]["output"] = {}
-
-                # If just agent_name.output, copy entire output
-                if len(parts) == 2 and parts[1] == "output":
-                    ctx[agent_name]["output"] = self.agent_outputs[agent_name].copy()
-                elif len(parts) >= 3 and parts[1] == "output":
-                    # Copy specific field(s): agent_name.output.field
-                    field_name = parts[2]
-                    if field_name in self.agent_outputs[agent_name]:
-                        ctx[agent_name]["output"][field_name] = self.agent_outputs[
-                            agent_name
-                        ][field_name]
-                    elif not is_optional:
-                        raise KeyError(
-                            f"Missing output field '{field_name}' from agent '{agent_name}'"
-                        )
-                elif len(parts) == 2 and parts[1] != "output":
-                    # Shorthand format: agent_name.field -> agent_name.output.field
-                    field_name = parts[1]
-                    if field_name in self.agent_outputs[agent_name]:
-                        ctx[agent_name]["output"][field_name] = self.agent_outputs[
-                            agent_name
-                        ][field_name]
-                    elif not is_optional:
-                        raise KeyError(
-                            f"Missing output field '{field_name}' from agent '{agent_name}'"
-                        )
+            if entity_name in self.agent_outputs:
+                agent_output = self.agent_outputs[entity_name]
+                
+                # Check if this is a parallel group (has 'outputs' and 'errors' keys)
+                is_parallel_group = (
+                    isinstance(agent_output, dict) 
+                    and "outputs" in agent_output 
+                    and "errors" in agent_output
+                )
+                
+                if is_parallel_group:
+                    # Handle parallel group references
+                    self._add_parallel_group_input(ctx, entity_name, parts[1:], is_optional)
+                else:
+                    # Handle regular agent references
+                    self._add_agent_input(ctx, entity_name, parts[1:], is_optional)
             elif not is_optional:
-                raise KeyError(f"Missing required agent output: {agent_name}")
+                raise KeyError(f"Missing required agent output: {entity_name}")
+
+    def _add_agent_input(
+        self, 
+        ctx: dict[str, Any], 
+        agent_name: str, 
+        remaining_parts: list[str], 
+        is_optional: bool
+    ) -> None:
+        """Add a regular agent output reference to context.
+        
+        Args:
+            ctx: The context dictionary to update.
+            agent_name: The name of the agent.
+            remaining_parts: The remaining path parts after agent name.
+            is_optional: Whether this is an optional reference.
+            
+        Raises:
+            KeyError: If a required field is missing.
+        """
+        # Ensure the agent context exists
+        if agent_name not in ctx:
+            ctx[agent_name] = {"output": {}}
+        elif "output" not in ctx[agent_name]:
+            ctx[agent_name]["output"] = {}
+
+        agent_output = self.agent_outputs[agent_name]
+
+        if not remaining_parts:
+            # Just agent_name - copy entire output
+            ctx[agent_name]["output"] = agent_output.copy()
+        elif len(remaining_parts) == 1 and remaining_parts[0] == "output":
+            # agent_name.output - copy entire output
+            ctx[agent_name]["output"] = agent_output.copy()
+        elif len(remaining_parts) >= 2 and remaining_parts[0] == "output":
+            # agent_name.output.field - copy specific field
+            field_name = remaining_parts[1]
+            if field_name in agent_output:
+                ctx[agent_name]["output"][field_name] = agent_output[field_name]
+            elif not is_optional:
+                raise KeyError(
+                    f"Missing output field '{field_name}' from agent '{agent_name}'"
+                )
+        elif len(remaining_parts) == 1 and remaining_parts[0] != "output":
+            # Shorthand format: agent_name.field -> agent_name.output.field
+            field_name = remaining_parts[0]
+            if field_name in agent_output:
+                ctx[agent_name]["output"][field_name] = agent_output[field_name]
+            elif not is_optional:
+                raise KeyError(
+                    f"Missing output field '{field_name}' from agent '{agent_name}'"
+                )
+
+    def _add_parallel_group_input(
+        self, 
+        ctx: dict[str, Any], 
+        group_name: str, 
+        remaining_parts: list[str], 
+        is_optional: bool
+    ) -> None:
+        """Add a parallel group output reference to context.
+        
+        Supports patterns:
+        - parallel_group.outputs - All outputs
+        - parallel_group.outputs.agent_name - Specific agent's output
+        - parallel_group.outputs.agent_name.field - Specific field
+        - parallel_group.errors - All errors
+        
+        Args:
+            ctx: The context dictionary to update.
+            group_name: The name of the parallel group.
+            remaining_parts: The remaining path parts after group name.
+            is_optional: Whether this is an optional reference.
+            
+        Raises:
+            KeyError: If a required field is missing.
+        """
+        # Ensure the parallel group context exists
+        if group_name not in ctx:
+            ctx[group_name] = {}
+
+        group_output = self.agent_outputs[group_name]
+
+        if not remaining_parts:
+            # Just parallel_group - copy entire output structure
+            ctx[group_name] = group_output.copy()
+        elif remaining_parts[0] == "outputs":
+            # Ensure outputs dict exists
+            if "outputs" not in ctx[group_name]:
+                ctx[group_name]["outputs"] = {}
+                
+            if len(remaining_parts) == 1:
+                # parallel_group.outputs - copy all outputs
+                ctx[group_name]["outputs"] = group_output["outputs"].copy()
+            elif len(remaining_parts) == 2:
+                # parallel_group.outputs.agent_name - copy specific agent's output
+                agent_name = remaining_parts[1]
+                if agent_name in group_output["outputs"]:
+                    ctx[group_name]["outputs"][agent_name] = group_output["outputs"][agent_name]
+                elif not is_optional:
+                    raise KeyError(
+                        f"Missing agent '{agent_name}' in parallel group '{group_name}'"
+                    )
+            elif len(remaining_parts) >= 3:
+                # parallel_group.outputs.agent_name.field - copy specific field
+                agent_name = remaining_parts[1]
+                field_name = remaining_parts[2]
+                
+                if agent_name in group_output["outputs"]:
+                    agent_output = group_output["outputs"][agent_name]
+                    if field_name in agent_output:
+                        # Ensure the agent dict exists in context
+                        if agent_name not in ctx[group_name]["outputs"]:
+                            ctx[group_name]["outputs"][agent_name] = {}
+                        ctx[group_name]["outputs"][agent_name][field_name] = agent_output[field_name]
+                    elif not is_optional:
+                        raise KeyError(
+                            f"Missing field '{field_name}' from agent '{agent_name}' "
+                            f"in parallel group '{group_name}'"
+                        )
+                elif not is_optional:
+                    raise KeyError(
+                        f"Missing agent '{agent_name}' in parallel group '{group_name}'"
+                    )
+        elif remaining_parts[0] == "errors":
+            # parallel_group.errors - copy errors dict
+            if "errors" not in ctx[group_name]:
+                ctx[group_name]["errors"] = {}
+            ctx[group_name]["errors"] = group_output["errors"].copy()
 
     def get_for_template(self) -> dict[str, Any]:
         """Get full context for template rendering.

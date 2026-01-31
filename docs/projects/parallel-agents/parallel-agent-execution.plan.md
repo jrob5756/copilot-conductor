@@ -533,27 +533,29 @@ None.
 
 ### Epic 5: Context Access Patterns
 
+**Status**: DONE
+
 **Goal**: Enable downstream agents to access parallel outputs via Jinja2 templates.
 
 **Prerequisites**: Epic 3
 
 **Tasks**:
 
-| Task ID | Type | Description | Files | Estimate |
-|---------|------|-------------|-------|----------|
-| PE-5.1 | IMPL | Update `build_for_agent()` to handle parallel group outputs in explicit mode | `engine/context.py` | M |
-| PE-5.2 | IMPL | Update input reference parser to support `parallel_group.outputs.agent.field` | `engine/context.py` | M |
-| PE-5.3 | IMPL | Add template rendering support for `{{ parallel_group.outputs }}` | `executor/template.py` | S |
-| PE-5.4 | TEST | Test accessing parallel outputs in agent prompts | `tests/test_engine/test_context.py` | M |
-| PE-5.5 | TEST | Test explicit mode with parallel group inputs | `tests/test_engine/test_context.py` | M |
-| PE-5.6 | TEST | Test output template access to parallel results | `tests/test_executor/test_template.py` | S |
+| Task ID | Type | Description | Files | Estimate | Status |
+|---------|------|-------------|-------|----------|--------|
+| PE-5.1 | IMPL | Update `build_for_agent()` to handle parallel group outputs in explicit mode | `engine/context.py` | M | DONE |
+| PE-5.2 | IMPL | Update input reference parser to support `parallel_group.outputs.agent.field` | `engine/context.py` | M | DONE |
+| PE-5.3 | IMPL | Add template rendering support for `{{ parallel_group.outputs }}` | `executor/template.py` | S | DONE |
+| PE-5.4 | TEST | Test accessing parallel outputs in agent prompts | `tests/test_engine/test_context.py` | M | DONE |
+| PE-5.5 | TEST | Test explicit mode with parallel group inputs | `tests/test_engine/test_context.py` | M | DONE |
+| PE-5.6 | TEST | Test output template access to parallel results | `tests/test_executor/test_template.py` | S | DONE |
 
 **Acceptance Criteria**:
-- [ ] Agents can access `{{ parallel_group.outputs.agent_name.field }}`
-- [ ] Agents can access `{{ parallel_group.errors }}` to check for failures
-- [ ] Explicit context mode correctly includes parallel group outputs when declared
-- [ ] Input references like `parallel_group.outputs` are validated
-- [ ] Optional references with `?` work for parallel outputs
+- [x] Agents can access `{{ parallel_group.outputs.agent_name.field }}`
+- [x] Agents can access `{{ parallel_group.errors }}` to check for failures
+- [x] Explicit context mode correctly includes parallel group outputs when declared
+- [x] Input references like `parallel_group.outputs` are validated
+- [x] Optional references with `?` work for parallel outputs
 
 ---
 

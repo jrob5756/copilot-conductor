@@ -237,7 +237,7 @@ class TestWorkflowContextOptionalDeps:
         assert "optional_agent" not in agent_ctx
 
     def test_optional_missing_workflow_input_skipped(self) -> None:
-        """Test that missing optional workflow input is skipped."""
+        """Test that missing optional workflow input is set to None."""
         ctx = WorkflowContext()
         ctx.set_workflow_inputs({})
 
@@ -248,8 +248,8 @@ class TestWorkflowContextOptionalDeps:
             mode="explicit",
         )
 
-        # workflow.input should be empty or not contain the optional field
-        assert "optional" not in agent_ctx.get("workflow", {}).get("input", {})
+        # Optional workflow inputs are set to None so templates can check them
+        assert agent_ctx["workflow"]["input"]["optional"] is None
 
     def test_optional_present_is_included(self) -> None:
         """Test that present optional dependencies are included."""
@@ -533,3 +533,295 @@ class TestContextTrimmingInvalidStrategy:
 
         with pytest.raises(ValueError, match="Unknown trimming strategy"):
             ctx.trim_context(max_tokens=10, strategy="invalid")  # type: ignore
+
+
+class TestParallelGroupContextAccess:
+    """Tests for accessing parallel group outputs in context."""
+
+    def test_accumulate_mode_with_parallel_group(self) -> None:
+        """Test that parallel group outputs are correctly structured in accumulate mode."""
+        ctx = WorkflowContext()
+        ctx.set_workflow_inputs({"goal": "test"})
+        
+        # Store a regular agent output
+        ctx.store("planner", {"plan": "step 1"})
+        
+        # Store a parallel group output
+        parallel_output = {
+            "outputs": {
+                "researcher1": {"finding": "result A"},
+                "researcher2": {"finding": "result B"},
+            },
+            "errors": {},
+        }
+        ctx.store("parallel_research", parallel_output)
+        
+        # Build context
+        agent_ctx = ctx.build_for_agent("summarizer", [], mode="accumulate")
+        
+        # Regular agent should be wrapped in output
+        assert agent_ctx["planner"]["output"]["plan"] == "step 1"
+        
+        # Parallel group should NOT be wrapped - direct access to outputs/errors
+        assert "outputs" in agent_ctx["parallel_research"]
+        assert "errors" in agent_ctx["parallel_research"]
+        assert agent_ctx["parallel_research"]["outputs"]["researcher1"]["finding"] == "result A"
+        assert agent_ctx["parallel_research"]["outputs"]["researcher2"]["finding"] == "result B"
+        assert agent_ctx["parallel_research"]["errors"] == {}
+
+    def test_last_only_mode_with_parallel_group(self) -> None:
+        """Test that parallel group is correctly structured in last_only mode."""
+        ctx = WorkflowContext()
+        ctx.store("agent1", {"result": "first"})
+        
+        parallel_output = {
+            "outputs": {
+                "validator1": {"valid": True},
+                "validator2": {"valid": False},
+            },
+            "errors": {},
+        }
+        ctx.store("parallel_validation", parallel_output)
+        
+        agent_ctx = ctx.build_for_agent("decision", [], mode="last_only")
+        
+        # Should only have the parallel group (last agent)
+        assert "agent1" not in agent_ctx
+        assert "parallel_validation" in agent_ctx
+        assert agent_ctx["parallel_validation"]["outputs"]["validator1"]["valid"] is True
+
+    def test_explicit_mode_parallel_group_all_outputs(self) -> None:
+        """Test explicit mode referencing all parallel outputs."""
+        ctx = WorkflowContext()
+        
+        parallel_output = {
+            "outputs": {
+                "checker1": {"status": "pass"},
+                "checker2": {"status": "fail"},
+            },
+            "errors": {},
+        }
+        ctx.store("parallel_checks", parallel_output)
+        
+        agent_ctx = ctx.build_for_agent(
+            "reporter",
+            ["parallel_checks.outputs"],
+            mode="explicit",
+        )
+        
+        assert agent_ctx["parallel_checks"]["outputs"]["checker1"]["status"] == "pass"
+        assert agent_ctx["parallel_checks"]["outputs"]["checker2"]["status"] == "fail"
+
+    def test_explicit_mode_parallel_group_specific_agent(self) -> None:
+        """Test explicit mode referencing specific agent in parallel group."""
+        ctx = WorkflowContext()
+        
+        parallel_output = {
+            "outputs": {
+                "agent_a": {"data": "value_a", "extra": "ignored"},
+                "agent_b": {"data": "value_b"},
+            },
+            "errors": {},
+        }
+        ctx.store("my_parallel", parallel_output)
+        
+        agent_ctx = ctx.build_for_agent(
+            "consumer",
+            ["my_parallel.outputs.agent_a"],
+            mode="explicit",
+        )
+        
+        assert agent_ctx["my_parallel"]["outputs"]["agent_a"]["data"] == "value_a"
+        assert agent_ctx["my_parallel"]["outputs"]["agent_a"]["extra"] == "ignored"
+        # agent_b should not be in context
+        assert "agent_b" not in agent_ctx["my_parallel"]["outputs"]
+
+    def test_explicit_mode_parallel_group_specific_field(self) -> None:
+        """Test explicit mode referencing specific field from parallel agent."""
+        ctx = WorkflowContext()
+        
+        parallel_output = {
+            "outputs": {
+                "analyzer": {"score": 95, "details": "good", "notes": "extra"},
+            },
+            "errors": {},
+        }
+        ctx.store("analysis_group", parallel_output)
+        
+        agent_ctx = ctx.build_for_agent(
+            "scorer",
+            ["analysis_group.outputs.analyzer.score"],
+            mode="explicit",
+        )
+        
+        assert agent_ctx["analysis_group"]["outputs"]["analyzer"]["score"] == 95
+        # Other fields should not be present
+        assert "details" not in agent_ctx["analysis_group"]["outputs"]["analyzer"]
+        assert "notes" not in agent_ctx["analysis_group"]["outputs"]["analyzer"]
+
+    def test_explicit_mode_parallel_group_errors(self) -> None:
+        """Test explicit mode accessing parallel group errors."""
+        ctx = WorkflowContext()
+        
+        parallel_output = {
+            "outputs": {
+                "worker1": {"result": "success"},
+            },
+            "errors": {
+                "worker2": {
+                    "agent_name": "worker2",
+                    "exception_type": "ValueError",
+                    "message": "Invalid input",
+                    "suggestion": "Check input format",
+                }
+            },
+        }
+        ctx.store("workers", parallel_output)
+        
+        agent_ctx = ctx.build_for_agent(
+            "error_handler",
+            ["workers.errors"],
+            mode="explicit",
+        )
+        
+        assert "errors" in agent_ctx["workers"]
+        assert "worker2" in agent_ctx["workers"]["errors"]
+        assert agent_ctx["workers"]["errors"]["worker2"]["message"] == "Invalid input"
+
+    def test_explicit_mode_optional_parallel_agent_missing(self) -> None:
+        """Test optional reference to missing parallel agent."""
+        ctx = WorkflowContext()
+        
+        parallel_output = {
+            "outputs": {
+                "existing": {"data": "value"},
+            },
+            "errors": {},
+        }
+        ctx.store("group1", parallel_output)
+        
+        # Should not raise even though 'missing' doesn't exist
+        agent_ctx = ctx.build_for_agent(
+            "consumer",
+            ["group1.outputs.missing?"],
+            mode="explicit",
+        )
+        
+        # group1.outputs should exist but without 'missing'
+        if "group1" in agent_ctx and "outputs" in agent_ctx["group1"]:
+            assert "missing" not in agent_ctx["group1"]["outputs"]
+
+    def test_explicit_mode_optional_parallel_field_missing(self) -> None:
+        """Test optional reference to missing field in parallel agent."""
+        ctx = WorkflowContext()
+        
+        parallel_output = {
+            "outputs": {
+                "agent1": {"field_a": "value"},
+            },
+            "errors": {},
+        }
+        ctx.store("group1", parallel_output)
+        
+        # Should not raise even though 'missing_field' doesn't exist
+        agent_ctx = ctx.build_for_agent(
+            "consumer",
+            ["group1.outputs.agent1.missing_field?"],
+            mode="explicit",
+        )
+        
+        # Agent1 might not be in context since the field was missing
+        # and optional
+        if "group1" in agent_ctx and "outputs" in agent_ctx["group1"]:
+            if "agent1" in agent_ctx["group1"]["outputs"]:
+                assert "missing_field" not in agent_ctx["group1"]["outputs"]["agent1"]
+
+    def test_explicit_mode_required_parallel_agent_missing_raises(self) -> None:
+        """Test that missing required parallel agent raises error."""
+        ctx = WorkflowContext()
+        
+        parallel_output = {
+            "outputs": {
+                "existing": {"data": "value"},
+            },
+            "errors": {},
+        }
+        ctx.store("group1", parallel_output)
+        
+        with pytest.raises(KeyError, match="Missing agent 'missing'"):
+            ctx.build_for_agent(
+                "consumer",
+                ["group1.outputs.missing"],
+                mode="explicit",
+            )
+
+    def test_explicit_mode_required_parallel_field_missing_raises(self) -> None:
+        """Test that missing required field from parallel agent raises error."""
+        ctx = WorkflowContext()
+        
+        parallel_output = {
+            "outputs": {
+                "agent1": {"field_a": "value"},
+            },
+            "errors": {},
+        }
+        ctx.store("group1", parallel_output)
+        
+        with pytest.raises(KeyError, match="Missing field 'missing_field'"):
+            ctx.build_for_agent(
+                "consumer",
+                ["group1.outputs.agent1.missing_field"],
+                mode="explicit",
+            )
+
+    def test_get_for_template_with_parallel_group(self) -> None:
+        """Test that get_for_template includes parallel groups correctly."""
+        ctx = WorkflowContext()
+        ctx.set_workflow_inputs({"input": "test"})
+        ctx.store("agent1", {"result": "normal"})
+        
+        parallel_output = {
+            "outputs": {
+                "p1": {"value": 1},
+                "p2": {"value": 2},
+            },
+            "errors": {},
+        }
+        ctx.store("parallel_group", parallel_output)
+        
+        template_ctx = ctx.get_for_template()
+        
+        # Regular agent wrapped in output
+        assert template_ctx["agent1"]["output"]["result"] == "normal"
+        
+        # Parallel group should have direct structure
+        assert template_ctx["parallel_group"]["outputs"]["p1"]["value"] == 1
+        assert template_ctx["parallel_group"]["outputs"]["p2"]["value"] == 2
+
+    def test_mixed_regular_and_parallel_in_explicit_mode(self) -> None:
+        """Test mixing regular agent and parallel group references in explicit mode."""
+        ctx = WorkflowContext()
+        ctx.set_workflow_inputs({"goal": "test"})
+        ctx.store("planner", {"plan": "step 1"})
+        
+        parallel_output = {
+            "outputs": {
+                "researcher": {"finding": "data"},
+            },
+            "errors": {},
+        }
+        ctx.store("research_group", parallel_output)
+        
+        agent_ctx = ctx.build_for_agent(
+            "summarizer",
+            [
+                "workflow.input.goal",
+                "planner.output.plan",
+                "research_group.outputs.researcher.finding",
+            ],
+            mode="explicit",
+        )
+        
+        assert agent_ctx["workflow"]["input"]["goal"] == "test"
+        assert agent_ctx["planner"]["output"]["plan"] == "step 1"
+        assert agent_ctx["research_group"]["outputs"]["researcher"]["finding"] == "data"

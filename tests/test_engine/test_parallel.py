@@ -74,8 +74,8 @@ def simple_parallel_workflow() -> WorkflowConfig:
             ),
         ],
         output={
-            "agent1_result": "{{ parallel_group_1.output.outputs.agent1.result }}",
-            "agent2_result": "{{ parallel_group_1.output.outputs.agent2.result }}",
+            "agent1_result": "{{ parallel_group_1.outputs.agent1.result }}",
+            "agent2_result": "{{ parallel_group_1.outputs.agent2.result }}",
         },
     )
 
@@ -170,8 +170,8 @@ async def test_parallel_group_continue_on_error_mode(mock_provider):
             ),
         ],
         output={
-            "agent2_result": "{{ parallel_group_1.output.outputs.agent2.result }}",
-            "has_errors": "{{ parallel_group_1.output.errors | length > 0 }}",
+            "agent2_result": "{{ parallel_group_1.outputs.agent2.result }}",
+            "has_errors": "{{ parallel_group_1.errors | length > 0 }}",
         },
     )
 
@@ -236,7 +236,7 @@ async def test_parallel_group_all_or_nothing_mode_all_succeed(mock_provider):
             ),
         ],
         output={
-            "combined": "{{ parallel_group_1.output.outputs.agent1.result }} + {{ parallel_group_1.output.outputs.agent2.result }}",
+            "combined": "{{ parallel_group_1.outputs.agent1.result }} + {{ parallel_group_1.outputs.agent2.result }}",
         },
     )
 

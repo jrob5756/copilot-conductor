@@ -387,3 +387,156 @@ class TestTemplateRendererSyntaxErrors:
         with pytest.raises(TemplateError) as exc_info:
             renderer.render("{{ name", {"name": "test"})
         assert exc_info.value.suggestion is not None
+
+
+class TestTemplateRendererParallelOutputs:
+    """Tests for rendering templates with parallel group outputs."""
+
+    def test_render_parallel_group_output(self) -> None:
+        """Test rendering template that accesses parallel group outputs."""
+        renderer = TemplateRenderer()
+        context = {
+            "research_group": {
+                "outputs": {
+                    "researcher1": {"finding": "Discovery A"},
+                    "researcher2": {"finding": "Discovery B"},
+                },
+                "errors": {},
+            }
+        }
+        result = renderer.render(
+            "Results: {{ research_group.outputs.researcher1.finding }} and {{ research_group.outputs.researcher2.finding }}",
+            context,
+        )
+        assert result == "Results: Discovery A and Discovery B"
+
+    def test_render_parallel_group_with_errors(self) -> None:
+        """Test rendering template that checks parallel group errors."""
+        renderer = TemplateRenderer()
+        context = {
+            "validators": {
+                "outputs": {
+                    "validator1": {"status": "pass"},
+                },
+                "errors": {
+                    "validator2": {
+                        "agent_name": "validator2",
+                        "message": "Failed to validate",
+                    }
+                },
+            }
+        }
+        template = """{% if validators.errors %}Found {{ validators.errors | length }} error(s){% else %}All passed{% endif %}"""
+        result = renderer.render(template, context)
+        assert "Found 1 error(s)" in result
+
+    def test_render_loop_over_parallel_outputs(self) -> None:
+        """Test rendering template that loops over parallel outputs."""
+        renderer = TemplateRenderer()
+        context = {
+            "analyzers": {
+                "outputs": {
+                    "analyzer_a": {"score": 85},
+                    "analyzer_b": {"score": 92},
+                    "analyzer_c": {"score": 78},
+                },
+                "errors": {},
+            }
+        }
+        template = """{% for name, output in analyzers.outputs.items() %}{{ name }}: {{ output.score }}
+{% endfor %}"""
+        result = renderer.render(template, context)
+        assert "analyzer_a: 85" in result
+        assert "analyzer_b: 92" in result
+        assert "analyzer_c: 78" in result
+
+    def test_render_mixed_regular_and_parallel_outputs(self) -> None:
+        """Test rendering template with both regular and parallel outputs."""
+        renderer = TemplateRenderer()
+        context = {
+            "workflow": {"input": {"topic": "AI"}},
+            "planner": {"output": {"steps": ["research", "analyze"]}},
+            "research_team": {
+                "outputs": {
+                    "researcher1": {"summary": "Finding 1"},
+                    "researcher2": {"summary": "Finding 2"},
+                },
+                "errors": {},
+            }
+        }
+        template = """Topic: {{ workflow.input.topic }}
+Plan: {{ planner.output.steps | json }}
+Research findings:
+- {{ research_team.outputs.researcher1.summary }}
+- {{ research_team.outputs.researcher2.summary }}"""
+        result = renderer.render(template, context)
+        assert "Topic: AI" in result
+        assert "Finding 1" in result
+        assert "Finding 2" in result
+
+    def test_render_parallel_output_with_json_filter(self) -> None:
+        """Test rendering parallel outputs with json filter."""
+        renderer = TemplateRenderer()
+        context = {
+            "checkers": {
+                "outputs": {
+                    "syntax_check": {"valid": True, "warnings": []},
+                    "style_check": {"valid": False, "issues": ["line too long"]},
+                },
+                "errors": {},
+            }
+        }
+        result = renderer.render(
+            "{{ checkers.outputs | json }}",
+            context,
+        )
+        assert "syntax_check" in result
+        assert "style_check" in result
+        assert "valid" in result
+
+    def test_render_conditional_on_parallel_errors(self) -> None:
+        """Test conditional rendering based on parallel errors."""
+        renderer = TemplateRenderer()
+        context_with_errors = {
+            "tasks": {
+                "outputs": {},
+                "errors": {
+                    "task1": {"message": "Failed"},
+                },
+            }
+        }
+        context_no_errors = {
+            "tasks": {
+                "outputs": {
+                    "task1": {"result": "Success"},
+                },
+                "errors": {},
+            }
+        }
+        
+        template = """{% if tasks.errors %}Failures detected{% else %}All tasks succeeded{% endif %}"""
+        
+        result_with_errors = renderer.render(template, context_with_errors)
+        assert "Failures detected" in result_with_errors
+        
+        result_no_errors = renderer.render(template, context_no_errors)
+        assert "All tasks succeeded" in result_no_errors
+
+    def test_render_default_filter_with_parallel_output(self) -> None:
+        """Test default filter with potentially None parallel output field."""
+        renderer = TemplateRenderer()
+        context = {
+            "group": {
+                "outputs": {
+                    "agent1": {"result": "data"},
+                    "agent2": {"result": None},  # Field exists but is None
+                },
+                "errors": {},
+            }
+        }
+        # Access field that's None with default filter
+        result = renderer.render(
+            "{{ group.outputs.agent2.result | default('N/A') }}",
+            context,
+        )
+        assert result == "N/A"
