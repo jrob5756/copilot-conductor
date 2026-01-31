@@ -409,8 +409,9 @@ class WorkflowEngine:
                         )
 
                         # Store for-each group output in context
-                        # Format: {outputs: [...] or {...}, errors: {key: {...}}, count: N}
+                        # Format: {type: 'for_each', outputs: [...] or {...}, errors: {key: {...}}, count: N}
                         for_each_output_dict = {
+                            "type": "for_each",
                             "outputs": for_each_output.outputs,
                             "errors": {
                                 key: {
@@ -480,8 +481,9 @@ class WorkflowEngine:
                         )
 
                         # Store parallel group output in context
-                        # Format: {outputs: {agent1: {...}, agent2: {...}}, errors: {agent1: {...}}}
+                        # Format: {type: 'parallel', outputs: {agent1: {...}, agent2: {...}}, errors: {agent1: {...}}}
                         parallel_output_dict = {
+                            "type": "parallel",
                             "outputs": parallel_output.outputs,
                             "errors": {
                                 name: {

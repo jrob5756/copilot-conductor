@@ -1113,21 +1113,23 @@ def _find_for_each_group(self, name: str) -> ForEachDef | None:
 
 **Prerequisites**: Epic 6
 
+**Status**: DONE
+
 **Tasks**:
 | Task ID | Type | Description | Files | Status |
 |---------|------|-------------|-------|--------|
-| E7-T1 | IMPL | Update `WorkflowContext.build_for_agent()` to handle for-each outputs | `src/copilot_conductor/engine/context.py` | TO DO |
-| E7-T2 | IMPL | Add for-each output format to `_add_explicit_input()` | `src/copilot_conductor/engine/context.py` | TO DO |
-| E7-T3 | TEST | Test accessing `for_each.outputs` in subsequent agent | `tests/test_integration/test_for_each.py` | TO DO |
-| E7-T4 | TEST | Test accessing `for_each.errors` in subsequent agent | `tests/test_integration/test_for_each.py` | TO DO |
-| E7-T5 | TEST | Test empty outputs behavior (list → `[]`, dict → `{}`) | `tests/test_integration/test_for_each.py` | TO DO |
+| E7-T1 | IMPL | Update `WorkflowContext.build_for_agent()` to handle for-each outputs | `src/copilot_conductor/engine/context.py` | DONE |
+| E7-T2 | IMPL | Add for-each output format to `_add_explicit_input()` | `src/copilot_conductor/engine/context.py` | DONE |
+| E7-T3 | TEST | Test accessing `for_each.outputs` in subsequent agent | `tests/test_integration/test_for_each.py` | DONE |
+| E7-T4 | TEST | Test accessing `for_each.errors` in subsequent agent | `tests/test_integration/test_for_each.py` | DONE |
+| E7-T5 | TEST | Test empty outputs behavior (list → `[]`, dict → `{}`) | `tests/test_integration/test_for_each.py` | DONE |
 
 **Acceptance Criteria**:
-- [ ] Downstream agents can access `for_each.outputs[0]`
-- [ ] Downstream agents can access `for_each.outputs["key"]`
-- [ ] Downstream agents can iterate over `for_each.outputs`
-- [ ] Empty arrays produce correct empty output structure
-- [ ] All tests pass
+- [x] Downstream agents can access `for_each.outputs[0]`
+- [x] Downstream agents can access `for_each.outputs["key"]`
+- [x] Downstream agents can iterate over `for_each.outputs`
+- [x] Empty arrays produce correct empty output structure
+- [x] All tests pass
 
 ---
 

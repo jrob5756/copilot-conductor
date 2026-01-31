@@ -748,7 +748,7 @@ class TestParallelGroupContextAccess:
         }
         ctx.store("group1", parallel_output)
         
-        with pytest.raises(KeyError, match="Missing agent 'missing'"):
+        with pytest.raises(KeyError, match="Missing key/agent 'missing' in outputs of 'group1'"):
             ctx.build_for_agent(
                 "consumer",
                 ["group1.outputs.missing"],

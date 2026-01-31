@@ -1278,3 +1278,306 @@ class TestForEachOutputAccess:
         # Verify all agents were called (finder + 3 processors + error_checker)
         assert provider.execute.call_count == 5
 
+    async def test_explicit_mode_with_for_each_outputs(self):
+        """Test accessing for-each outputs with explicit context mode."""
+        from unittest.mock import AsyncMock, MagicMock
+        from copilot_conductor.providers.base import AgentOutput
+        
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="explicit-mode-test",
+                entry_point="finder",
+                runtime=RuntimeConfig(provider="copilot"),
+                context=ContextConfig(mode="explicit"),
+                limits=LimitsConfig(max_iterations=50),
+            ),
+            agents=[
+                AgentDef(
+                    name="finder",
+                    model="gpt-4",
+                    prompt="Find items",
+                    output={"items": OutputField(type="array")},
+                    routes=[RouteDef(to="processors")],
+                ),
+                AgentDef(
+                    name="summarizer",
+                    model="gpt-4",
+                    prompt="First: {{ processors.outputs[0].result }}",
+                    output={"summary": OutputField(type="string")},
+                    input=["processors.outputs"],
+                    routes=[RouteDef(to="$end")],
+                ),
+            ],
+            for_each=[
+                ForEachDef.model_validate({
+                    "name": "processors",
+                    "type": "for_each",
+                    "source": "finder.output.items",
+                    "as": "item",
+                    "agent": {
+                        "name": "processor",
+                        "model": "gpt-4",
+                        "prompt": "Process {{ item }}",
+                        "output": {"result": {"type": "string"}},
+                    },
+                    "routes": [{"to": "summarizer"}],
+                }),
+            ],
+            output={},
+        )
+        
+        provider = MagicMock()
+        provider.execute = AsyncMock()
+        
+        # Setup: finder returns 2 items
+        provider.execute.side_effect = [
+            AgentOutput(
+                content={"items": ["A", "B"]},
+                raw_response={},
+                model="gpt-4",
+                tokens_used=20,
+            ),
+            AgentOutput(content={"result": "result_A"}, raw_response={}, model="gpt-4", tokens_used=10),
+            AgentOutput(content={"result": "result_B"}, raw_response={}, model="gpt-4", tokens_used=10),
+            AgentOutput(content={"summary": "done"}, raw_response={}, model="gpt-4", tokens_used=10),
+        ]
+        
+        engine = WorkflowEngine(config, provider)
+        result = await engine.run({})
+        
+        # Verify that the workflow completed successfully
+        assert result == {}
+        
+        # Verify all agents were called (finder + 2 processors + summarizer)
+        assert provider.execute.call_count == 4
+
+    async def test_explicit_mode_with_dict_outputs(self):
+        """Test accessing keyed for-each outputs with explicit context mode."""
+        from unittest.mock import AsyncMock, MagicMock
+        from copilot_conductor.providers.base import AgentOutput
+        
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="explicit-dict-test",
+                entry_point="finder",
+                runtime=RuntimeConfig(provider="copilot"),
+                context=ContextConfig(mode="explicit"),
+                limits=LimitsConfig(max_iterations=50),
+            ),
+            agents=[
+                AgentDef(
+                    name="finder",
+                    model="gpt-4",
+                    prompt="Find KPIs",
+                    output={"kpis": OutputField(type="array")},
+                    routes=[RouteDef(to="analyzers")],
+                ),
+                AgentDef(
+                    name="reporter",
+                    model="gpt-4",
+                    prompt="Status: {{ analyzers.outputs['K1'].status }}",
+                    output={"report": OutputField(type="string")},
+                    input=["analyzers.outputs"],
+                    routes=[RouteDef(to="$end")],
+                ),
+            ],
+            for_each=[
+                ForEachDef.model_validate({
+                    "name": "analyzers",
+                    "type": "for_each",
+                    "source": "finder.output.kpis",
+                    "as": "kpi",
+                    "key_by": "id",
+                    "agent": {
+                        "name": "analyzer",
+                        "model": "gpt-4",
+                        "prompt": "Analyze {{ kpi.id }}",
+                        "output": {"status": {"type": "string"}},
+                    },
+                    "routes": [{"to": "reporter"}],
+                }),
+            ],
+            output={},
+        )
+        
+        provider = MagicMock()
+        provider.execute = AsyncMock()
+        
+        # Setup: finder returns KPIs with id keys
+        provider.execute.side_effect = [
+            AgentOutput(
+                content={"kpis": [
+                    {"id": "K1", "name": "Revenue"},
+                    {"id": "K2", "name": "Profit"},
+                ]},
+                raw_response={},
+                model="gpt-4",
+                tokens_used=20,
+            ),
+            AgentOutput(content={"status": "good"}, raw_response={}, model="gpt-4", tokens_used=10),
+            AgentOutput(content={"status": "excellent"}, raw_response={}, model="gpt-4", tokens_used=10),
+            AgentOutput(content={"report": "done"}, raw_response={}, model="gpt-4", tokens_used=10),
+        ]
+        
+        engine = WorkflowEngine(config, provider)
+        result = await engine.run({})
+        
+        # Verify that the workflow completed successfully
+        assert result == {}
+        
+        # Verify all agents were called (finder + 2 analyzers + reporter)
+        assert provider.execute.call_count == 4
+
+    async def test_explicit_mode_with_errors(self):
+        """Test accessing for-each errors with explicit context mode."""
+        from unittest.mock import AsyncMock, MagicMock
+        from copilot_conductor.providers.base import AgentOutput
+        from copilot_conductor.exceptions import ExecutionError as ExecError
+        
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="explicit-errors-test",
+                entry_point="finder",
+                runtime=RuntimeConfig(provider="copilot"),
+                context=ContextConfig(mode="explicit"),
+                limits=LimitsConfig(max_iterations=50),
+            ),
+            agents=[
+                AgentDef(
+                    name="finder",
+                    model="gpt-4",
+                    prompt="Find items",
+                    output={"items": OutputField(type="array")},
+                    routes=[RouteDef(to="processors")],
+                ),
+                AgentDef(
+                    name="error_checker",
+                    model="gpt-4",
+                    prompt="Errors: {{ processors.errors | length }}",
+                    output={"report": OutputField(type="string")},
+                    input=["processors.errors"],
+                    routes=[RouteDef(to="$end")],
+                ),
+            ],
+            for_each=[
+                ForEachDef.model_validate({
+                    "name": "processors",
+                    "type": "for_each",
+                    "source": "finder.output.items",
+                    "as": "item",
+                    "failure_mode": "continue_on_error",
+                    "agent": {
+                        "name": "processor",
+                        "model": "gpt-4",
+                        "prompt": "Process {{ item }}",
+                        "output": {"result": {"type": "string"}},
+                    },
+                    "routes": [{"to": "error_checker"}],
+                }),
+            ],
+            output={},
+        )
+        
+        provider = MagicMock()
+        provider.execute = AsyncMock()
+        
+        # Setup: 3 items, 1 fails
+        provider.execute.side_effect = [
+            AgentOutput(
+                content={"items": ["A", "B", "C"]},
+                raw_response={},
+                model="gpt-4",
+                tokens_used=20,
+            ),
+            AgentOutput(content={"result": "ok"}, raw_response={}, model="gpt-4", tokens_used=10),
+            ExecError("Failed to process B"),
+            AgentOutput(content={"result": "ok"}, raw_response={}, model="gpt-4", tokens_used=10),
+            AgentOutput(content={"report": "done"}, raw_response={}, model="gpt-4", tokens_used=10),
+        ]
+        
+        engine = WorkflowEngine(config, provider)
+        result = await engine.run({})
+        
+        # Verify that the workflow completed successfully
+        assert result == {}
+        
+        # Verify all agents were called (finder + 3 processors + error_checker)
+        assert provider.execute.call_count == 5
+
+    async def test_explicit_mode_with_empty_outputs(self):
+        """Test E7-T5: Empty outputs in explicit mode produce correct structures."""
+        from unittest.mock import AsyncMock, MagicMock
+        from copilot_conductor.providers.base import AgentOutput
+        
+        # Test both list outputs (no key_by) and dict outputs (with key_by)
+        for key_by in [None, "item_id"]:
+            config = WorkflowConfig(
+                workflow=WorkflowDef(
+                    name="explicit-empty-test",
+                    entry_point="finder",
+                    runtime=RuntimeConfig(provider="copilot"),
+                    context=ContextConfig(mode="explicit"),
+                    limits=LimitsConfig(max_iterations=50),
+                ),
+                agents=[
+                    AgentDef(
+                        name="finder",
+                        model="gpt-4",
+                        prompt="Find items",
+                        output={"items": OutputField(type="array")},
+                        routes=[RouteDef(to="processors")],
+                    ),
+                    AgentDef(
+                        name="checker",
+                        model="gpt-4",
+                        prompt="Count: {{ processors.count }}, Errors: {{ processors.errors }}",
+                        output={"summary": OutputField(type="string")},
+                        input=["processors.outputs", "processors.errors", "processors.count"],
+                        routes=[RouteDef(to="$end")],
+                    ),
+                ],
+                for_each=[
+                    ForEachDef.model_validate({
+                        "name": "processors",
+                        "type": "for_each",
+                        "source": "finder.output.items",
+                        "as": "item",
+                        "key_by": key_by,
+                        "agent": {
+                            "name": "processor",
+                            "model": "gpt-4",
+                            "prompt": "Process {{ item }}",
+                            "output": {"result": {"type": "string"}},
+                        },
+                        "routes": [{"to": "checker"}],
+                    }),
+                ],
+                output={},
+            )
+            
+            provider = MagicMock()
+            provider.execute = AsyncMock()
+            
+            # Setup: finder returns empty array
+            provider.execute.side_effect = [
+                AgentOutput(
+                    content={"items": []},
+                    raw_response={},
+                    model="gpt-4",
+                    tokens_used=20,
+                ),
+                AgentOutput(content={"summary": "done"}, raw_response={}, model="gpt-4", tokens_used=10),
+            ]
+            
+            engine = WorkflowEngine(config, provider)
+            result = await engine.run({})
+            
+            # Verify that the workflow completed successfully
+            # Empty list should produce {outputs: [], errors: {}, count: 0}
+            # Empty dict (with key_by) should produce {outputs: {}, errors: {}, count: 0}
+            assert result == {}
+            
+            # Verify only finder and checker were called (no processors since array is empty)
+            assert provider.execute.call_count == 2
+
+

@@ -325,17 +325,32 @@ class WorkflowContext:
         remaining_parts: list[str], 
         is_optional: bool
     ) -> None:
-        """Add a parallel group output reference to context.
+        """Add a parallel/for-each group output reference to context.
         
-        Supports patterns:
+        Supports patterns for static parallel groups:
         - parallel_group.outputs - All outputs
         - parallel_group.outputs.agent_name - Specific agent's output
         - parallel_group.outputs.agent_name.field - Specific field
         - parallel_group.errors - All errors
         
+        Supports patterns for for-each groups (list-based):
+        - for_each.outputs - All outputs (list)
+        - for_each.outputs[0] - Cannot be handled here (requires template eval)
+        - for_each.errors - All errors
+        
+        Supports patterns for for-each groups (dict-based with key_by):
+        - for_each.outputs - All outputs (dict)
+        - for_each.outputs["key"] - Cannot be handled here (requires template eval)
+        - for_each.outputs.key - Specific key's output
+        - for_each.errors - All errors
+        
+        Note: Index/key access like outputs[0] or outputs["key"] is handled
+        by the template engine, not by this method. This method only handles
+        dotted path access in explicit input declarations.
+        
         Args:
             ctx: The context dictionary to update.
-            group_name: The name of the parallel group.
+            group_name: The name of the parallel/for-each group.
             remaining_parts: The remaining path parts after group name.
             is_optional: Whether this is an optional reference.
             
@@ -352,48 +367,81 @@ class WorkflowContext:
             # Just parallel_group - copy entire output structure
             ctx[group_name] = group_output.copy()
         elif remaining_parts[0] == "outputs":
-            # Ensure outputs dict exists
-            if "outputs" not in ctx[group_name]:
-                ctx[group_name]["outputs"] = {}
-                
+            # Determine if this is a for-each group or static parallel group using 'type' field
+            outputs = group_output["outputs"]
+            group_type = group_output.get("type")  # 'parallel' or 'for_each'
+            
+            # For backward compatibility, fall back to heuristic if 'type' is missing
+            if group_type is None:
+                is_for_each_list = isinstance(outputs, list)
+                is_for_each_dict = isinstance(outputs, dict) and group_output.get("count") is not None
+            else:
+                is_for_each_list = group_type == "for_each" and isinstance(outputs, list)
+                is_for_each_dict = group_type == "for_each" and isinstance(outputs, dict)
+            
             if len(remaining_parts) == 1:
-                # parallel_group.outputs - copy all outputs
-                ctx[group_name]["outputs"] = group_output["outputs"].copy()
-            elif len(remaining_parts) == 2:
-                # parallel_group.outputs.agent_name - copy specific agent's output
-                agent_name = remaining_parts[1]
-                if agent_name in group_output["outputs"]:
-                    ctx[group_name]["outputs"][agent_name] = group_output["outputs"][agent_name]
+                # group.outputs - copy all outputs (works for both static parallel and for-each)
+                ctx[group_name]["outputs"] = outputs.copy()
+            elif is_for_each_list:
+                # For-each group with list outputs
+                # Cannot handle index access here (e.g., outputs.0), must use template syntax outputs[0]
+                # This would be an error in input declaration
+                if not is_optional:
+                    raise KeyError(
+                        f"Cannot use dotted path with list-based for-each outputs. "
+                        f"Use template syntax like '{{{{ {group_name}.outputs[0] }}}}' instead of "
+                        f"declaring '{group_name}.{'.'.join(remaining_parts)}' in inputs."
+                    )
+            elif is_for_each_dict or len(remaining_parts) == 2:
+                # For-each group with dict outputs OR static parallel group
+                # Both use: group.outputs.key_or_agent_name
+                key_or_agent = remaining_parts[1]
+                
+                if "outputs" not in ctx[group_name]:
+                    ctx[group_name]["outputs"] = {}
+                
+                if key_or_agent in outputs:
+                    ctx[group_name]["outputs"][key_or_agent] = outputs[key_or_agent]
                 elif not is_optional:
                     raise KeyError(
-                        f"Missing agent '{agent_name}' in parallel group '{group_name}'"
+                        f"Missing key/agent '{key_or_agent}' in outputs of '{group_name}'"
                     )
             elif len(remaining_parts) >= 3:
-                # parallel_group.outputs.agent_name.field - copy specific field
-                agent_name = remaining_parts[1]
+                # group.outputs.key_or_agent.field - access specific field
+                key_or_agent = remaining_parts[1]
                 field_name = remaining_parts[2]
                 
-                if agent_name in group_output["outputs"]:
-                    agent_output = group_output["outputs"][agent_name]
-                    if field_name in agent_output:
-                        # Ensure the agent dict exists in context
-                        if agent_name not in ctx[group_name]["outputs"]:
-                            ctx[group_name]["outputs"][agent_name] = {}
-                        ctx[group_name]["outputs"][agent_name][field_name] = agent_output[field_name]
+                if "outputs" not in ctx[group_name]:
+                    ctx[group_name]["outputs"] = {}
+                
+                if key_or_agent in outputs:
+                    item_output = outputs[key_or_agent]
+                    if isinstance(item_output, dict) and field_name in item_output:
+                        # Ensure the key/agent dict exists in context
+                        if key_or_agent not in ctx[group_name]["outputs"]:
+                            ctx[group_name]["outputs"][key_or_agent] = {}
+                        ctx[group_name]["outputs"][key_or_agent][field_name] = item_output[field_name]
                     elif not is_optional:
                         raise KeyError(
-                            f"Missing field '{field_name}' from agent '{agent_name}' "
-                            f"in parallel group '{group_name}'"
+                            f"Missing field '{field_name}' in outputs['{key_or_agent}'] of '{group_name}'"
                         )
                 elif not is_optional:
                     raise KeyError(
-                        f"Missing agent '{agent_name}' in parallel group '{group_name}'"
+                        f"Missing key/agent '{key_or_agent}' in outputs of '{group_name}'"
                     )
         elif remaining_parts[0] == "errors":
-            # parallel_group.errors - copy errors dict
+            # group.errors - copy errors dict (works for both static parallel and for-each)
             if "errors" not in ctx[group_name]:
                 ctx[group_name]["errors"] = {}
             ctx[group_name]["errors"] = group_output["errors"].copy()
+        elif remaining_parts[0] == "count":
+            # group.count - for-each groups only
+            if "count" in group_output:
+                ctx[group_name]["count"] = group_output["count"]
+            elif not is_optional:
+                raise KeyError(
+                    f"'{group_name}' is not a for-each group (no 'count' field available)"
+                )
 
     def get_for_template(self) -> dict[str, Any]:
         """Get full context for template rendering.
