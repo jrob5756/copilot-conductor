@@ -42,18 +42,24 @@ def verbose_log(message: str, style: str = "dim") -> None:
         _verbose_console.print(f"[{style}]{message}[/{style}]")
 
 
-def verbose_log_section(title: str, content: str) -> None:
+def verbose_log_section(title: str, content: str, truncate: bool = True) -> None:
     """Log a section with title if verbose mode is enabled.
 
     Args:
         title: Section title.
         content: Section content.
+        truncate: If True, truncate content to 500 chars unless full mode is enabled.
     """
-    from copilot_conductor.cli.app import is_verbose
+    from copilot_conductor.cli.app import is_full, is_verbose
 
     if is_verbose():
+        display_content = content
+        # Truncate content unless full mode is enabled or truncate is False
+        if truncate and not is_full() and len(content) > 500:
+            display_content = content[:500] + "\n... [truncated, use --verbose for full]"
+
         _verbose_console.print(
-            Panel(content, title=f"[cyan]{title}[/cyan]", border_style="dim")
+            Panel(display_content, title=f"[cyan]{title}[/cyan]", border_style="dim")
         )
 
 

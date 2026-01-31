@@ -28,15 +28,29 @@ app = typer.Typer(
 console = Console(stderr=True)
 output_console = Console()
 
-# Context variable for verbose mode
+# Context variable for verbose mode (default True - show progress output)
 verbose_mode: contextvars.ContextVar[bool] = contextvars.ContextVar(
-    "verbose_mode", default=False
+    "verbose_mode", default=True
+)
+
+# Context variable for full verbose mode (--verbose flag - show full details)
+full_mode: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "full_mode", default=False
 )
 
 
 def is_verbose() -> bool:
-    """Check if verbose mode is enabled."""
+    """Check if verbose mode is enabled (default True)."""
     return verbose_mode.get()
+
+
+def is_full() -> bool:
+    """Check if full verbose mode is enabled (--verbose flag).
+    
+    When full mode is enabled, prompts are shown untruncated and
+    additional details like tool arguments and reasoning are displayed.
+    """
+    return full_mode.get()
 
 
 def format_error(error: Exception) -> Panel:
@@ -144,12 +158,12 @@ def main(
         typer.Option(
             "--verbose",
             "-V",
-            help="Show detailed execution progress and logging.",
+            help="Show full prompts and detailed tool call information.",
         ),
     ] = False,
 ) -> None:
     """Copilot Conductor - Orchestrate multi-agent workflows defined in YAML."""
-    verbose_mode.set(verbose)
+    full_mode.set(verbose)
 
 
 @app.command()

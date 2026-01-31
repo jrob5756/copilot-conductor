@@ -86,14 +86,14 @@ output:
 class TestVerboseLogging:
     """Tests for verbose logging functions."""
 
-    def test_is_verbose_default_false(self) -> None:
-        """Test that is_verbose returns False by default."""
+    def test_is_verbose_default_true(self) -> None:
+        """Test that is_verbose returns True by default."""
         from copilot_conductor.cli.app import is_verbose, verbose_mode
 
-        # Reset to default state first
-        token = verbose_mode.set(False)
+        # Reset to default state first (which is now True)
+        token = verbose_mode.set(True)
         try:
-            assert is_verbose() is False
+            assert is_verbose() is True
         finally:
             verbose_mode.reset(token)
 
@@ -205,17 +205,47 @@ class TestVerboseLogging:
         finally:
             verbose_mode.reset(token)
 
-    def test_verbose_log_section_shows_full_content(self) -> None:
-        """Test that verbose_log_section shows full content without truncation."""
+    def test_verbose_log_section_truncates_by_default(self) -> None:
+        """Test that verbose_log_section truncates long content by default."""
         from io import StringIO
 
         from rich.console import Console
 
-        from copilot_conductor.cli.app import verbose_mode
+        from copilot_conductor.cli.app import full_mode, verbose_mode
         from copilot_conductor.cli.run import verbose_log_section
 
         output = StringIO()
-        token = verbose_mode.set(True)
+        token_verbose = verbose_mode.set(True)
+        token_full = full_mode.set(False)  # Explicitly set full mode to False
+        try:
+            with patch(
+                "copilot_conductor.cli.run._verbose_console",
+                Console(file=output, force_terminal=True, width=200),
+            ):
+                long_content = "x" * 1000
+                verbose_log_section("Long Section", long_content)
+                output_text = output.getvalue()
+                # Content should be truncated (shows truncation message)
+                assert "truncated" in output_text or "..." in output_text
+                # Should only have ~500 x's (truncated at 500 chars)
+                x_count = output_text.count("x")
+                assert x_count == 500, f"Expected 500 x's, got {x_count}"
+        finally:
+            full_mode.reset(token_full)
+            verbose_mode.reset(token_verbose)
+
+    def test_verbose_log_section_shows_full_in_full_mode(self) -> None:
+        """Test that verbose_log_section shows full content when full mode is enabled."""
+        from io import StringIO
+
+        from rich.console import Console
+
+        from copilot_conductor.cli.app import full_mode, verbose_mode
+        from copilot_conductor.cli.run import verbose_log_section
+
+        output = StringIO()
+        token_verbose = verbose_mode.set(True)
+        token_full = full_mode.set(True)  # Enable full mode (--verbose flag)
         try:
             with patch(
                 "copilot_conductor.cli.run._verbose_console",
@@ -225,9 +255,42 @@ class TestVerboseLogging:
                 verbose_log_section("Long Section", long_content)
                 output_text = output.getvalue()
                 # Full content should be shown (no truncation indicator)
-                assert "..." not in output_text
+                assert "truncated" not in output_text
                 # Count total x's in output (content is wrapped across lines)
                 x_count = output_text.count("x")
                 assert x_count == 1000, f"Expected 1000 x's, got {x_count}"
         finally:
-            verbose_mode.reset(token)
+            full_mode.reset(token_full)
+            verbose_mode.reset(token_verbose)
+
+    def test_is_full_default_false(self) -> None:
+        """Test that is_full returns False by default."""
+        from copilot_conductor.cli.app import full_mode, is_full
+
+        # Reset to default state first
+        token = full_mode.set(False)
+        try:
+            assert is_full() is False
+        finally:
+            full_mode.reset(token)
+
+    def test_full_mode_can_be_set(self) -> None:
+        """Test that full mode can be set via context var."""
+        from copilot_conductor.cli.app import full_mode, is_full
+
+        # First set to False explicitly
+        token1 = full_mode.set(False)
+        try:
+            assert is_full() is False
+
+            # Set full mode to True
+            token2 = full_mode.set(True)
+            try:
+                assert is_full() is True
+            finally:
+                full_mode.reset(token2)
+
+            # Should be back to False
+            assert is_full() is False
+        finally:
+            full_mode.reset(token1)
