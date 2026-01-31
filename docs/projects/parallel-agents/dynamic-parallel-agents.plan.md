@@ -938,15 +938,15 @@ def _find_for_each_group(self, name: str) -> ForEachDef | None:
 **Tasks**:
 | Task ID | Type | Description | Files | Status |
 |---------|------|-------------|-------|--------|
-| E0-T1 | TEST | Run all existing parallel workflow tests | `tests/test_integration/test_parallel_workflows.py`, `examples/parallel-validation.yaml` | TO DO |
-| E0-T2 | TEST | Verify `_execute_parallel_group` handles all failure modes correctly | `src/copilot_conductor/engine/workflow.py` | TO DO |
-| E0-T3 | TEST | Confirm `asyncio.gather` error handling works as expected | `src/copilot_conductor/engine/workflow.py` | TO DO |
-| E0-T4 | IMPL | Document static parallel features that will be reused | `docs/projects/parallel-agents/prerequisite-verification.md` | TO DO |
+| E0-T1 | TEST | Run all existing parallel workflow tests | `tests/test_integration/test_parallel_workflows.py`, `examples/parallel-validation.yaml` | DONE |
+| E0-T2 | TEST | Verify `_execute_parallel_group` handles all failure modes correctly | `src/copilot_conductor/engine/workflow.py` | DONE |
+| E0-T3 | TEST | Confirm `asyncio.gather` error handling works as expected | `src/copilot_conductor/engine/workflow.py` | DONE |
+| E0-T4 | IMPL | Document static parallel features that will be reused | `docs/projects/parallel-agents/prerequisite-verification.md` | DONE |
 
 **Acceptance Criteria**:
-- [ ] All parallel workflow tests pass
-- [ ] Documentation confirms which components will be reused
-- [ ] No known bugs in static parallel infrastructure
+- [x] All parallel workflow tests pass
+- [x] Documentation confirms which components will be reused
+- [x] No known bugs in static parallel infrastructure
 
 ---
 
