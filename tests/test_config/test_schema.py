@@ -213,7 +213,7 @@ class TestLimitsConfig:
             LimitsConfig(max_iterations=0)  # Below minimum
 
         with pytest.raises(ValidationError):
-            LimitsConfig(max_iterations=101)  # Above maximum
+            LimitsConfig(max_iterations=501)  # Above maximum
 
     def test_timeout_bounds(self) -> None:
         """Test timeout_seconds bounds validation."""

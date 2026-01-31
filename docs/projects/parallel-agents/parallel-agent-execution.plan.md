@@ -617,28 +617,30 @@ None.
 
 ### Epic 8: Documentation & Examples
 
+**Status**: DONE
+
 **Goal**: Provide comprehensive documentation and example workflows.
 
 **Prerequisites**: Epic 7
 
 **Tasks**:
 
-| Task ID | Type | Description | Files | Estimate |
-|---------|------|-------------|-------|----------|
-| PE-8.1 | IMPL | Create `docs/parallel-execution.md` user guide | `docs/parallel-execution.md` | M |
-| PE-8.2 | IMPL | Create example: parallel-research.yaml | `examples/parallel-research.yaml` | S |
-| PE-8.3 | IMPL | Create example: parallel-validation.yaml | `examples/parallel-validation.yaml` | S |
-| PE-8.4 | IMPL | Update README.md with parallel execution feature | `README.md` | S |
-| PE-8.5 | IMPL | Update workflow-syntax.md with parallel YAML syntax | `docs/workflow-syntax.md` | M |
-| PE-8.6 | IMPL | Add troubleshooting section for common parallel issues | `docs/parallel-execution.md` | M |
-| PE-8.7 | TEST | Verify all examples execute successfully | `tests/test_integration/test_examples.py` | S |
+| Task ID | Type | Description | Files | Estimate | Status |
+|---------|------|-------------|-------|----------|--------|
+| PE-8.1 | IMPL | Create `docs/parallel-execution.md` user guide | `docs/parallel-execution.md` | M | DONE |
+| PE-8.2 | IMPL | Create example: parallel-research.yaml | `examples/parallel-research.yaml` | S | DONE |
+| PE-8.3 | IMPL | Create example: parallel-validation.yaml | `examples/parallel-validation.yaml` | S | DONE |
+| PE-8.4 | IMPL | Update README.md with parallel execution feature | `README.md` | S | DONE |
+| PE-8.5 | IMPL | Update workflow-syntax.md with parallel YAML syntax | `docs/workflow-syntax.md` | M | DONE |
+| PE-8.6 | IMPL | Add troubleshooting section for common parallel issues | `docs/parallel-execution.md` | M | DONE |
+| PE-8.7 | TEST | Verify all examples execute successfully | `tests/test_integration/test_examples.py` | S | DONE |
 
 **Acceptance Criteria**:
-- [ ] User guide covers all parallel execution concepts
-- [ ] User guide includes examples for all failure modes
-- [ ] Example workflows are tested and work correctly
-- [ ] README.md lists parallel execution as a feature
-- [ ] Troubleshooting guide addresses common issues
+- [x] User guide covers all parallel execution concepts
+- [x] User guide includes examples for all failure modes
+- [x] Example workflows are tested and work correctly
+- [x] README.md lists parallel execution as a feature
+- [x] Troubleshooting guide addresses common issues
 
 ---
 

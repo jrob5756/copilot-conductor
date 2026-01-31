@@ -9,6 +9,7 @@ A CLI tool for defining and running multi-agent workflows with the GitHub Copilo
 ## Features
 
 - **YAML-based workflow definitions** - Define multi-agent workflows in simple, readable YAML
+- **Parallel agent execution** - Run independent agents concurrently for faster workflows
 - **Conditional routing** - Route between agents based on output conditions
 - **Loop-back patterns** - Iterate agents until conditions are met
 - **Human-in-the-loop gates** - Pause workflows for human decisions with Rich terminal UI
@@ -195,6 +196,17 @@ workflow:
 tools:                            # Workflow-level tools
   - tool_name
 
+parallel:                         # Parallel execution groups
+  - name: string                  # Required: Group identifier
+    description: string           # Optional: Purpose description
+    agents:                       # Required: Agents to run in parallel
+      - agent_name_1
+      - agent_name_2
+    failure_mode: fail_fast       # fail_fast|continue_on_error|all_or_nothing
+    routes:                       # Routes after parallel execution
+      - to: agent_name|$end
+        when: "{{ condition }}"
+
 agents:
   - name: string                  # Required: Agent identifier
     type: agent|human_gate        # Default: agent
@@ -249,10 +261,14 @@ routes:
 See the [`examples/`](./examples/) directory for complete workflow examples:
 
 - [`simple-qa.yaml`](./examples/simple-qa.yaml) - Simple question-answering workflow
+- [`parallel-research.yaml`](./examples/parallel-research.yaml) - Parallel research from multiple sources
+- [`parallel-validation.yaml`](./examples/parallel-validation.yaml) - Parallel code validation checks
 - [`design-review.yaml`](./examples/design-review.yaml) - Loop pattern with human gate
 - [`research-assistant.yaml`](./examples/research-assistant.yaml) - Multi-agent workflow with tools
 - [`design.yaml`](./examples/design.yaml) - Solution design workflow with architect/reviewer loop
 - [`plan.yaml`](./examples/plan.yaml) - Implementation planning workflow with quality gates
+
+For detailed information on parallel execution, see [Parallel Execution Guide](./docs/parallel-execution.md).
 
 ## Development
 
