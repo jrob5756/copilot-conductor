@@ -521,3 +521,302 @@ class TestEdgeCases:
         assert enforcer.current_iteration == 0
         assert enforcer.execution_history == []
         assert enforcer.start_time != first_start
+
+
+class TestParallelGroupLimits:
+    """Tests for parallel group iteration and timeout limits."""
+
+    def test_check_parallel_group_iteration_within_limit(self) -> None:
+        """Test check_parallel_group_iteration when within limit."""
+        enforcer = LimitEnforcer(max_iterations=10)
+        enforcer.start()
+
+        # Should not raise for 3 agents when we have 10 iterations available
+        enforcer.check_parallel_group_iteration("parallel_group", 3)
+
+    def test_check_parallel_group_iteration_exceeds_limit(self) -> None:
+        """Test check_parallel_group_iteration when exceeding limit."""
+        enforcer = LimitEnforcer(max_iterations=5)
+        enforcer.start()
+
+        # Execute 3 agents
+        enforcer.record_execution("agent1", count=3)
+
+        # Try to execute parallel group with 3 agents (would need 6 total)
+        with pytest.raises(MaxIterationsError) as exc_info:
+            enforcer.check_parallel_group_iteration("parallel_group", 3)
+
+        error = exc_info.value
+        assert "would exceed maximum iterations" in str(error)
+        assert "parallel_group" in str(error)
+        assert error.iterations == 3
+        assert error.max_iterations == 5
+
+    def test_check_parallel_group_iteration_at_exact_boundary(self) -> None:
+        """Test parallel group at exact iteration boundary."""
+        enforcer = LimitEnforcer(max_iterations=6)
+        enforcer.start()
+
+        # Execute 3 agents
+        enforcer.record_execution("agent1", count=3)
+
+        # Should succeed with exactly 3 remaining
+        enforcer.check_parallel_group_iteration("parallel_group", 3)
+
+        # Record the parallel group execution
+        enforcer.record_execution("parallel_group", count=3)
+
+        # No more iterations available
+        with pytest.raises(MaxIterationsError):
+            enforcer.check_iteration("next_agent")
+
+    def test_record_execution_with_count(self) -> None:
+        """Test record_execution with count parameter for parallel groups."""
+        enforcer = LimitEnforcer()
+        enforcer.start()
+
+        # Record a parallel group with 3 agents
+        enforcer.record_execution("parallel_group_1", count=3)
+
+        assert enforcer.current_iteration == 3
+        assert enforcer.execution_history == ["parallel_group_1"]
+
+        # Record another parallel group with 2 agents
+        enforcer.record_execution("parallel_group_2", count=2)
+
+        assert enforcer.current_iteration == 5
+        assert enforcer.execution_history == ["parallel_group_1", "parallel_group_2"]
+
+    def test_check_parallel_group_iteration_suggestion(self) -> None:
+        """Test that check_parallel_group_iteration includes helpful suggestion."""
+        enforcer = LimitEnforcer(max_iterations=4)
+        enforcer.start()
+
+        # Execute 2 agents
+        enforcer.record_execution("agent1", count=2)
+
+        # Try to execute parallel group with 4 agents (would need 6 total)
+        with pytest.raises(MaxIterationsError) as exc_info:
+            enforcer.check_parallel_group_iteration("big_group", 4)
+
+        error = exc_info.value
+        assert error.suggestion is not None
+        assert "max_iterations" in error.suggestion or "reduce the number" in error.suggestion
+
+    @pytest.mark.asyncio
+    async def test_parallel_group_with_max_iterations(self) -> None:
+        """Test that parallel groups count all agents toward iteration limit."""
+        from copilot_conductor.config.schema import ParallelGroup
+
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="parallel-limits",
+                entry_point="parallel_workers",
+                limits=LimitsConfig(max_iterations=5),
+            ),
+            agents=[
+                AgentDef(
+                    name="worker1",
+                    model="gpt-4",
+                    prompt="Task 1",
+                    output={"result": OutputField(type="string")},
+                ),
+                AgentDef(
+                    name="worker2",
+                    model="gpt-4",
+                    prompt="Task 2",
+                    output={"result": OutputField(type="string")},
+                ),
+                AgentDef(
+                    name="worker3",
+                    model="gpt-4",
+                    prompt="Task 3",
+                    output={"result": OutputField(type="string")},
+                ),
+            ],
+            parallel=[
+                ParallelGroup(
+                    name="parallel_workers",
+                    agents=["worker1", "worker2", "worker3"],
+                    failure_mode="continue_on_error",
+                    routes=[RouteDef(to="$end")],
+                ),
+            ],
+            output={"final": "done"},
+        )
+
+        def mock_handler(agent, prompt, context):
+            return {"result": agent.name}
+
+        provider = CopilotProvider(mock_handler=mock_handler)
+        engine = WorkflowEngine(config, provider)
+
+        await engine.run({})
+
+        summary = engine.get_execution_summary()
+        # All 3 parallel agents should count
+        assert summary["iterations"] == 3
+        assert summary["agents_executed"] == ["parallel_workers"]
+
+    @pytest.mark.asyncio
+    async def test_parallel_group_exceeds_iteration_limit(self) -> None:
+        """Test that parallel group execution fails when exceeding iteration limit."""
+        from copilot_conductor.config.schema import ParallelGroup
+
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="parallel-overflow",
+                entry_point="parallel_workers",
+                limits=LimitsConfig(max_iterations=2),  # Too low for 3 agents
+            ),
+            agents=[
+                AgentDef(
+                    name="worker1",
+                    model="gpt-4",
+                    prompt="Task 1",
+                    output={"result": OutputField(type="string")},
+                ),
+                AgentDef(
+                    name="worker2",
+                    model="gpt-4",
+                    prompt="Task 2",
+                    output={"result": OutputField(type="string")},
+                ),
+                AgentDef(
+                    name="worker3",
+                    model="gpt-4",
+                    prompt="Task 3",
+                    output={"result": OutputField(type="string")},
+                ),
+            ],
+            parallel=[
+                ParallelGroup(
+                    name="parallel_workers",
+                    agents=["worker1", "worker2", "worker3"],
+                    failure_mode="fail_fast",
+                    routes=[RouteDef(to="$end")],
+                ),
+            ],
+            output={"final": "done"},
+        )
+
+        def mock_handler(agent, prompt, context):
+            return {"result": agent.name}
+
+        provider = CopilotProvider(mock_handler=mock_handler)
+        engine = WorkflowEngine(config, provider)
+
+        with pytest.raises(MaxIterationsError) as exc_info:
+            await engine.run({})
+
+        error = exc_info.value
+        assert "would exceed maximum iterations" in str(error)
+        assert error.max_iterations == 2
+
+    @pytest.mark.asyncio
+    async def test_wait_for_with_timeout_success(self) -> None:
+        """Test wait_for_with_timeout with successful completion."""
+        enforcer = LimitEnforcer(timeout_seconds=5)
+        enforcer.start()
+
+        async def quick_task():
+            await asyncio.sleep(0.01)
+            return "done"
+
+        result = await enforcer.wait_for_with_timeout(
+            quick_task(), operation_name="quick_task"
+        )
+        assert result == "done"
+
+    @pytest.mark.asyncio
+    async def test_wait_for_with_timeout_exceeds(self) -> None:
+        """Test wait_for_with_timeout when timeout is exceeded."""
+        enforcer = LimitEnforcer(timeout_seconds=0.1)
+        enforcer.start()
+
+        async def slow_task():
+            await asyncio.sleep(1.0)
+            return "done"
+
+        with pytest.raises(ConductorTimeoutError) as exc_info:
+            await enforcer.wait_for_with_timeout(
+                slow_task(), operation_name="slow_task"
+            )
+
+        error = exc_info.value
+        assert "slow_task" in str(error)
+        assert error.timeout_seconds == 0.1
+
+    @pytest.mark.asyncio
+    async def test_wait_for_with_no_timeout(self) -> None:
+        """Test wait_for_with_timeout when no timeout is set."""
+        enforcer = LimitEnforcer(timeout_seconds=None)
+        enforcer.start()
+
+        async def task():
+            await asyncio.sleep(0.01)
+            return "done"
+
+        # Should complete without timeout enforcement
+        result = await enforcer.wait_for_with_timeout(
+            task(), operation_name="task"
+        )
+        assert result == "done"
+
+    @pytest.mark.asyncio
+    async def test_parallel_group_with_timeout(self) -> None:
+        """Test that timeout is enforced during parallel group execution."""
+        from copilot_conductor.config.schema import ParallelGroup
+
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="parallel-timeout",
+                entry_point="parallel_workers",
+                limits=LimitsConfig(max_iterations=10, timeout_seconds=1),
+            ),
+            agents=[
+                AgentDef(
+                    name="worker1",
+                    model="gpt-4",
+                    prompt="Task 1",
+                    output={"result": OutputField(type="string")},
+                ),
+                AgentDef(
+                    name="worker2",
+                    model="gpt-4",
+                    prompt="Task 2",
+                    output={"result": OutputField(type="string")},
+                ),
+            ],
+            parallel=[
+                ParallelGroup(
+                    name="parallel_workers",
+                    agents=["worker1", "worker2"],
+                    failure_mode="fail_fast",
+                    routes=[RouteDef(to="$end")],
+                ),
+            ],
+            output={"final": "done"},
+        )
+
+        call_count = 0
+
+        def mock_handler(agent, prompt, context):
+            nonlocal call_count
+            call_count += 1
+            # Simulate slow agent execution
+            import time
+            time.sleep(2.0)  # Longer than timeout
+            return {"result": agent.name}
+
+        provider = CopilotProvider(mock_handler=mock_handler)
+        engine = WorkflowEngine(config, provider)
+
+        with pytest.raises(ConductorTimeoutError) as exc_info:
+            await engine.run({})
+
+        error = exc_info.value
+        # Timeout should be enforced during workflow execution
+        assert error.timeout_seconds == 1
+        assert "timeout" in str(error).lower()
+

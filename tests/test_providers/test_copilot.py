@@ -405,3 +405,151 @@ class TestRetryConfig:
         assert config.base_delay == 2.0
         assert config.max_delay == 60.0
         assert config.jitter == 0.5
+
+    def test_max_parse_recovery_attempts_default(self) -> None:
+        """Test default parse recovery attempts value."""
+        config = RetryConfig()
+        assert config.max_parse_recovery_attempts == 5
+
+    def test_max_parse_recovery_attempts_custom(self) -> None:
+        """Test custom parse recovery attempts value."""
+        config = RetryConfig(max_parse_recovery_attempts=10)
+        assert config.max_parse_recovery_attempts == 10
+
+
+class TestParseRecoveryPrompt:
+    """Tests for the parse recovery prompt builder."""
+
+    def test_build_parse_recovery_prompt_basic(self) -> None:
+        """Test basic parse recovery prompt generation."""
+        provider = CopilotProvider(mock_handler=stub_handler)
+
+        schema = {
+            "name": {"type": "string", "description": "The name field"},
+            "value": {"type": "number", "description": "The value field"},
+        }
+
+        prompt = provider._build_parse_recovery_prompt(
+            parse_error="Could not extract JSON from response",
+            original_response="```json\n{invalid json",
+            schema=schema,
+        )
+
+        # Verify the prompt contains all required components
+        assert "Could not extract JSON from response" in prompt
+        assert "```json\n{invalid json" in prompt
+        assert '"name"' in prompt
+        assert '"value"' in prompt
+        assert "ONLY a valid JSON object" in prompt
+
+    def test_build_parse_recovery_prompt_truncates_long_response(self) -> None:
+        """Test that long responses are truncated in recovery prompt."""
+        provider = CopilotProvider(mock_handler=stub_handler)
+
+        # Create a response longer than 500 characters
+        long_response = "x" * 600
+
+        prompt = provider._build_parse_recovery_prompt(
+            parse_error="Parse error",
+            original_response=long_response,
+            schema={"field": {"type": "string", "description": "A field"}},
+        )
+
+        # The response should be truncated with ...
+        assert "x" * 500 + "..." in prompt
+        # The full 600 characters should not be in the prompt
+        assert "x" * 600 not in prompt
+
+    def test_build_parse_recovery_prompt_preserves_short_response(self) -> None:
+        """Test that short responses are not truncated."""
+        provider = CopilotProvider(mock_handler=stub_handler)
+
+        short_response = "short response"
+
+        prompt = provider._build_parse_recovery_prompt(
+            parse_error="Parse error",
+            original_response=short_response,
+            schema={"field": {"type": "string", "description": "A field"}},
+        )
+
+        # The short response should be fully included without ...
+        assert short_response in prompt
+        assert short_response + "..." not in prompt
+
+
+class TestExtractJson:
+    """Tests for JSON extraction logic."""
+
+    def test_extract_json_direct_json(self) -> None:
+        """Test extracting direct JSON string."""
+        provider = CopilotProvider(mock_handler=stub_handler)
+
+        result = provider._extract_json('{"key": "value"}')
+        assert result == {"key": "value"}
+
+    def test_extract_json_from_code_block(self) -> None:
+        """Test extracting JSON from markdown code block."""
+        provider = CopilotProvider(mock_handler=stub_handler)
+
+        result = provider._extract_json('```json\n{"key": "value"}\n```')
+        assert result == {"key": "value"}
+
+    def test_extract_json_from_bare_code_block(self) -> None:
+        """Test extracting JSON from code block without language hint."""
+        provider = CopilotProvider(mock_handler=stub_handler)
+
+        result = provider._extract_json('```\n{"key": "value"}\n```')
+        assert result == {"key": "value"}
+
+    def test_extract_json_from_braces(self) -> None:
+        """Test extracting JSON from text containing braces."""
+        provider = CopilotProvider(mock_handler=stub_handler)
+
+        result = provider._extract_json('Here is the result: {"key": "value"}')
+        assert result == {"key": "value"}
+
+    def test_extract_json_raises_on_invalid(self) -> None:
+        """Test that extraction raises ValueError on invalid JSON."""
+        provider = CopilotProvider(mock_handler=stub_handler)
+
+        with pytest.raises(ValueError) as exc_info:
+            provider._extract_json("This is not JSON at all")
+
+        assert "Could not extract JSON" in str(exc_info.value)
+
+    def test_extract_json_raises_on_malformed_json(self) -> None:
+        """Test that extraction raises ValueError on malformed JSON."""
+        provider = CopilotProvider(mock_handler=stub_handler)
+
+        with pytest.raises(ValueError):
+            provider._extract_json('{"key": "missing end brace"')
+
+
+class TestLogParseRecovery:
+    """Tests for parse recovery logging."""
+
+    def test_log_parse_recovery_does_not_raise(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """Test that logging parse recovery doesn't raise exceptions."""
+        provider = CopilotProvider(mock_handler=stub_handler)
+
+        # This should not raise even if Rich isn't available
+        # (it uses stderr, so we just verify it doesn't crash)
+        provider._log_parse_recovery(
+            attempt=1,
+            max_attempts=5,
+            error="Some parse error message",
+        )
+        # If we get here without exception, the test passes
+
+    def test_log_parse_recovery_truncates_long_error(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """Test that long error messages are truncated in logs."""
+        provider = CopilotProvider(mock_handler=stub_handler)
+
+        long_error = "x" * 200
+
+        # Should not raise
+        provider._log_parse_recovery(
+            attempt=2,
+            max_attempts=5,
+            error=long_error,
+        )

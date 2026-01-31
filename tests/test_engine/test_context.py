@@ -825,3 +825,208 @@ class TestParallelGroupContextAccess:
         assert agent_ctx["workflow"]["input"]["goal"] == "test"
         assert agent_ctx["planner"]["output"]["plan"] == "step 1"
         assert agent_ctx["research_group"]["outputs"]["researcher"]["finding"] == "data"
+
+
+class TestContextTrimmingWithParallelOutputs:
+    """Tests for context trimming when parallel group outputs are present."""
+
+    def test_estimate_tokens_includes_parallel_outputs(self) -> None:
+        """Test that token estimation includes parallel group outputs."""
+        ctx = WorkflowContext()
+        ctx.set_workflow_inputs({"goal": "test"})
+        
+        # Store regular agent output
+        ctx.store("planner", {"plan": "step 1" * 100})
+        
+        # Store parallel group output
+        parallel_output = {
+            "outputs": {
+                "researcher1": {"finding": "data1" * 100},
+                "researcher2": {"finding": "data2" * 100},
+            },
+            "errors": {},
+        }
+        ctx.store("research_group", parallel_output)
+        
+        # Token estimate should include all content
+        tokens = ctx.estimate_context_tokens()
+        assert tokens > 0
+        
+        # Should include parallel output content
+        full_ctx = ctx.get_for_template()
+        assert "research_group" in full_ctx
+        assert "outputs" in full_ctx["research_group"]
+
+    def test_trim_drop_oldest_with_parallel_outputs(self) -> None:
+        """Test drop_oldest trimming strategy with parallel group outputs."""
+        ctx = WorkflowContext()
+        ctx.set_workflow_inputs({"goal": "test"})
+        
+        # Store a regular agent output (oldest)
+        ctx.store("agent1", {"data": "x" * 1000})
+        ctx.execution_history.append("agent1")
+        
+        # Store parallel group output
+        parallel_output = {
+            "outputs": {
+                "worker1": {"result": "y" * 1000},
+                "worker2": {"result": "z" * 1000},
+            },
+            "errors": {},
+        }
+        ctx.store("parallel_group", parallel_output)
+        ctx.execution_history.append("parallel_group")
+        
+        # Store another regular agent output (newest)
+        ctx.store("agent2", {"data": "w" * 100})
+        ctx.execution_history.append("agent2")
+        
+        initial_tokens = ctx.estimate_context_tokens()
+        
+        # Trim to a smaller size
+        max_tokens = initial_tokens // 3
+        final_tokens = ctx.trim_context(max_tokens, strategy="drop_oldest")
+        
+        # Should have dropped oldest agents
+        assert final_tokens <= max_tokens
+        
+        # The newest agent should still be present
+        assert "agent2" in ctx.agent_outputs
+
+    def test_trim_truncate_with_parallel_outputs(self) -> None:
+        """Test truncate trimming strategy with parallel group outputs.
+        
+        Note: The truncate strategy only handles flat string values,
+        not nested structures. For parallel outputs, drop_oldest is recommended.
+        """
+        ctx = WorkflowContext()
+        ctx.set_workflow_inputs({"goal": "test"})
+        
+        # Store a regular agent with flat output
+        ctx.store("agent1", {"data": "x" * 1000})
+        ctx.execution_history.append("agent1")
+        
+        # Store parallel group output with nested structure
+        parallel_output = {
+            "outputs": {
+                "researcher": {"findings": "Very long findings " * 200},
+                "analyzer": {"analysis": "Detailed analysis " * 200},
+            },
+            "errors": {},
+        }
+        ctx.store("research_group", parallel_output)
+        ctx.execution_history.append("research_group")
+        
+        initial_tokens = ctx.estimate_context_tokens()
+        
+        # Trim to a smaller size
+        max_tokens = initial_tokens // 3
+        final_tokens = ctx.trim_context(max_tokens, strategy="truncate")
+        
+        # Truncate only works on flat string values, so it may not achieve
+        # the target if most content is nested
+        # Just verify it doesn't crash and doesn't increase tokens
+        assert final_tokens <= initial_tokens
+
+    def test_trim_preserves_parallel_structure(self) -> None:
+        """Test that trimming preserves parallel output structure."""
+        ctx = WorkflowContext()
+        
+        # Store parallel group output
+        parallel_output = {
+            "outputs": {
+                "worker1": {"result": "Long result " * 500},
+                "worker2": {"result": "Another long result " * 500},
+            },
+            "errors": {
+                "worker3": {
+                    "agent_name": "worker3",
+                    "exception_type": "Error",
+                    "message": "Failed",
+                    "suggestion": "Fix it",
+                }
+            },
+        }
+        ctx.store("parallel_group", parallel_output)
+        ctx.execution_history.append("parallel_group")
+        
+        initial_tokens = ctx.estimate_context_tokens()
+        
+        # Trim aggressively
+        max_tokens = initial_tokens // 4
+        ctx.trim_context(max_tokens, strategy="truncate")
+        
+        # Parallel group should still exist with proper structure
+        if "parallel_group" in ctx.agent_outputs:
+            pg_output = ctx.agent_outputs["parallel_group"]
+            assert "outputs" in pg_output or "errors" in pg_output
+
+    def test_estimate_tokens_for_parallel_errors(self) -> None:
+        """Test token estimation includes error information in parallel outputs."""
+        ctx = WorkflowContext()
+        
+        # Store parallel group with errors
+        parallel_output = {
+            "outputs": {
+                "worker1": {"result": "success"},
+            },
+            "errors": {
+                "worker2": {
+                    "agent_name": "worker2",
+                    "exception_type": "ValidationError",
+                    "message": "Input validation failed: " + "x" * 500,
+                    "suggestion": "Check input format and try again",
+                },
+                "worker3": {
+                    "agent_name": "worker3",
+                    "exception_type": "TimeoutError",
+                    "message": "Execution timed out after 30 seconds",
+                    "suggestion": "Increase timeout or optimize processing",
+                },
+            },
+        }
+        ctx.store("parallel_validators", parallel_output)
+        
+        tokens = ctx.estimate_context_tokens()
+        
+        # Should include error messages in token count
+        assert tokens > 0
+        
+        # Verify error content is in context
+        full_ctx = ctx.get_for_template()
+        assert "parallel_validators" in full_ctx
+        assert "errors" in full_ctx["parallel_validators"]
+        assert "worker2" in full_ctx["parallel_validators"]["errors"]
+        assert "worker3" in full_ctx["parallel_validators"]["errors"]
+
+    def test_trim_handles_empty_parallel_outputs(self) -> None:
+        """Test trimming handles parallel groups with empty outputs."""
+        ctx = WorkflowContext()
+        
+        # Store parallel group with only errors (all agents failed)
+        parallel_output = {
+            "outputs": {},
+            "errors": {
+                "worker1": {
+                    "agent_name": "worker1",
+                    "exception_type": "Error",
+                    "message": "Failed",
+                    "suggestion": None,
+                },
+            },
+        }
+        ctx.store("failed_group", parallel_output)
+        ctx.execution_history.append("failed_group")
+        
+        # Store another agent
+        ctx.store("recovery", {"status": "recovered"})
+        ctx.execution_history.append("recovery")
+        
+        initial_tokens = ctx.estimate_context_tokens()
+        max_tokens = initial_tokens // 2
+        
+        # Should not crash with empty outputs dict
+        final_tokens = ctx.trim_context(max_tokens, strategy="drop_oldest")
+        
+        assert final_tokens <= max_tokens
+

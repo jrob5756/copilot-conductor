@@ -319,8 +319,10 @@ class WorkflowEngine:
                     
                     # Handle parallel group execution
                     if parallel_group is not None:
-                        # Check iteration limit before executing
-                        self.limits.check_iteration(current_agent_name)
+                        # Check iteration limit for all parallel agents before executing
+                        self.limits.check_parallel_group_iteration(
+                            parallel_group.name, len(parallel_group.agents)
+                        )
                         
                         # Verbose: Log parallel group execution start
                         iteration = self.limits.current_iteration + 1
@@ -333,9 +335,12 @@ class WorkflowEngine:
                         # Trim context if max_tokens is configured
                         self._trim_context_if_needed()
                         
-                        # Execute parallel group
+                        # Execute parallel group with timeout enforcement
                         _group_start = _time.time()
-                        parallel_output = await self._execute_parallel_group(parallel_group)
+                        parallel_output = await self.limits.wait_for_with_timeout(
+                            self._execute_parallel_group(parallel_group),
+                            operation_name=f"parallel group '{parallel_group.name}'"
+                        )
                         _group_elapsed = _time.time() - _group_start
                         
                         # Verbose: Log parallel group completion
@@ -360,8 +365,10 @@ class WorkflowEngine:
                         }
                         self.context.store(parallel_group.name, parallel_output_dict)
                         
-                        # Record execution (count parallel group as single execution)
-                        self.limits.record_execution(parallel_group.name)
+                        # Record execution: count all parallel agents that executed
+                        # (both successful and failed agents count toward iteration limit)
+                        agent_count = len(parallel_group.agents)
+                        self.limits.record_execution(parallel_group.name, count=agent_count)
                         
                         # Check timeout after parallel group
                         self.limits.check_timeout()
@@ -675,8 +682,8 @@ class WorkflowEngine:
                     tokens=output.tokens_used,
                 )
 
-                # Note: Execution count is recorded at the parallel group level,
-                # not for individual agents within the group
+                # Individual parallel agents are counted toward iteration limit
+                # at the parallel group level after all agents complete
                 return (agent.name, output.content)
             except Exception as e:
                 _agent_elapsed = _time.time() - _agent_start

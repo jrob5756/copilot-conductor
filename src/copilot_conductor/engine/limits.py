@@ -11,6 +11,7 @@ import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
+from typing import Any
 
 from copilot_conductor.exceptions import (
     MaxIterationsError,
@@ -101,7 +102,41 @@ class LimitEnforcer:
                 agent_history=self.execution_history.copy(),
             )
 
-    def record_execution(self, agent_name: str) -> None:
+    def check_parallel_group_iteration(
+        self, group_name: str, agent_count: int
+    ) -> None:
+        """Check iteration limit before parallel group execution.
+
+        This checks if all agents in the parallel group can execute without
+        exceeding the iteration limit.
+
+        Args:
+            group_name: Name of parallel group about to execute.
+            agent_count: Number of agents in the parallel group.
+
+        Raises:
+            MaxIterationsError: If executing all parallel agents would exceed max iterations.
+        """
+        self.current_agent = group_name
+
+        # Check if executing all parallel agents would exceed the limit
+        if self.current_iteration + agent_count > self.max_iterations:
+            remaining = self.max_iterations - self.current_iteration
+            raise MaxIterationsError(
+                f"Parallel group '{group_name}' with {agent_count} agents would exceed "
+                f"maximum iterations ({self.max_iterations}). Only {remaining} "
+                f"iteration(s) remaining.",
+                suggestion=(
+                    f"Increase max_iterations in workflow.limits or reduce the number "
+                    f"of agents in the parallel group. Current iteration: "
+                    f"{self.current_iteration}/{self.max_iterations}"
+                ),
+                iterations=self.current_iteration,
+                max_iterations=self.max_iterations,
+                agent_history=self.execution_history.copy(),
+            )
+
+    def record_execution(self, agent_name: str, count: int = 1) -> None:
         """Record successful agent execution.
 
         Updates the execution history and increments the iteration counter.
@@ -109,9 +144,10 @@ class LimitEnforcer:
 
         Args:
             agent_name: Name of agent that just completed.
+            count: Number of iterations to record (default 1, >1 for parallel groups).
         """
         self.execution_history.append(agent_name)
-        self.current_iteration += 1
+        self.current_iteration += count
 
     def check_timeout(self) -> None:
         """Check if workflow has exceeded timeout.
@@ -205,6 +241,46 @@ class LimitEnforcer:
                 suggestion=(
                     "Increase timeout_seconds in workflow.limits or optimize "
                     "agent execution time"
+                ),
+                elapsed_seconds=elapsed,
+                timeout_seconds=float(self.timeout_seconds),
+                current_agent=self.current_agent,
+            ) from None
+
+    async def wait_for_with_timeout(
+        self, coro: Any, operation_name: str = "operation"
+    ) -> Any:
+        """Execute a coroutine with timeout enforcement.
+
+        Uses asyncio.wait_for with the remaining timeout. This is useful
+        for parallel execution to ensure each parallel group respects
+        the overall workflow timeout.
+
+        Args:
+            coro: Coroutine to execute.
+            operation_name: Name of operation for error messages (default "operation").
+
+        Returns:
+            Result of the coroutine.
+
+        Raises:
+            ConductorTimeoutError: If timeout exceeded.
+        """
+        remaining = self.get_remaining_timeout()
+        
+        # No timeout if not set
+        if remaining is None:
+            return await coro
+        
+        try:
+            return await asyncio.wait_for(coro, timeout=remaining)
+        except asyncio.TimeoutError:
+            elapsed = time.monotonic() - self.start_time if self.start_time else 0
+            raise ConductorTimeoutError(
+                f"Timeout during {operation_name} ({self.timeout_seconds}s limit)",
+                suggestion=(
+                    "Increase timeout_seconds in workflow.limits or optimize "
+                    f"{operation_name} execution time"
                 ),
                 elapsed_seconds=elapsed,
                 timeout_seconds=float(self.timeout_seconds),

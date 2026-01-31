@@ -38,12 +38,16 @@ class RetryConfig:
         base_delay: Base delay in seconds before first retry.
         max_delay: Maximum delay in seconds between retries.
         jitter: Maximum random jitter to add to delay (0.0 to 1.0 fraction of delay).
+        max_parse_recovery_attempts: Maximum number of in-session recovery attempts
+            for JSON parse failures. When parsing fails, a follow-up message is sent
+            to the same session asking the model to correct its response format.
     """
 
     max_attempts: int = 3
     base_delay: float = 1.0
     max_delay: float = 30.0
     jitter: float = 0.25
+    max_parse_recovery_attempts: int = 5
 
 
 class CopilotProvider(AgentProvider):
@@ -261,18 +265,17 @@ class CopilotProvider(AgentProvider):
         if agent.system_prompt:
             full_prompt = f"System: {agent.system_prompt}\n\nUser: {rendered_prompt}"
 
-        # If agent has output schema, instruct to respond in JSON
+        # Build schema description for output schema (used in prompt and recovery)
+        schema_for_prompt: dict[str, Any] | None = None
         if agent.output:
-            schema_desc = json.dumps(
-                {
-                    name: {
-                        "type": field.type,
-                        "description": field.description or f"The {name} field",
-                    }
-                    for name, field in agent.output.items()
-                },
-                indent=2,
-            )
+            schema_for_prompt = {
+                name: {
+                    "type": field.type,
+                    "description": field.description or f"The {name} field",
+                }
+                for name, field in agent.output.items()
+            }
+            schema_desc = json.dumps(schema_for_prompt, indent=2)
             full_prompt += (
                 f"\n\n**IMPORTANT: You MUST respond with a JSON object matching this schema:**\n"
                 f"```json\n{schema_desc}\n```\n"
@@ -292,65 +295,69 @@ class CopilotProvider(AgentProvider):
             # Create a session and send the prompt
             session = await self._client.create_session(session_config)
 
-            # Collect response using event handler
-            response_content = ""
-            done = asyncio.Event()
-            error_message: str | None = None
-
             # Capture verbose state before callback (contextvars don't propagate to sync callbacks)
             from copilot_conductor.cli.app import is_full, is_verbose
             verbose_enabled = is_verbose()
             full_enabled = is_full()
 
-            def on_event(event: Any) -> None:
-                nonlocal response_content, error_message
-                event_type = event.type.value if hasattr(event.type, "value") else str(event.type)
+            try:
+                # Send initial prompt and get response
+                response_content = await self._send_and_wait(
+                    session, full_prompt, verbose_enabled, full_enabled
+                )
 
-                if event_type == "assistant.message":
-                    response_content = event.data.content
-                elif event_type == "session.idle":
-                    done.set()
-                elif event_type == "error" or event_type == "session.error":
-                    error_message = getattr(event.data, "message", str(event.data))
-                    done.set()
+                # If no output schema, we're done
+                if not agent.output:
+                    return {"result": response_content}
 
-                # Verbose logging for intermediate progress
-                if verbose_enabled:
-                    self._log_event_verbose(event_type, event, full_enabled)
+                # Try to parse the response as JSON with recovery loop
+                max_recovery = self._retry_config.max_parse_recovery_attempts
+                last_parse_error: str | None = None
 
-            session.on(on_event)
-            await session.send({"prompt": full_prompt})
+                for recovery_attempt in range(max_recovery + 1):  # +1 for initial attempt
+                    try:
+                        return self._extract_json(response_content)
+                    except (json.JSONDecodeError, ValueError) as e:
+                        last_parse_error = str(e)
 
-            # Wait for completion - no timeout at SDK level
-            # The workflow-level timeout will enforce overall limits
-            await done.wait()
+                        # If this was the last recovery attempt, break and raise
+                        if recovery_attempt >= max_recovery:
+                            break
 
-            await session.destroy()
+                        # Log recovery attempt in verbose mode
+                        if verbose_enabled:
+                            self._log_parse_recovery(
+                                recovery_attempt + 1,
+                                max_recovery,
+                                last_parse_error,
+                            )
 
-            if error_message:
+                        # Build recovery prompt and send to same session
+                        recovery_prompt = self._build_parse_recovery_prompt(
+                            parse_error=last_parse_error,
+                            original_response=response_content,
+                            schema=schema_for_prompt,  # type: ignore[arg-type]
+                        )
+
+                        # Send recovery prompt and get new response
+                        response_content = await self._send_and_wait(
+                            session, recovery_prompt, verbose_enabled, full_enabled
+                        )
+
+                # All recovery attempts exhausted
+                expected_fields = list(agent.output.keys())
                 raise ProviderError(
-                    f"Copilot SDK error: {error_message}",
+                    f"Failed to parse structured output from agent response: {last_parse_error}",
+                    suggestion=(
+                        f"Agent was expected to return JSON with fields: {expected_fields}. "
+                        f"Response started with: {response_content[:200]}..."
+                    ),
                     is_retryable=True,
                 )
 
-            # Parse the response as JSON if we have an output schema
-            if agent.output and response_content:
-                try:
-                    # Try to extract JSON from the response
-                    return self._extract_json(response_content)
-                except (json.JSONDecodeError, ValueError) as e:
-                    # Provide better error for structured output parsing failures
-                    expected_fields = list(agent.output.keys())
-                    raise ProviderError(
-                        f"Failed to parse structured output from agent response: {e}",
-                        suggestion=(
-                            f"Agent was expected to return JSON with fields: {expected_fields}. "
-                            f"Response started with: {response_content[:200]}..."
-                        ),
-                        is_retryable=True,
-                    ) from e
-
-            return {"result": response_content}
+            finally:
+                # Always destroy session when done
+                await session.destroy()
 
         except ProviderError:
             raise
@@ -360,6 +367,90 @@ class CopilotProvider(AgentProvider):
                 suggestion="Check that copilot CLI is installed and authenticated",
                 is_retryable=True,
             ) from e
+
+    async def _send_and_wait(
+        self,
+        session: Any,
+        prompt: str,
+        verbose_enabled: bool,
+        full_enabled: bool,
+    ) -> str:
+        """Send a prompt to the session and wait for response.
+
+        Args:
+            session: The Copilot SDK session.
+            prompt: The prompt to send.
+            verbose_enabled: Whether verbose logging is enabled.
+            full_enabled: Whether full logging mode is enabled.
+
+        Returns:
+            The response content string.
+
+        Raises:
+            ProviderError: If an error occurs during the SDK call.
+        """
+        response_content = ""
+        done = asyncio.Event()
+        error_message: str | None = None
+
+        def on_event(event: Any) -> None:
+            nonlocal response_content, error_message
+            event_type = event.type.value if hasattr(event.type, "value") else str(event.type)
+
+            if event_type == "assistant.message":
+                response_content = event.data.content
+            elif event_type == "session.idle":
+                done.set()
+            elif event_type == "error" or event_type == "session.error":
+                error_message = getattr(event.data, "message", str(event.data))
+                done.set()
+
+            # Verbose logging for intermediate progress
+            if verbose_enabled:
+                self._log_event_verbose(event_type, event, full_enabled)
+
+        session.on(on_event)
+        await session.send({"prompt": prompt})
+
+        # Wait for completion - no timeout at SDK level
+        # The workflow-level timeout will enforce overall limits
+        await done.wait()
+
+        if error_message:
+            raise ProviderError(
+                f"Copilot SDK error: {error_message}",
+                is_retryable=True,
+            )
+
+        return response_content
+
+    def _log_parse_recovery(
+        self,
+        attempt: int,
+        max_attempts: int,
+        error: str,
+    ) -> None:
+        """Log a parse recovery attempt in verbose mode.
+
+        Args:
+            attempt: Current recovery attempt number (1-based).
+            max_attempts: Maximum number of recovery attempts.
+            error: The parse error message.
+        """
+        from rich.console import Console
+        from rich.text import Text
+
+        console = Console(stderr=True, highlight=False)
+
+        text = Text()
+        text.append("    ├─ ", style="dim")
+        text.append("🔄 ", style="")
+        text.append(f"Parse Recovery {attempt}/{max_attempts}", style="yellow bold")
+        text.append(" - ", style="dim")
+        # Truncate error message for display
+        error_preview = error[:100] + "..." if len(error) > 100 else error
+        text.append(error_preview, style="dim italic")
+        console.print(text)
 
     def _extract_json(self, content: str) -> dict[str, Any]:
         """Extract JSON from response content.
@@ -401,6 +492,48 @@ class CopilotProvider(AgentProvider):
                 pass
 
         raise ValueError(f"Could not extract JSON from response: {content[:200]}...")
+
+    def _build_parse_recovery_prompt(
+        self,
+        parse_error: str,
+        original_response: str,
+        schema: dict[str, Any],
+    ) -> str:
+        """Build a prompt to recover from JSON parse failures.
+
+        When an agent's response cannot be parsed as valid JSON, this method
+        creates a follow-up prompt that provides the model with:
+        - The specific parse error encountered
+        - A truncated view of its original response
+        - The expected JSON schema
+
+        This allows the model to understand what went wrong and correct its
+        response format without starting a new conversation.
+
+        Args:
+            parse_error: The error message from the parse attempt.
+            original_response: The agent's malformed response.
+            schema: The expected output schema as a dict.
+
+        Returns:
+            A prompt asking the agent to correct its response format.
+        """
+        # Truncate the original response to avoid overwhelming the context
+        truncated_response = original_response[:500]
+        if len(original_response) > 500:
+            truncated_response += "..."
+
+        schema_desc = json.dumps(schema, indent=2)
+
+        return (
+            f"Your previous response could not be parsed as valid JSON.\n\n"
+            f"**Parse Error:** {parse_error}\n\n"
+            f"**Your response started with:**\n```\n{truncated_response}\n```\n\n"
+            f"**Expected JSON schema:**\n```json\n{schema_desc}\n```\n\n"
+            f"Please respond with ONLY a valid JSON object matching the schema above. "
+            f"Do NOT include markdown code blocks, explanatory text, or anything other "
+            f"than the raw JSON object."
+        )
 
     def _log_event_verbose(self, event_type: str, event: Any, full_mode: bool) -> None:
         """Log SDK events in verbose mode for progress visibility.

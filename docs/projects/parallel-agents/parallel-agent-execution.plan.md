@@ -646,28 +646,30 @@ None.
 
 ### Epic 9: Limits & Safety
 
+**Status**: DONE
+
 **Goal**: Ensure parallel execution respects workflow limits and safety constraints.
 
 **Prerequisites**: Epic 3
 
 **Tasks**:
 
-| Task ID | Type | Description | Files | Estimate |
-|---------|------|-------------|-------|----------|
-| PE-9.1 | IMPL | Update `LimitEnforcer` to track parallel agent executions | `engine/limits.py` | M |
-| PE-9.2 | IMPL | Enforce max_iterations across parallel agents | `engine/limits.py` | M |
-| PE-9.3 | IMPL | Enforce timeout during parallel execution | `engine/limits.py` | S |
-| PE-9.4 | IMPL | Update context token estimation for parallel outputs | `engine/context.py` | M |
-| PE-9.5 | TEST | Test max_iterations with parallel groups | `tests/test_engine/test_limits.py` | M |
-| PE-9.6 | TEST | Test timeout during parallel execution | `tests/test_engine/test_limits.py` | M |
-| PE-9.7 | TEST | Test context trimming with parallel outputs | `tests/test_engine/test_context.py` | M |
+| Task ID | Type | Description | Files | Estimate | Status |
+|---------|------|-------------|-------|----------|--------|
+| PE-9.1 | IMPL | Update `LimitEnforcer` to track parallel agent executions | `engine/limits.py` | M | DONE |
+| PE-9.2 | IMPL | Enforce max_iterations across parallel agents | `engine/limits.py` | M | DONE |
+| PE-9.3 | IMPL | Enforce timeout during parallel execution | `engine/limits.py` | S | DONE |
+| PE-9.4 | IMPL | Update context token estimation for parallel outputs | `engine/context.py` | M | DONE |
+| PE-9.5 | TEST | Test max_iterations with parallel groups | `tests/test_engine/test_limits.py` | M | DONE |
+| PE-9.6 | TEST | Test timeout during parallel execution | `tests/test_engine/test_limits.py` | M | DONE |
+| PE-9.7 | TEST | Test context trimming with parallel outputs | `tests/test_engine/test_context.py` | M | DONE |
 
 **Acceptance Criteria**:
-- [ ] Parallel agent executions count toward max_iterations limit
-- [ ] Timeout is enforced during parallel execution (uses `asyncio.wait_for`)
-- [ ] Context token estimation includes parallel output structures
-- [ ] Exceeding limits during parallel execution raises appropriate errors
-- [ ] Execution history includes all parallel agents
+- [x] Parallel agent executions count toward max_iterations limit
+- [x] Timeout is enforced during parallel execution (uses `asyncio.wait_for`)
+- [x] Context token estimation includes parallel output structures
+- [x] Exceeding limits during parallel execution raises appropriate errors
+- [x] Execution history includes all parallel agents
 
 ---
 
