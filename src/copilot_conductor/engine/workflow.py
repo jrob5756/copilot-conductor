@@ -105,6 +105,52 @@ def _verbose_log_parallel_summary(
         group_name, success_count, failure_count, total_elapsed
     )
 
+
+def _verbose_log_for_each_start(
+    group_name: str,
+    item_count: int,
+    max_concurrent: int,
+    failure_mode: str,
+) -> None:
+    """Lazy import wrapper for verbose_log_for_each_start to avoid circular imports."""
+    from copilot_conductor.cli.run import verbose_log_for_each_start
+    verbose_log_for_each_start(group_name, item_count, max_concurrent, failure_mode)
+
+
+def _verbose_log_for_each_item_complete(
+    item_key: str,
+    elapsed: float,
+    *,
+    tokens: int | None = None,
+) -> None:
+    """Lazy import wrapper for verbose_log_for_each_item_complete to avoid circular imports."""
+    from copilot_conductor.cli.run import verbose_log_for_each_item_complete
+    verbose_log_for_each_item_complete(item_key, elapsed, tokens=tokens)
+
+
+def _verbose_log_for_each_item_failed(
+    item_key: str,
+    elapsed: float,
+    exception_type: str,
+    message: str,
+) -> None:
+    """Lazy import wrapper for verbose_log_for_each_item_failed to avoid circular imports."""
+    from copilot_conductor.cli.run import verbose_log_for_each_item_failed
+    verbose_log_for_each_item_failed(item_key, elapsed, exception_type, message)
+
+
+def _verbose_log_for_each_summary(
+    group_name: str,
+    success_count: int,
+    failure_count: int,
+    total_elapsed: float,
+) -> None:
+    """Lazy import wrapper for verbose_log_for_each_summary to avoid circular imports."""
+    from copilot_conductor.cli.run import verbose_log_for_each_summary
+    verbose_log_for_each_summary(
+        group_name, success_count, failure_count, total_elapsed
+    )
+
 if TYPE_CHECKING:
     from copilot_conductor.config.schema import AgentDef, ForEachDef, ParallelGroup, WorkflowConfig
     from copilot_conductor.providers.base import AgentProvider
@@ -1221,11 +1267,11 @@ class WorkflowEngine:
             return ForEachGroupOutput(outputs=empty_outputs, errors={}, count=0)
 
         # Verbose: Log for-each group start
-        _verbose_log(
-            f"For-each group '{for_each_group.name}': {len(items)} items, "
-            f"max_concurrent={for_each_group.max_concurrent}, "
-            f"{for_each_group.failure_mode} mode",
-            style="bold cyan"
+        _verbose_log_for_each_start(
+            for_each_group.name,
+            len(items),
+            for_each_group.max_concurrent,
+            for_each_group.failure_mode,
         )
 
         # Track timing for summary
@@ -1279,10 +1325,10 @@ class WorkflowEngine:
                 _item_elapsed = _time.time() - _item_start
 
                 # Verbose: Log item completion
-                _verbose_log(
-                    f"  [{key}] Completed in {_item_elapsed:.2f}s "
-                    f"({output.tokens_used} tokens)",
-                    style="dim green"
+                _verbose_log_for_each_item_complete(
+                    key,
+                    _item_elapsed,
+                    tokens=output.tokens_used,
                 )
 
                 return (key, output.content)
@@ -1290,9 +1336,11 @@ class WorkflowEngine:
                 _item_elapsed = _time.time() - _item_start
 
                 # Verbose: Log item failure
-                _verbose_log(
-                    f"  [{key}] Failed in {_item_elapsed:.2f}s: {type(e).__name__}: {str(e)}",
-                    style="dim red"
+                _verbose_log_for_each_item_failed(
+                    key,
+                    _item_elapsed,
+                    type(e).__name__,
+                    str(e),
                 )
 
                 # Attach metadata for error reporting
@@ -1422,10 +1470,11 @@ class WorkflowEngine:
         _group_elapsed = _time.time() - _group_start
         success_count = len(for_each_output.outputs) if isinstance(for_each_output.outputs, dict) else len(for_each_output.outputs)  # type: ignore
         failure_count = len(for_each_output.errors)
-        _verbose_log(
-            f"For-each group '{for_each_group.name}' completed in {_group_elapsed:.2f}s: "
-            f"{success_count} succeeded, {failure_count} failed",
-            style="bold green"
+        _verbose_log_for_each_summary(
+            for_each_group.name,
+            success_count,
+            failure_count,
+            _group_elapsed,
         )
 
         # Apply failure mode policy (for continue_on_error and all_or_nothing)

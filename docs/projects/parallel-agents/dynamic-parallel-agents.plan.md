@@ -1138,62 +1138,76 @@ def _find_for_each_group(self, name: str) -> ForEachDef | None:
 
 **Prerequisites**: Epic 7
 
+**Status**: DONE
+
 **Tasks**:
 | Task ID | Type | Description | Files | Status |
 |---------|------|-------------|-------|--------|
-| E8-T1 | IMPL | Add `_verbose_log_for_each_start()` | `src/copilot_conductor/cli/run.py` | TO DO |
-| E8-T2 | IMPL | Add `_verbose_log_for_each_item_complete()` | `src/copilot_conductor/cli/run.py` | TO DO |
-| E8-T3 | IMPL | Add `_verbose_log_for_each_item_failed()` | `src/copilot_conductor/cli/run.py` | TO DO |
-| E8-T4 | IMPL | Add `_verbose_log_for_each_summary()` | `src/copilot_conductor/cli/run.py` | TO DO |
-| E8-T5 | IMPL | Integrate verbose logging into `_execute_for_each_group()` | `src/copilot_conductor/engine/workflow.py` | TO DO |
-| E8-T6 | TEST | Manual test: Run with `--verbose` flag | Manual | TO DO |
+| E8-T1 | IMPL | Add `_verbose_log_for_each_start()` | `src/copilot_conductor/cli/run.py` | DONE |
+| E8-T2 | IMPL | Add `_verbose_log_for_each_item_complete()` | `src/copilot_conductor/cli/run.py` | DONE |
+| E8-T3 | IMPL | Add `_verbose_log_for_each_item_failed()` | `src/copilot_conductor/cli/run.py` | DONE |
+| E8-T4 | IMPL | Add `_verbose_log_for_each_summary()` | `src/copilot_conductor/cli/run.py` | DONE |
+| E8-T5 | IMPL | Integrate verbose logging into `_execute_for_each_group()` | `src/copilot_conductor/engine/workflow.py` | DONE |
+| E8-T6 | TEST | Manual test: Run with `--verbose` flag | Manual | DONE |
 
 **Acceptance Criteria**:
-- [ ] Verbose mode shows for-each start, item completion, failures, and summary
-- [ ] Timing information included for each item
-- [ ] Manual verification confirms output is readable
+- [x] Verbose mode shows for-each start, item completion, failures, and summary
+- [x] Timing information included for each item
+- [x] Manual verification confirms output is readable
 
 ---
 
 ### Epic 9: Documentation and Examples
 **Goal**: Document for-each feature and provide examples
 
+**Status**: DONE
+
 **Prerequisites**: Epic 8
 
 **Tasks**:
 | Task ID | Type | Description | Files | Status |
 |---------|------|-------------|-------|--------|
-| E9-T1 | DOC | Update workflow YAML reference docs | `docs/reference/workflow-yaml.md` | TO DO |
-| E9-T2 | DOC | Add for-each usage guide | `docs/guides/dynamic-parallel.md` | TO DO |
-| E9-T3 | DOC | Document output access patterns | `docs/guides/dynamic-parallel.md` | TO DO |
-| E9-T4 | IMPL | Create KPI analysis example with for-each | `examples/kpi-analysis-parallel.yaml` | TO DO |
-| E9-T5 | IMPL | Create simple for-each example | `examples/for-each-demo.yaml` | TO DO |
-| E9-T6 | DOC | Update README with for-each feature | `README.md` | TO DO |
+| E9-T1 | DOC | Update workflow YAML reference docs | `docs/workflow-syntax.md` | DONE |
+| E9-T2 | DOC | Add for-each usage guide | `docs/dynamic-parallel.md` | DONE |
+| E9-T3 | DOC | Document output access patterns | `docs/dynamic-parallel.md` | DONE |
+| E9-T4 | IMPL | Create KPI analysis example with for-each | `examples/kpi-analysis-parallel.yaml` | DONE |
+| E9-T5 | IMPL | Create simple for-each example | `examples/for-each-simple.yaml` | DONE |
+| E9-T6 | DOC | Update README with for-each feature | `README.md` | DONE |
 
 **Acceptance Criteria**:
-- [ ] Documentation covers syntax, examples, and best practices
-- [ ] Examples demonstrate common use cases
-- [ ] README updated with feature overview
+- [x] Documentation covers syntax, examples, and best practices
+- [x] Examples demonstrate common use cases
+- [x] README updated with feature overview
 
 ---
 
 ### Epic 10: Performance Testing and Optimization
 **Goal**: Validate performance and optimize if needed
 
+**Status**: DONE
+
 **Prerequisites**: Epic 9
 
 **Tasks**:
 | Task ID | Type | Description | Files | Status |
 |---------|------|-------------|-------|--------|
-| E10-T1 | TEST | Performance test: 100-item array with max_concurrent=10 | `tests/test_performance/test_for_each_perf.py` | TO DO |
-| E10-T2 | TEST | Performance test: 10-item array with max_concurrent=5 | `tests/test_performance/test_for_each_perf.py` | TO DO |
-| E10-T3 | TEST | Memory profiling for large arrays (1000 items) | Manual | TO DO |
-| E10-T4 | IMPL | Optimize if performance bottlenecks found (conditional) | TBD | TO DO |
+| E10-T1 | TEST | Performance test: 100-item array with max_concurrent=10 | `tests/test_performance.py` | DONE |
+| E10-T2 | TEST | Performance test: 10-item array with max_concurrent=5 | `tests/test_performance.py` | DONE |
+| E10-T3 | TEST | Memory profiling for large arrays (1000 items) | `tests/test_performance.py` | DONE |
+| E10-T4 | IMPL | Optimize if performance bottlenecks found (conditional) | N/A | DONE |
 
 **Acceptance Criteria**:
-- [ ] 100-item array completes within reasonable time (10x single execution + overhead, not 2x as previously stated)
-- [ ] Memory usage acceptable for 1000-item arrays
-- [ ] No performance regressions vs static parallel
+- [x] 100-item array completes within reasonable time (10x single execution + overhead, not 2x as previously stated)
+- [x] Memory usage acceptable for 1000-item arrays
+- [x] No performance regressions vs static parallel
+
+**Implementation Notes**:
+- All performance tests added to `tests/test_performance.py` under `TestForEachPerformance` class
+- Tests cover all acceptance criteria including 100-item, 10-item, 1000-item arrays
+- Performance comparison vs static parallel included
+- Memory profiling using tracemalloc for 1000-item test
+- Batching scalability test validates that execution scales with batch count, not item count
+- E10-T4 (optimization) was not needed as tests show good performance characteristics
 
 ---
 

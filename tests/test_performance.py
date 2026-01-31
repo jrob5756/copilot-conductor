@@ -709,3 +709,501 @@ class TestParallelExecutionPerformance:
         assert avg_time < 0.01, (
             f"Parallel overhead {avg_time * 1000:.2f}ms, expected <10ms"
         )
+
+
+class TestForEachPerformance:
+    """Performance tests for for-each (dynamic parallel) execution.
+    
+    Tests cover Epic 10 acceptance criteria:
+    - 100-item array completes within reasonable time (10x single execution + overhead)
+    - Memory usage acceptable for 1000-item arrays
+    - No performance regressions vs static parallel
+    """
+
+    @pytest.mark.asyncio
+    async def test_100_item_array_with_max_concurrent_10(self) -> None:
+        """E10-T1: Test performance with 100-item array and max_concurrent=10.
+        
+        Acceptance: Should complete within reasonable time (10x single execution + overhead).
+        With max_concurrent=10, we expect ~10 batches, so roughly 10x the time of
+        a single execution, plus some overhead.
+        """
+        from copilot_conductor.config.schema import ForEachDef
+
+        # First, measure single agent execution time
+        single_workflow = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="single-agent-baseline",
+                entry_point="agent",
+            ),
+            agents=[
+                AgentDef(
+                    name="agent",
+                    model="gpt-4",
+                    prompt="Process item",
+                    output={"result": OutputField(type="string")},
+                    routes=[RouteDef(to="$end")],
+                ),
+            ],
+            output={"result": "{{ agent.output.result }}"},
+        )
+
+        def mock_handler(agent, prompt, context):
+            # Simulate 50ms of work per agent
+            time.sleep(0.05)
+            return {"result": f"processed"}
+
+        provider_single = CopilotProvider(mock_handler=mock_handler)
+        engine_single = WorkflowEngine(single_workflow, provider_single)
+        
+        start_single = time.perf_counter()
+        await engine_single.run({})
+        single_time = time.perf_counter() - start_single
+
+        # Now test 100-item for-each
+        for_each_workflow = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="for-each-100-items",
+                entry_point="finder",
+            ),
+            agents=[
+                AgentDef(
+                    name="finder",
+                    model="gpt-4",
+                    prompt="Generate items",
+                    output={"items": OutputField(type="array")},
+                    routes=[RouteDef(to="processors")],
+                ),
+                AgentDef(
+                    name="processor",
+                    model="gpt-4",
+                    prompt="Process item {{ item }}",
+                    output={"result": OutputField(type="string")},
+                ),
+            ],
+            for_each=[
+                ForEachDef(
+                    name="processors",
+                    source="finder.output.items",
+                    as_="item",
+                    agent="processor",
+                    max_concurrent=10,
+                    failure_mode="continue_on_error",
+                ),
+            ],
+            output={"count": "{{ processors.count }}"},
+        )
+
+        def mock_handler_with_array(agent, prompt, context):
+            if agent.name == "finder":
+                # Generate 100 items
+                return {"items": list(range(100))}
+            else:
+                # Processor agent - simulate 50ms work
+                time.sleep(0.05)
+                return {"result": f"processed"}
+
+        provider_foreach = CopilotProvider(mock_handler=mock_handler_with_array)
+        engine_foreach = WorkflowEngine(for_each_workflow, provider_foreach)
+
+        start_foreach = time.perf_counter()
+        result = await engine_foreach.run({})
+        foreach_time = time.perf_counter() - start_foreach
+
+        # Verify execution completed successfully
+        assert result["count"] == 100
+
+        # Performance expectation: ~10 batches @ 50ms each = ~500ms baseline
+        # Allow for overhead: should complete within 10x single execution + 200ms overhead
+        expected_max_time = (single_time * 10) + 0.2
+        
+        assert foreach_time < expected_max_time, (
+            f"100-item for-each took {foreach_time:.3f}s, "
+            f"expected <{expected_max_time:.3f}s "
+            f"(10x single={single_time:.3f}s + 0.2s overhead)"
+        )
+
+        # Also verify it's actually running in parallel (should be much faster than sequential)
+        sequential_estimate = single_time * 100
+        speedup = sequential_estimate / foreach_time
+        
+        # With max_concurrent=10, we should see significant speedup
+        assert speedup > 5, (
+            f"For-each speedup is only {speedup:.1f}x, "
+            f"expected >5x (foreach={foreach_time:.3f}s, "
+            f"sequential estimate={sequential_estimate:.3f}s)"
+        )
+
+    @pytest.mark.asyncio
+    async def test_10_item_array_with_max_concurrent_5(self) -> None:
+        """E10-T2: Test performance with 10-item array and max_concurrent=5.
+        
+        Acceptance: Should complete within reasonable time with proper batching.
+        """
+        from copilot_conductor.config.schema import ForEachDef
+
+        for_each_workflow = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="for-each-10-items",
+                entry_point="finder",
+            ),
+            agents=[
+                AgentDef(
+                    name="finder",
+                    model="gpt-4",
+                    prompt="Generate items",
+                    output={"items": OutputField(type="array")},
+                    routes=[RouteDef(to="processors")],
+                ),
+                AgentDef(
+                    name="processor",
+                    model="gpt-4",
+                    prompt="Process item {{ item }}",
+                    output={"result": OutputField(type="string")},
+                ),
+            ],
+            for_each=[
+                ForEachDef(
+                    name="processors",
+                    source="finder.output.items",
+                    as_="item",
+                    agent="processor",
+                    max_concurrent=5,
+                    failure_mode="continue_on_error",
+                ),
+            ],
+            output={"count": "{{ processors.count }}"},
+        )
+
+        execution_order = []
+
+        def mock_handler(agent, prompt, context):
+            if agent.name == "finder":
+                return {"items": list(range(10))}
+            else:
+                # Track execution timing
+                execution_order.append({
+                    "agent": agent.name,
+                    "time": time.perf_counter(),
+                })
+                time.sleep(0.05)  # 50ms per agent
+                return {"result": "processed"}
+
+        provider = CopilotProvider(mock_handler=mock_handler)
+        engine = WorkflowEngine(for_each_workflow, provider)
+
+        start = time.perf_counter()
+        result = await engine.run({})
+        elapsed = time.perf_counter() - start
+
+        # Verify execution
+        assert result["count"] == 10
+
+        # With max_concurrent=5 and 10 items, we expect 2 batches
+        # Each batch ~50ms, so ~100ms total + overhead
+        # Allow generous overhead for test stability
+        assert elapsed < 0.5, (
+            f"10-item for-each took {elapsed:.3f}s, expected <0.5s"
+        )
+
+    @pytest.mark.asyncio
+    async def test_memory_usage_1000_items(self) -> None:
+        """E10-T3: Memory profiling for large arrays (1000 items).
+        
+        Acceptance: Memory usage should be acceptable for 1000-item arrays.
+        With batching, memory should not grow linearly with array size.
+        """
+        import tracemalloc
+        from copilot_conductor.config.schema import ForEachDef
+
+        tracemalloc.start()
+
+        for_each_workflow = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="for-each-1000-items",
+                entry_point="finder",
+            ),
+            agents=[
+                AgentDef(
+                    name="finder",
+                    model="gpt-4",
+                    prompt="Generate items",
+                    output={"items": OutputField(type="array")},
+                    routes=[RouteDef(to="processors")],
+                ),
+                AgentDef(
+                    name="processor",
+                    model="gpt-4",
+                    prompt="Process {{ item }}",
+                    output={"result": OutputField(type="string")},
+                ),
+            ],
+            for_each=[
+                ForEachDef(
+                    name="processors",
+                    source="finder.output.items",
+                    as_="item",
+                    agent="processor",
+                    max_concurrent=20,
+                    failure_mode="continue_on_error",
+                ),
+            ],
+            output={"count": "{{ processors.count }}"},
+        )
+
+        def mock_handler(agent, prompt, context):
+            if agent.name == "finder":
+                # Generate 1000 items
+                return {"items": [{"id": i, "data": f"item_{i}"} for i in range(1000)]}
+            else:
+                # Small delay to simulate work
+                time.sleep(0.001)  # 1ms per item for faster test
+                return {"result": f"ok"}
+
+        provider = CopilotProvider(mock_handler=mock_handler)
+        engine = WorkflowEngine(for_each_workflow, provider)
+
+        await engine.run({})
+
+        current, peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+
+        # Memory should be reasonable - allow up to 200MB for 1000 items
+        # This is conservative; with proper batching it should be much less
+        max_allowed_mb = 200
+        peak_mb = peak / (1024 * 1024)
+        
+        assert peak_mb < max_allowed_mb, (
+            f"1000-item for-each used {peak_mb:.1f}MB peak memory, "
+            f"expected <{max_allowed_mb}MB"
+        )
+
+    @pytest.mark.asyncio
+    async def test_performance_parity_with_static_parallel(self) -> None:
+        """E10-T4: Test that for-each has no significant regression vs static parallel.
+        
+        Acceptance: For-each should perform similarly to static parallel
+        for the same number of agents.
+        """
+        from copilot_conductor.config.schema import ForEachDef
+
+        num_agents = 20
+
+        # Static parallel workflow
+        static_workflow = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="static-parallel",
+                entry_point="parallel_group",
+            ),
+            agents=[
+                AgentDef(
+                    name=f"agent{i}",
+                    model="gpt-4",
+                    prompt=f"Task {i}",
+                    output={"result": OutputField(type="string")},
+                )
+                for i in range(num_agents)
+            ],
+            parallel=[
+                ParallelGroup(
+                    name="parallel_group",
+                    agents=[f"agent{i}" for i in range(num_agents)],
+                    failure_mode="continue_on_error",
+                ),
+            ],
+            output={"result": "done"},
+        )
+
+        # For-each workflow
+        foreach_workflow = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="foreach-parallel",
+                entry_point="finder",
+            ),
+            agents=[
+                AgentDef(
+                    name="finder",
+                    model="gpt-4",
+                    prompt="Generate items",
+                    output={"items": OutputField(type="array")},
+                    routes=[RouteDef(to="processors")],
+                ),
+                AgentDef(
+                    name="processor",
+                    model="gpt-4",
+                    prompt="Process {{ item }}",
+                    output={"result": OutputField(type="string")},
+                ),
+            ],
+            for_each=[
+                ForEachDef(
+                    name="processors",
+                    source="finder.output.items",
+                    as_="item",
+                    agent="processor",
+                    max_concurrent=num_agents,  # Same concurrency as static
+                    failure_mode="continue_on_error",
+                ),
+            ],
+            output={"count": "{{ processors.count }}"},
+        )
+
+        def mock_handler_static(agent, prompt, context):
+            time.sleep(0.02)  # 20ms per agent
+            return {"result": "ok"}
+
+        def mock_handler_foreach(agent, prompt, context):
+            if agent.name == "finder":
+                return {"items": list(range(num_agents))}
+            time.sleep(0.02)  # 20ms per agent
+            return {"result": "ok"}
+
+        # Test static parallel
+        provider_static = CopilotProvider(mock_handler=mock_handler_static)
+        engine_static = WorkflowEngine(static_workflow, provider_static)
+        
+        start_static = time.perf_counter()
+        await engine_static.run({})
+        static_time = time.perf_counter() - start_static
+
+        # Test for-each
+        provider_foreach = CopilotProvider(mock_handler=mock_handler_foreach)
+        engine_foreach = WorkflowEngine(foreach_workflow, provider_foreach)
+        
+        start_foreach = time.perf_counter()
+        result = await engine_foreach.run({})
+        foreach_time = time.perf_counter() - start_foreach
+
+        # Verify for-each executed correctly
+        assert result["count"] == num_agents
+
+        # For-each should be within 50% of static parallel performance
+        # (allowing for array resolution and batching overhead)
+        max_allowed = static_time * 1.5
+        
+        assert foreach_time < max_allowed, (
+            f"For-each took {foreach_time:.3f}s vs static parallel {static_time:.3f}s, "
+            f"expected for-each <{max_allowed:.3f}s (1.5x static)"
+        )
+
+    @pytest.mark.asyncio
+    async def test_empty_array_performance(self) -> None:
+        """Test that empty arrays have minimal overhead."""
+        from copilot_conductor.config.schema import ForEachDef
+
+        for_each_workflow = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="for-each-empty",
+                entry_point="finder",
+            ),
+            agents=[
+                AgentDef(
+                    name="finder",
+                    model="gpt-4",
+                    prompt="Generate items",
+                    output={"items": OutputField(type="array")},
+                    routes=[RouteDef(to="processors")],
+                ),
+                AgentDef(
+                    name="processor",
+                    model="gpt-4",
+                    prompt="Process {{ item }}",
+                    output={"result": OutputField(type="string")},
+                ),
+            ],
+            for_each=[
+                ForEachDef(
+                    name="processors",
+                    source="finder.output.items",
+                    as_="item",
+                    agent="processor",
+                    max_concurrent=10,
+                ),
+            ],
+            output={"count": "{{ processors.count }}"},
+        )
+
+        def mock_handler(agent, prompt, context):
+            return {"items": []} if agent.name == "finder" else {"result": "ok"}
+
+        provider = CopilotProvider(mock_handler=mock_handler)
+        engine = WorkflowEngine(for_each_workflow, provider)
+
+        start = time.perf_counter()
+        result = await engine.run({})
+        elapsed = time.perf_counter() - start
+
+        # Empty array should complete very quickly
+        assert result["count"] == 0
+        assert elapsed < 0.1, f"Empty array took {elapsed:.3f}s, expected <0.1s"
+
+    @pytest.mark.asyncio
+    async def test_batching_scalability(self) -> None:
+        """Test that execution time scales with batch count, not item count."""
+        from copilot_conductor.config.schema import ForEachDef
+
+        async def run_foreach_with_items(num_items: int, max_concurrent: int) -> float:
+            """Helper to run for-each and return execution time."""
+            workflow = WorkflowConfig(
+                workflow=WorkflowDef(
+                    name="scalability-test",
+                    entry_point="finder",
+                ),
+                agents=[
+                    AgentDef(
+                        name="finder",
+                        model="gpt-4",
+                        prompt="items",
+                        output={"items": OutputField(type="array")},
+                        routes=[RouteDef(to="processors")],
+                    ),
+                    AgentDef(
+                        name="processor",
+                        model="gpt-4",
+                        prompt="process",
+                        output={"result": OutputField(type="string")},
+                    ),
+                ],
+                for_each=[
+                    ForEachDef(
+                        name="processors",
+                        source="finder.output.items",
+                        as_="item",
+                        agent="processor",
+                        max_concurrent=max_concurrent,
+                    ),
+                ],
+                output={"count": "{{ processors.count }}"},
+            )
+
+            def mock_handler(agent, prompt, context):
+                if agent.name == "finder":
+                    return {"items": list(range(num_items))}
+                time.sleep(0.01)  # 10ms per item
+                return {"result": "ok"}
+
+            provider = CopilotProvider(mock_handler=mock_handler)
+            engine = WorkflowEngine(workflow, provider)
+
+            start = time.perf_counter()
+            await engine.run({})
+            return time.perf_counter() - start
+
+        # Test with same batch count but different item counts
+        # Both should take similar time since they have same number of batches
+        
+        # 20 items with max_concurrent=10 = 2 batches
+        time_20_items = await run_foreach_with_items(20, 10)
+        
+        # 100 items with max_concurrent=50 = 2 batches
+        time_100_items = await run_foreach_with_items(100, 50)
+
+        # Both should complete in similar time (2 batches each)
+        # Allow 50% variance for overhead differences
+        ratio = max(time_20_items, time_100_items) / min(time_20_items, time_100_items)
+        
+        assert ratio < 1.5, (
+            f"Execution time should scale with batch count, not item count. "
+            f"20 items: {time_20_items:.3f}s, 100 items: {time_100_items:.3f}s, "
+            f"ratio: {ratio:.2f}x (expected <1.5x)"
+        )

@@ -1,0 +1,311 @@
+# KPI Analysis Workflow (Parallel Version)
+#
+# This workflow analyzes SFI KPIs using dynamic parallel execution (for-each).
+# It shows:
+# - Processing all KPIs in parallel batches
+# - Key-based output aggregation (keyed by kpi_id)
+# - Partial failure handling with continue_on_error
+# - Progress tracking and aggregation
+#
+# Prerequisites:
+# - S360 MCP tools must be available in the environment
+# - Eng Hub MCP tools must be available in the environment
+#
+# Usage:
+#   conductor run examples/kpi-analysis-parallel.yaml --input kpi_directory="/path/to/kpi-directory.json"
+#
+# With specific category filter:
+#   conductor run examples/kpi-analysis-parallel.yaml --input kpi_directory="..." --input category="Engineering Systems"
+
+workflow:
+  name: kpi-analysis-parallel
+  description: Parallel analysis of SFI KPIs using for-each
+  version: "1.0.0"
+  entry_point: kpi_loader
+
+  runtime:
+    provider: copilot
+    default_model: claude-opus-4.5
+    mcp_servers:
+      enghub:
+        command: node
+        args: ["/Users/jason/src/enghub-mcp-server-tools/dist/index.js"]
+        tools: ["*"]
+      s360:
+        type: http
+        url: https://mcp.vnext.s360.msftcloudes.com/
+        tools: ["*"]
+
+  input:
+    kpi_directory:
+      type: string
+      required: true
+      description: Path to the KPI directory JSON file
+    category:
+      type: string
+      required: false
+      description: Optional category filter
+    output_dir:
+      type: string
+      required: false
+      default: "/Users/jason/src/notes/projects/ai-development/anti-patterns/get-green-stay-green/analysis"
+      description: Directory where analysis documents will be saved
+
+  context:
+    mode: explicit
+
+  limits:
+    max_iterations: 50
+    timeout_seconds: 3600  # 1 hour max
+
+# For-each group for parallel KPI analysis
+for_each:
+  - name: kpi_analyzers
+    type: for_each
+    description: Analyze each KPI in parallel
+    
+    source: kpi_loader.output.kpis
+    as: kpi
+    max_concurrent: 5                # Process 5 KPIs at a time
+    failure_mode: continue_on_error  # Continue even if some KPIs fail
+    key_by: kpi.kpi_id               # Use kpi_id as output key
+    
+    agent:
+      model: claude-opus-4.5
+      tools: ["*"]  # Access all MCP tools
+      input:
+        - workflow.input.output_dir
+        - kpi_loader.output.category_name
+      prompt: |
+        You are a KPI Analysis agent specializing in Microsoft SFI (Secure Future Initiative) compliance.
+        
+        Analyze this KPI and gather comprehensive information:
+        
+        **KPI {{ _index + 1 }} of {{ kpi_loader.output.total_count }}**
+        - ID: {{ kpi.kpi_id }}
+        - Title: {{ kpi.title }}
+        - Domain: {{ kpi.domain }}
+        - Owner: {{ kpi.owner }}
+        - Category: {{ kpi.category_name }}
+        
+        ## TASKS
+        
+        1. **Query S360 for KPI Details**
+           Use the KPI ID ({{ kpi.kpi_id }}) to:
+           - Get the full KPI definition and requirements
+           - Check current compliance status
+           - Retrieve any existing work items
+        
+        2. **Gather KPI Metrics from S360**
+           Query S360 to collect:
+           - **Volume:** Number of open S360 action items for this KPI
+           - **Age:** Average age of open S360 items (days since created)
+           - **Impact:** Customer impact, security impact, or business criticality
+           - **Frequency:** How often new items are created for this KPI
+           - **Resolution Time:** Average time to resolve items for this KPI
+        
+        3. **Find Documentation in Eng Hub**
+           Search for documentation related to this KPI:
+           - Find remediation guides and best practices
+           - Look for related tooling or automation
+        
+        4. **Analyze Trends**
+           - Is this KPI improving or deteriorating?
+           - Are there patterns in the failures?
+           - What are the common root causes?
+        
+        Provide structured analysis with all metrics and recommendations.
+      output:
+        kpi_id:
+          type: string
+          description: KPI ID analyzed
+        priority:
+          type: string
+          description: "Critical | High | Medium | Low"
+        summary:
+          type: string
+          description: Brief summary of findings
+        compliance_status:
+          type: string
+          description: Current compliance status
+        metrics:
+          type: object
+          description: Collected metrics (volume, age, impact, etc.)
+        resolution_steps:
+          type: array
+          description: Recommended resolution steps
+        documentation_links:
+          type: array
+          description: Links to relevant documentation
+        trend:
+          type: string
+          description: "Improving | Stable | Deteriorating"
+        confidence:
+          type: number
+          description: Confidence score 1-10
+    
+    routes:
+      - to: report_generator
+
+agents:
+  # Agent 1: Load and filter KPIs
+  - name: kpi_loader
+    description: Loads KPIs from JSON and applies optional category filter
+    model: claude-sonnet-4
+    input:
+      - workflow.input.kpi_directory
+      - workflow.input.category
+    prompt: |
+      Load KPIs from the directory JSON file and prepare for parallel analysis.
+      
+      **KPI Directory JSON:** {{ workflow.input.kpi_directory }}
+      {% if workflow.input.category %}
+      **Filter to Category:** {{ workflow.input.category }}
+      {% endif %}
+      
+      ## TASKS
+      
+      1. **Read the KPI Directory JSON**
+         Load the JSON file at the given path.
+         Expected structure: Array of KPI objects with fields:
+         - kpi_id (string)
+         - title (string)
+         - domain (string)
+         - owner (string)
+         - category_name (string)
+         - category_filename (string)
+      
+      2. **Apply Category Filter (if specified)**
+         {% if workflow.input.category %}
+         Filter to only KPIs where category_name matches "{{ workflow.input.category }}"
+         {% else %}
+         Include all KPIs
+         {% endif %}
+      
+      3. **Return KPI List**
+         Return the filtered list of KPIs as a structured array.
+    output:
+      kpis:
+        type: array
+        description: Array of KPI objects to analyze
+      total_count:
+        type: number
+        description: Total number of KPIs to analyze
+      category_name:
+        type: string
+        description: Category name (if filtered) or "All Categories"
+    routes:
+      - to: $end
+        when: "{{ output.total_count == 0 }}"
+      - to: kpi_analyzers
+  
+  # Agent 2: Generate final report
+  - name: report_generator
+    description: Aggregates all KPI analyses and generates final report
+    model: claude-sonnet-4
+    input:
+      - workflow.input.output_dir
+      - kpi_loader.output
+      - kpi_analyzers.outputs
+      - kpi_analyzers.errors
+    prompt: |
+      Generate a comprehensive analysis report from parallel KPI processing.
+      
+      **Output Directory:** {{ workflow.input.output_dir }}
+      **Category:** {{ kpi_loader.output.category_name }}
+      
+      ## RESULTS
+      
+      Total KPIs: {{ kpi_loader.output.total_count }}
+      Successfully Analyzed: {{ kpi_analyzers.outputs | length }}
+      Failed Analyses: {{ kpi_analyzers.errors | length }}
+      
+      {% if kpi_analyzers.errors %}
+      ### Failed KPIs
+      {% for kpi_id, error in kpi_analyzers.errors.items() %}
+      - {{ kpi_id }}: {{ error.message }}
+      {% endfor %}
+      {% endif %}
+      
+      ### Successful Analyses
+      {% for kpi_id, analysis in kpi_analyzers.outputs.items() %}
+      
+      **{{ kpi_id }}** ({{ analysis.priority }})
+      - Status: {{ analysis.compliance_status }}
+      - Trend: {{ analysis.trend }}
+      - Summary: {{ analysis.summary }}
+      
+      {% endfor %}
+      
+      ## TASKS
+      
+      1. **Calculate Overall Statistics**
+         - Total KPIs analyzed
+         - Priority breakdown (Critical, High, Medium, Low)
+         - Compliance status breakdown
+         - Trend analysis (Improving vs Deteriorating)
+         - Average confidence score
+      
+      2. **Identify Critical Issues**
+         - List all Critical priority KPIs
+         - List all Deteriorating trend KPIs
+         - Highlight highest impact items
+      
+      3. **Generate Executive Summary**
+         - Overall health score for this category
+         - Top 5 issues requiring immediate attention
+         - Positive trends to highlight
+         - Recommended next actions
+      
+      4. **Save Report to File**
+         Create a comprehensive markdown report at:
+         {{ workflow.input.output_dir }}/{{ kpi_loader.output.category_name | replace(" ", "-") | lower }}-analysis.md
+         
+         Include:
+         - Executive summary
+         - Statistics and metrics
+         - Detailed KPI breakdown (sorted by priority)
+         - Failed analyses section
+         - Appendix with all data
+    output:
+      report_file:
+        type: string
+        description: Path to generated report file
+      executive_summary:
+        type: string
+        description: Executive summary of findings
+      health_score:
+        type: number
+        description: Overall health score 1-10
+      critical_count:
+        type: number
+        description: Number of critical priority KPIs
+      high_count:
+        type: number
+        description: Number of high priority KPIs
+      improving_count:
+        type: number
+        description: Number of KPIs with improving trend
+      deteriorating_count:
+        type: number
+        description: Number of KPIs with deteriorating trend
+      top_issues:
+        type: array
+        description: Top 5 issues requiring attention
+    routes:
+      - to: $end
+
+output:
+  category: "{{ kpi_loader.output.category_name }}"
+  total_kpis: "{{ kpi_loader.output.total_count }}"
+  analyzed: "{{ kpi_analyzers.outputs | length }}"
+  failed: "{{ kpi_analyzers.errors | length }}"
+  success_rate: "{{ (kpi_analyzers.outputs | length) / (kpi_loader.output.total_count) * 100 }}%"
+  report_file: "{{ report_generator.output.report_file }}"
+  executive_summary: "{{ report_generator.output.executive_summary }}"
+  health_score: "{{ report_generator.output.health_score }}"
+  critical_count: "{{ report_generator.output.critical_count }}"
+  high_count: "{{ report_generator.output.high_count }}"
+  improving_count: "{{ report_generator.output.improving_count }}"
+  deteriorating_count: "{{ report_generator.output.deteriorating_count }}"
+  top_issues: "{{ report_generator.output.top_issues | json }}"

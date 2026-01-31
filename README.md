@@ -9,7 +9,8 @@ A CLI tool for defining and running multi-agent workflows with the GitHub Copilo
 ## Features
 
 - **YAML-based workflow definitions** - Define multi-agent workflows in simple, readable YAML
-- **Parallel agent execution** - Run independent agents concurrently for faster workflows
+- **Static parallel execution** - Run independent agents concurrently for faster workflows
+- **Dynamic parallel (for-each)** - Process variable-length arrays with parallel agent instances
 - **Conditional routing** - Route between agents based on output conditions
 - **Loop-back patterns** - Iterate agents until conditions are met
 - **Human-in-the-loop gates** - Pause workflows for human decisions with Rich terminal UI
@@ -196,7 +197,7 @@ workflow:
 tools:                            # Workflow-level tools
   - tool_name
 
-parallel:                         # Parallel execution groups
+parallel:                         # Static parallel execution groups
   - name: string                  # Required: Group identifier
     description: string           # Optional: Purpose description
     agents:                       # Required: Agents to run in parallel
@@ -204,6 +205,24 @@ parallel:                         # Parallel execution groups
       - agent_name_2
     failure_mode: fail_fast       # fail_fast|continue_on_error|all_or_nothing
     routes:                       # Routes after parallel execution
+      - to: agent_name|$end
+        when: "{{ condition }}"
+
+for_each:                         # Dynamic parallel (for-each) groups
+  - name: string                  # Required: Group identifier
+    type: for_each                # Required: Marks as dynamic parallel
+    description: string           # Optional: Purpose description
+    source: string                # Required: Reference to array (e.g., "finder.output.items")
+    as: string                    # Required: Loop variable name (e.g., "item")
+    max_concurrent: 10            # Optional: Concurrent execution limit (default: 10)
+    failure_mode: fail_fast       # Optional: fail_fast|continue_on_error|all_or_nothing
+    key_by: string                # Optional: Path to extract key (e.g., "item.id")
+    agent:                        # Required: Inline agent definition
+      model: string
+      prompt: "{{ item }}"        # Can use loop variables
+      output:
+        field: { type: string }
+    routes:                       # Routes after for-each execution
       - to: agent_name|$end
         when: "{{ condition }}"
 
@@ -261,6 +280,8 @@ routes:
 See the [`examples/`](./examples/) directory for complete workflow examples:
 
 - [`simple-qa.yaml`](./examples/simple-qa.yaml) - Simple question-answering workflow
+- [`for-each-simple.yaml`](./examples/for-each-simple.yaml) - **Dynamic parallel (for-each) processing**
+- [`kpi-analysis-parallel.yaml`](./examples/kpi-analysis-parallel.yaml) - **Parallel KPI analysis with for-each**
 - [`parallel-research.yaml`](./examples/parallel-research.yaml) - Parallel research from multiple sources
 - [`parallel-validation.yaml`](./examples/parallel-validation.yaml) - Parallel code validation checks
 - [`design-review.yaml`](./examples/design-review.yaml) - Loop pattern with human gate
@@ -268,7 +289,10 @@ See the [`examples/`](./examples/) directory for complete workflow examples:
 - [`design.yaml`](./examples/design.yaml) - Solution design workflow with architect/reviewer loop
 - [`plan.yaml`](./examples/plan.yaml) - Implementation planning workflow with quality gates
 
-For detailed information on parallel execution, see [Parallel Execution Guide](./docs/parallel-execution.md).
+**Documentation:**
+- [Parallel Execution Guide](./docs/parallel-execution.md) - Static parallel groups
+- [Dynamic Parallel (For-Each) Guide](./docs/dynamic-parallel.md) - For-each groups and array processing
+- [Workflow Syntax Reference](./docs/workflow-syntax.md) - Complete YAML syntax
 
 ## Development
 

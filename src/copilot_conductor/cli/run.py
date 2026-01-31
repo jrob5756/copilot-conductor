@@ -261,22 +261,160 @@ def verbose_log_parallel_summary(
     if is_verbose():
         text = Text()
         text.append("└─ ", style="cyan")
-        
+
         if failure_count == 0:
             text.append("✓ ", style="green")
             text.append(group_name, style="green")
-            text.append(f"  ({success_count}/{success_count} succeeded, {total_elapsed:.2f}s)", style="dim")
+            text.append(
+                f"  ({success_count}/{success_count} succeeded, "
+                f"{total_elapsed:.2f}s)",
+                style="dim",
+            )
         else:
             status_parts = []
             # Always show succeeded count even if 0
             status_parts.append(f"{success_count} succeeded")
             status_parts.append(f"{failure_count} failed")
-            
+
             style = "yellow" if success_count > 0 else "red"
             text.append("◆ ", style=style)
             text.append(group_name, style=style)
             text.append(f"  ({', '.join(status_parts)}, {total_elapsed:.2f}s)", style="dim")
-        
+
+        _verbose_console.print(text)
+
+
+def verbose_log_for_each_start(
+    group_name: str,
+    item_count: int,
+    max_concurrent: int,
+    failure_mode: str,
+) -> None:
+    """Log for-each group execution start.
+
+    Args:
+        group_name: Name of the for-each group.
+        item_count: Number of items to process.
+        max_concurrent: Maximum concurrent executions.
+        failure_mode: Failure mode (fail_fast, continue_on_error, all_or_nothing).
+    """
+    from rich.text import Text
+
+    from copilot_conductor.cli.app import is_verbose
+
+    if is_verbose():
+        text = Text()
+        text.append("┌─ ", style="blue")
+        text.append("For-Each: ", style="blue")
+        text.append(group_name, style="blue bold")
+        text.append(
+            f" ({item_count} items, max_concurrent={max_concurrent}, {failure_mode})",
+            style="dim"
+        )
+        _verbose_console.print()
+        _verbose_console.print(text)
+
+
+def verbose_log_for_each_item_complete(
+    item_key: str,
+    elapsed: float,
+    *,
+    tokens: int | None = None,
+) -> None:
+    """Log for-each item completion.
+
+    Args:
+        item_key: Key/index of the item that completed.
+        elapsed: Elapsed time in seconds.
+        tokens: Tokens used (if any).
+    """
+    from rich.text import Text
+
+    from copilot_conductor.cli.app import is_verbose
+
+    if is_verbose():
+        parts = [f"{elapsed:.2f}s"]
+        if tokens:
+            parts.append(f"{tokens} tokens")
+
+        text = Text()
+        text.append("  ✓ ", style="green")
+        text.append(f"[{item_key}]", style="green")
+        text.append(f"  ({', '.join(parts)})", style="dim")
+        _verbose_console.print(text)
+
+
+def verbose_log_for_each_item_failed(
+    item_key: str,
+    elapsed: float,
+    exception_type: str,
+    message: str,
+) -> None:
+    """Log for-each item failure.
+
+    Args:
+        item_key: Key/index of the item that failed.
+        elapsed: Elapsed time in seconds.
+        exception_type: Type of exception.
+        message: Error message.
+    """
+    from rich.text import Text
+
+    from copilot_conductor.cli.app import is_verbose
+
+    if is_verbose():
+        text = Text()
+        text.append("  ✗ ", style="red")
+        text.append(f"[{item_key}]", style="red")
+        text.append(f"  ({elapsed:.2f}s)", style="dim")
+        _verbose_console.print(text)
+        _verbose_console.print(
+            f"      {exception_type}: {message}", style="red dim"
+        )
+
+
+def verbose_log_for_each_summary(
+    group_name: str,
+    success_count: int,
+    failure_count: int,
+    total_elapsed: float,
+) -> None:
+    """Log for-each group execution summary.
+
+    Args:
+        group_name: Name of the for-each group.
+        success_count: Number of items that succeeded.
+        failure_count: Number of items that failed.
+        total_elapsed: Total elapsed time in seconds.
+    """
+    from rich.text import Text
+
+    from copilot_conductor.cli.app import is_verbose
+
+    if is_verbose():
+        text = Text()
+        text.append("└─ ", style="cyan")
+
+        if failure_count == 0:
+            text.append("✓ ", style="green")
+            text.append(group_name, style="green")
+            text.append(
+                f"  ({success_count}/{success_count} succeeded, {total_elapsed:.2f}s)",
+                style="dim"
+            )
+        else:
+            status_parts = []
+            status_parts.append(f"{success_count} succeeded")
+            status_parts.append(f"{failure_count} failed")
+
+            style = "yellow" if success_count > 0 else "red"
+            text.append("◆ ", style=style)
+            text.append(group_name, style=style)
+            text.append(
+                f"  ({', '.join(status_parts)}, {total_elapsed:.2f}s)",
+                style="dim"
+            )
+
         _verbose_console.print(text)
 
 
@@ -567,13 +705,13 @@ def display_execution_plan(plan: ExecutionPlan, console: Console | None = None) 
     for i, step in enumerate(plan.steps, 1):
         routes_str = format_routes(step.routes)
         loop_marker = " [yellow](loop target)[/yellow]" if step.is_loop_target else ""
-        
+
         # Handle parallel groups differently
         if step.agent_type == "parallel_group":
             # Show parallel group with failure mode
             failure_mode_display = step.failure_mode or "fail_fast"
             model_info = f"[dim]{failure_mode_display}[/dim]"
-            
+
             table.add_row(
                 str(i),
                 f"{step.agent_name}{loop_marker}",
@@ -581,7 +719,7 @@ def display_execution_plan(plan: ExecutionPlan, console: Console | None = None) 
                 model_info,
                 routes_str,
             )
-            
+
             # Add a detail row showing which agents execute in parallel
             if step.parallel_agents:
                 agents_display = ", ".join(f"[cyan]{agent}[/cyan]" for agent in step.parallel_agents)
@@ -607,20 +745,20 @@ def display_execution_plan(plan: ExecutionPlan, console: Console | None = None) 
     output_console.print()
     parallel_group_count = sum(1 for s in plan.steps if s.agent_type == "parallel_group")
     total_parallel_agents = sum(
-        len(s.parallel_agents or []) 
-        for s in plan.steps 
+        len(s.parallel_agents or [])
+        for s in plan.steps
         if s.agent_type == "parallel_group"
     )
-    
+
     summary_parts = [
         f"[dim]Total steps:[/dim] {len(plan.steps)}",
         f"[dim]Loop targets:[/dim] {sum(1 for s in plan.steps if s.is_loop_target)}",
     ]
-    
+
     if parallel_group_count > 0:
         summary_parts.append(f"[dim]Parallel groups:[/dim] {parallel_group_count}")
         summary_parts.append(f"[dim]Parallel agents:[/dim] {total_parallel_agents}")
-    
+
     output_console.print(" | ".join(summary_parts))
 
 

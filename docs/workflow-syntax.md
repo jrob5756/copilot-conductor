@@ -107,6 +107,10 @@ agents:
 
 Parallel groups execute multiple agents concurrently for improved performance.
 
+### Static Parallel Groups
+
+Execute a fixed list of agents in parallel:
+
 ```yaml
 parallel:
   - name: string                    # Required: Group identifier
@@ -125,6 +129,64 @@ parallel:
         when: "{{ condition }}"
 ```
 
+### Dynamic Parallel (For-Each) Groups
+
+Execute an agent template for each item in an array determined at runtime:
+
+```yaml
+for_each:
+  - name: string                    # Required: Group identifier
+    type: for_each                  # Required: Marks this as for-each group
+    description: string             # Optional: Purpose description
+    
+    source: string                  # Required: Reference to array in context
+                                    # Example: "finder.output.items"
+    
+    as: string                      # Required: Loop variable name
+                                    # Available in templates as {{ <var> }}
+                                    # Reserved names: workflow, context, output, _index, _key
+    
+    agent:                          # Required: Inline agent definition
+      model: string                 # Optional: Model override
+      prompt: |                     # Required: Template with {{ <var> }}
+        Process {{ item }}
+        Index: {{ _index }}         # Zero-based item index
+        {% if _key is defined %}
+        Key: {{ _key }}             # Extracted key (if key_by specified)
+        {% endif %}
+      output:                       # Optional: Output schema
+        result: { type: string }
+    
+    max_concurrent: 10              # Optional: Concurrent execution limit
+                                    # Default: 10
+    
+    failure_mode: fail_fast         # Optional: Error handling strategy
+                                    # Default: fail_fast
+    
+    key_by: string                  # Optional: Path for dict-based outputs
+                                    # Example: "item.id" → outputs["123"]
+    
+    routes:                         # Optional: Routes after execution
+      - to: next_agent
+```
+
+**Loop Variables:**
+
+For-each agents have access to special loop variables in addition to the custom loop variable defined by `as`:
+
+- `{{ <var_name> }}` - Current item from array (e.g., `{{ kpi }}`, `{{ item }}`)
+- `{{ _index }}` - Zero-based index of current item (0, 1, 2, ...)
+- `{{ _key }}` - Extracted key value (only if `key_by` is specified)
+
+**Reserved Variable Names:**
+
+The following names cannot be used for the `as` parameter:
+- `workflow` - Reserved for workflow inputs
+- `context` - Reserved for execution metadata
+- `output` - Reserved for agent outputs
+- `_index` - Reserved for item index
+- `_key` - Reserved for extracted key
+
 ### Failure Modes
 
 - **`fail_fast`** (recommended): Stop immediately on first agent failure
@@ -134,6 +196,8 @@ parallel:
 ### Accessing Parallel Outputs
 
 Downstream agents can access parallel group outputs using Jinja2 templates:
+
+#### Static Parallel Groups
 
 ```yaml
 agents:
@@ -149,6 +213,40 @@ agents:
 Structure:
 - `{{ group_name.outputs.agent_name.field }}` - Access successful agent output
 - `{{ group_name.errors.agent_name.message }}` - Access error details (if `continue_on_error` mode)
+
+#### For-Each Groups
+
+```yaml
+agents:
+  - name: aggregator
+    prompt: |
+      Process these results:
+      
+      # Index-based access (when key_by not specified)
+      First result: {{ processors.outputs[0].result }}
+      Second result: {{ processors.outputs[1].result }}
+      
+      # Key-based access (when key_by is specified)
+      KPI-123 result: {{ analyzers.outputs["KPI-123"].analysis }}
+      
+      # Iterate over all outputs
+      {% for result in processors.outputs %}
+      - {{ result | json }}
+      {% endfor %}
+      
+      # Access loop metadata
+      Total processed: {{ processors.outputs | length }}
+      
+      # Check for errors
+      {% if processors.errors %}
+      Failed items: {{ processors.errors | length }}
+      {% endif %}
+```
+
+Structure:
+- **Without `key_by`**: `{{ group_name.outputs[index].field }}` - Array access
+- **With `key_by`**: `{{ group_name.outputs["key"].field }}` - Dict access
+- `{{ group_name.errors }}` - Dict of failed items (if `continue_on_error` or `all_or_nothing`)
 
 ## Routes
 
