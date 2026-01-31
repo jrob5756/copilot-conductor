@@ -113,13 +113,13 @@ if TYPE_CHECKING:
 @dataclass
 class ParallelAgentError:
     """Error information from a failed parallel agent execution.
-    
+
     Attributes:
         agent_name: Name of the agent that failed.
         exception_type: Type of the exception (e.g., "ValidationError").
         message: Error message.
         suggestion: Optional suggestion for fixing the error.
-    
+
     Example:
         error = ParallelAgentError(
             agent_name="validator",
@@ -128,7 +128,7 @@ class ParallelAgentError:
             suggestion="Ensure all required fields are present"
         )
     """
-    
+
     agent_name: str
     exception_type: str
     message: str
@@ -138,11 +138,11 @@ class ParallelAgentError:
 @dataclass
 class ParallelGroupOutput:
     """Aggregated output from a parallel group execution.
-    
+
     Attributes:
         outputs: Dictionary mapping successful agent names to their outputs.
         errors: Dictionary mapping failed agent names to their errors.
-    
+
     Example:
         output = ParallelGroupOutput(
             outputs={"agent1": {"result": "success"}, "agent2": {"value": 42}},
@@ -150,7 +150,7 @@ class ParallelGroupOutput:
         )
         # Access via: output.outputs["agent1"]["result"]
     """
-    
+
     outputs: dict[str, Any] = field(default_factory=dict)
     errors: dict[str, ParallelAgentError] = field(default_factory=dict)
 
@@ -197,7 +197,7 @@ class ExecutionStep:
 
     parallel_agents: list[str] | None = None
     """For parallel groups, list of agent names that execute in parallel."""
-    
+
     failure_mode: str | None = None
     """For parallel groups, the failure handling mode."""
 
@@ -313,31 +313,32 @@ class WorkflowEngine:
                     # Try to find agent or parallel group
                     agent = self._find_agent(current_agent_name)
                     parallel_group = self._find_parallel_group(current_agent_name)
-                    
+
                     if agent is None and parallel_group is None:
                         raise ExecutionError(
                             f"Agent or parallel group not found: {current_agent_name}",
                             suggestion=f"Ensure '{current_agent_name}' is defined in the workflow",
                         )
-                    
+
                     # Handle parallel group execution
                     if parallel_group is not None:
                         # Check iteration limit for all parallel agents before executing
                         self.limits.check_parallel_group_iteration(
                             parallel_group.name, len(parallel_group.agents)
                         )
-                        
+
                         # Verbose: Log parallel group execution start
                         iteration = self.limits.current_iteration + 1
                         _verbose_log(
                             f"[{iteration}] Executing parallel group: {parallel_group.name} "
-                            f"({len(parallel_group.agents)} agents, {parallel_group.failure_mode} mode)",
+                            f"({len(parallel_group.agents)} agents, "
+                            f"{parallel_group.failure_mode} mode)",
                             style="bold cyan"
                         )
-                        
+
                         # Trim context if max_tokens is configured
                         self._trim_context_if_needed()
-                        
+
                         # Execute parallel group with timeout enforcement
                         _group_start = _time.time()
                         parallel_output = await self.limits.wait_for_with_timeout(
@@ -345,13 +346,13 @@ class WorkflowEngine:
                             operation_name=f"parallel group '{parallel_group.name}'"
                         )
                         _group_elapsed = _time.time() - _group_start
-                        
+
                         # Verbose: Log parallel group completion
                         _verbose_log_timing(
                             f"Parallel group '{parallel_group.name}' completed",
                             _group_elapsed
                         )
-                        
+
                         # Store parallel group output in context
                         # Format: {outputs: {agent1: {...}, agent2: {...}}, errors: {agent1: {...}}}
                         parallel_output_dict = {
@@ -367,26 +368,28 @@ class WorkflowEngine:
                             },
                         }
                         self.context.store(parallel_group.name, parallel_output_dict)
-                        
+
                         # Record execution: count all parallel agents that executed
                         # (both successful and failed agents count toward iteration limit)
                         agent_count = len(parallel_group.agents)
                         self.limits.record_execution(parallel_group.name, count=agent_count)
-                        
+
                         # Check timeout after parallel group
                         self.limits.check_timeout()
-                        
+
                         # Evaluate routes from parallel group
-                        route_result = self._evaluate_parallel_routes(parallel_group, parallel_output_dict)
-                        
+                        route_result = self._evaluate_parallel_routes(
+                            parallel_group, parallel_output_dict
+                        )
+
                         # Verbose: Log routing decision
                         _verbose_log_route(route_result.target)
-                        
+
                         if route_result.target == "$end":
                             result = self._build_final_output(route_result.output_transform)
                             self._execute_hook("on_complete", result=result)
                             return result
-                        
+
                         current_agent_name = route_result.target
 
                     # Handle regular agent execution
@@ -611,6 +614,90 @@ class WorkflowEngine:
         """
         return next((p for p in self.config.parallel if p.name == name), None)
 
+    def _resolve_array_reference(self, source: str) -> list[Any]:
+        """Resolve a source reference to a runtime array from workflow context.
+
+        Navigates dotted path notation to extract an array from agent outputs.
+
+        Example:
+            source = "finder.output.kpis"
+            1. Lookup agent_outputs["finder"]
+            2. Navigate to ["output"]["kpis"]
+            3. Return the array value
+
+        Args:
+            source: Dotted path reference (e.g., 'finder.output.kpis').
+
+        Returns:
+            The resolved array (list).
+
+        Raises:
+            ExecutionError: If path doesn't exist, value is not an array.
+        """
+        parts = source.split(".")
+
+        if len(parts) < 3:
+            raise ExecutionError(
+                f"Invalid source reference format: '{source}'",
+                suggestion="Source must have at least 3 parts (e.g., 'agent_name.output.field')"
+            )
+
+        # First part is the agent name
+        agent_name = parts[0]
+
+        # Check if agent output exists
+        if agent_name not in self.context.agent_outputs:
+            # Provide helpful suggestion about execution order
+            executed = list(self.context.agent_outputs.keys())
+            if executed:
+                raise ExecutionError(
+                    f"Agent '{agent_name}' output not found for source '{source}'",
+                    suggestion=f"Agent '{agent_name}' must execute before this for-each group. "
+                               f"Executed agents so far: {executed}"
+                )
+            else:
+                raise ExecutionError(
+                    f"Agent '{agent_name}' output not found for source '{source}'",
+                    suggestion=f"Agent '{agent_name}' must execute before this for-each group"
+                )
+
+        # Navigate through the dotted path
+        current = self.context.agent_outputs[agent_name]
+        path_traversed = [agent_name]
+
+        for part in parts[1:]:
+            path_traversed.append(part)
+
+            if not isinstance(current, dict):
+                parent_path = '.'.join(path_traversed[:-1])
+                raise ExecutionError(
+                    f"Cannot navigate to '{part}' in source '{source}': "
+                    f"'{parent_path}' is not a dictionary (type: {type(current).__name__})",
+                    suggestion=f"Check that '{parent_path}' returns a dictionary structure"
+                )
+
+            if part not in current:
+                parent_path = '.'.join(path_traversed[:-1])
+                available_keys = list(current.keys()) if isinstance(current, dict) else []
+                raise ExecutionError(
+                    f"Field '{part}' not found in '{parent_path}' for source '{source}'",
+                    suggestion=(
+                        f"Available keys: {available_keys}" if available_keys
+                        else f"Check the output structure of '{agent_name}'"
+                    )
+                )
+
+            current = current[part]
+
+        # Validate that the final value is a list or tuple
+        if not isinstance(current, (list, tuple)):
+            raise ExecutionError(
+                f"Source '{source}' resolved to {type(current).__name__}, expected list or tuple",
+                suggestion=f"Ensure '{source}' returns an array/list from the agent output"
+            )
+
+        return current
+
     async def _execute_parallel_group(
         self, parallel_group: ParallelGroup
     ) -> ParallelGroupOutput:
@@ -636,10 +723,10 @@ class WorkflowEngine:
         """
         # Verbose: Log parallel group start
         _verbose_log_parallel_start(parallel_group.name, len(parallel_group.agents))
-        
+
         # Track timing for summary
         _group_start = _time.time()
-        
+
         # Create immutable context snapshot
         context_snapshot = copy.deepcopy(self.context)
 
@@ -662,7 +749,7 @@ class WorkflowEngine:
                 Tuple of (agent_name, output_content, elapsed, model, tokens)
 
             Raises:
-                Exception: Any exception from agent execution (wrapped with agent context and timing)
+                Exception: Any exception from agent execution (wrapped).
             """
             _agent_start = _time.time()
             try:
@@ -690,7 +777,7 @@ class WorkflowEngine:
                 return (agent.name, output.content)
             except Exception as e:
                 _agent_elapsed = _time.time() - _agent_start
-                
+
                 # Verbose: Log agent failure
                 _verbose_log_parallel_agent_failed(
                     agent.name,
@@ -698,7 +785,7 @@ class WorkflowEngine:
                     type(e).__name__,
                     str(e),
                 )
-                
+
                 # Wrap exception with agent name and timing for better error reporting
                 if not hasattr(e, '_parallel_agent_name'):
                     e._parallel_agent_name = agent.name  # type: ignore
@@ -724,13 +811,19 @@ class WorkflowEngine:
                 # Extract agent name and exception type from wrapped exception
                 agent_name = getattr(e, '_parallel_agent_name', 'unknown')
                 exception_type = type(e).__name__
-                
+
                 # Create error message with exception type and mode
                 if agent_name != "unknown":
-                    error_msg = f"Agent '{agent_name}' in parallel group '{parallel_group.name}' failed (fail_fast mode): {exception_type}: {str(e)}"
+                    error_msg = (
+                        f"Agent '{agent_name}' in parallel group '{parallel_group.name}' "
+                        f"failed (fail_fast mode): {exception_type}: {str(e)}"
+                    )
                 else:
-                    error_msg = f"Parallel group '{parallel_group.name}' failed (fail_fast mode): {exception_type}: {str(e)}"
-                
+                    error_msg = (
+                        f"Parallel group '{parallel_group.name}' failed (fail_fast mode): "
+                        f"{exception_type}: {str(e)}"
+                    )
+
                 suggestion = getattr(e, "suggestion", None)
                 raise ExecutionError(
                     error_msg,
@@ -756,7 +849,7 @@ class WorkflowEngine:
             # Separate successes and failures
             for i, result in enumerate(results):
                 agent_name = agent_names[i]
-                
+
                 if isinstance(result, Exception):
                     # Agent failed - store error
                     parallel_output.errors[agent_name] = ParallelAgentError(
@@ -806,7 +899,7 @@ class WorkflowEngine:
             # Separate successes and failures
             for i, result in enumerate(results):
                 agent_name = agent_names[i]
-                
+
                 if isinstance(result, Exception):
                     # Agent failed - store error
                     parallel_output.errors[agent_name] = ParallelAgentError(
@@ -983,14 +1076,14 @@ class WorkflowEngine:
             # Check if this name corresponds to a parallel group
             if self._find_parallel_group(name) is not None:
                 parallel_groups_executed.append(name)
-        
+
         # Count individual parallel agents that executed
         parallel_agents_count = 0
         for group_name in parallel_groups_executed:
             parallel_group = self._find_parallel_group(group_name)
             if parallel_group is not None:
                 parallel_agents_count += len(parallel_group.agents)
-        
+
         summary = {
             "iterations": self.limits.current_iteration,
             "agents_executed": self.limits.execution_history.copy(),
@@ -999,12 +1092,12 @@ class WorkflowEngine:
             "max_iterations": self.limits.max_iterations,
             "timeout_seconds": self.limits.timeout_seconds,
         }
-        
+
         # Add parallel group stats if any were executed
         if parallel_groups_executed:
             summary["parallel_groups_executed"] = parallel_groups_executed
             summary["parallel_agents_count"] = parallel_agents_count
-        
+
         return summary
 
     def build_execution_plan(self) -> ExecutionPlan:
@@ -1065,7 +1158,7 @@ class WorkflowEngine:
         # Try to find agent first, then parallel group
         agent = self._find_agent(agent_name)
         parallel_group = self._find_parallel_group(agent_name)
-        
+
         if agent is None and parallel_group is None:
             return
 
@@ -1082,7 +1175,7 @@ class WorkflowEngine:
         if parallel_group is not None:
             routes_info: list[dict[str, Any]] = []
             route_targets: list[str] = []
-            
+
             if parallel_group.routes:
                 for route in parallel_group.routes:
                     routes_info.append({
@@ -1091,7 +1184,7 @@ class WorkflowEngine:
                         "is_conditional": route.when is not None,
                     })
                     route_targets.append(route.to)
-            
+
             # Build step for parallel group
             step = ExecutionStep(
                 agent_name=parallel_group.name,
@@ -1103,12 +1196,12 @@ class WorkflowEngine:
                 failure_mode=parallel_group.failure_mode,
             )
             plan.steps.append(step)
-            
+
             # Trace routes from parallel group
             for target in route_targets:
                 if target != "$end":
                     self._trace_path(target, plan, visited, loop_targets)
-            
+
             return
 
         # Handle regular agent

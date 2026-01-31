@@ -980,24 +980,26 @@ def _find_for_each_group(self, name: str) -> ForEachDef | None:
 ### Epic 2: Array Resolution Logic
 **Goal**: Implement runtime array resolution from WorkflowContext
 
+**Status**: DONE
+
 **Prerequisites**: Epic 1
 
 **Tasks**:
 | Task ID | Type | Description | Files | Status |
 |---------|------|-------------|-------|--------|
-| E2-T1 | IMPL | Implement `_resolve_array_reference()` method | `src/copilot_conductor/engine/workflow.py` | TO DO |
-| E2-T2 | IMPL | Add dotted path navigation logic | `src/copilot_conductor/engine/workflow.py` | TO DO |
-| E2-T3 | IMPL | Add type validation (ensure resolved value is list) | `src/copilot_conductor/engine/workflow.py` | TO DO |
-| E2-T4 | IMPL | Add error handling with clear suggestions | `src/copilot_conductor/engine/workflow.py` | TO DO |
-| E2-T5 | TEST | Unit tests for successful resolution | `tests/test_engine/test_workflow.py` | TO DO |
-| E2-T6 | TEST | Test error cases (missing path, wrong type, nested access) | `tests/test_engine/test_workflow.py` | TO DO |
-| E2-T7 | TEST | Test empty array handling | `tests/test_engine/test_workflow.py` | TO DO |
+| E2-T1 | IMPL | Implement `_resolve_array_reference()` method | `src/copilot_conductor/engine/workflow.py` | DONE |
+| E2-T2 | IMPL | Add dotted path navigation logic | `src/copilot_conductor/engine/workflow.py` | DONE |
+| E2-T3 | IMPL | Add type validation (ensure resolved value is list) | `src/copilot_conductor/engine/workflow.py` | DONE |
+| E2-T4 | IMPL | Add error handling with clear suggestions | `src/copilot_conductor/engine/workflow.py` | DONE |
+| E2-T5 | TEST | Unit tests for successful resolution | `tests/test_engine/test_workflow.py` | DONE |
+| E2-T6 | TEST | Test error cases (missing path, wrong type, nested access) | `tests/test_engine/test_workflow.py` | DONE |
+| E2-T7 | TEST | Test empty array handling | `tests/test_engine/test_workflow.py` | DONE |
 
 **Acceptance Criteria**:
-- [ ] `_resolve_array_reference()` resolves valid paths
-- [ ] Clear error messages for invalid paths
-- [ ] Type validation catches non-array values
-- [ ] All unit tests pass
+- [x] `_resolve_array_reference()` resolves valid paths
+- [x] Clear error messages for invalid paths
+- [x] Type validation catches non-array values
+- [x] All unit tests pass
 
 ---
 

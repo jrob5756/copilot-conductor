@@ -1319,7 +1319,7 @@ class TestExecutionPlanWithParallelGroups:
         """Test execution plan includes parallel groups."""
         from unittest.mock import MagicMock
         mock_provider = MagicMock()
-        
+
         workflow = WorkflowConfig(
             workflow=WorkflowDef(
                 name="plan-with-parallel",
@@ -1366,14 +1366,14 @@ class TestExecutionPlanWithParallelGroups:
 
         # Should have 3 steps: planner, validators (parallel group), aggregator
         assert len(plan.steps) == 3
-        
+
         # Check planner step
         planner_step = plan.steps[0]
         assert planner_step.agent_name == "planner"
         assert planner_step.agent_type == "agent"
         assert len(planner_step.routes) == 1
         assert planner_step.routes[0]["to"] == "validators"
-        
+
         # Check validators parallel group step
         validators_step = plan.steps[1]
         assert validators_step.agent_name == "validators"
@@ -1382,7 +1382,7 @@ class TestExecutionPlanWithParallelGroups:
         assert validators_step.parallel_agents == ["validator1", "validator2"]
         assert len(validators_step.routes) == 1
         assert validators_step.routes[0]["to"] == "aggregator"
-        
+
         # Check aggregator step
         aggregator_step = plan.steps[2]
         assert aggregator_step.agent_name == "aggregator"
@@ -1392,7 +1392,7 @@ class TestExecutionPlanWithParallelGroups:
         """Test execution plan with parallel group as entry point."""
         from unittest.mock import MagicMock
         mock_provider = MagicMock()
-        
+
         workflow = WorkflowConfig(
             workflow=WorkflowDef(
                 name="parallel-entry",
@@ -1430,3 +1430,223 @@ class TestExecutionPlanWithParallelGroups:
         assert plan.steps[0].agent_name == "parallel_tasks"
         assert plan.steps[0].agent_type == "parallel_group"
         assert plan.steps[0].parallel_agents == ["task1", "task2"]
+
+
+class TestResolveArrayReference:
+    """Tests for _resolve_array_reference() method."""
+
+    @pytest.fixture
+    def workflow_engine_with_context(self) -> WorkflowEngine:
+        """Create a WorkflowEngine with pre-populated context."""
+        from unittest.mock import MagicMock
+        mock_provider = MagicMock()
+
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="test-workflow",
+                entry_point="finder",
+                runtime=RuntimeConfig(provider="copilot"),
+                context=ContextConfig(mode="accumulate"),
+                limits=LimitsConfig(max_iterations=10),
+            ),
+            agents=[
+                AgentDef(
+                    name="finder",
+                    model="gpt-4",
+                    prompt="Find items",
+                    output={"items": OutputField(type="array")},
+                ),
+            ],
+        )
+        engine = WorkflowEngine(config, mock_provider)
+
+        # Populate context with test data
+        engine.context.store("finder", {
+            "output": {
+                "kpis": [
+                    {"kpi_id": "K1", "name": "Revenue"},
+                    {"kpi_id": "K2", "name": "Profit"},
+                    {"kpi_id": "K3", "name": "Growth"},
+                ],
+                "metadata": {
+                    "total": 3
+                }
+            }
+        })
+
+        engine.context.store("nested_agent", {
+            "output": {
+                "data": {
+                    "items": ["item1", "item2", "item3"],
+                    "count": 3
+                }
+            }
+        })
+
+        return engine
+
+    def test_resolve_valid_array_reference(self, workflow_engine_with_context: WorkflowEngine):
+        """Test successful array resolution with valid path."""
+        result = workflow_engine_with_context._resolve_array_reference("finder.output.kpis")
+
+        assert isinstance(result, list)
+        assert len(result) == 3
+        assert result[0]["kpi_id"] == "K1"
+        assert result[1]["kpi_id"] == "K2"
+        assert result[2]["kpi_id"] == "K3"
+
+    def test_resolve_nested_array_reference(self, workflow_engine_with_context: WorkflowEngine):
+        """Test array resolution with deeper nesting."""
+        result = workflow_engine_with_context._resolve_array_reference(
+            "nested_agent.output.data.items"
+        )
+
+        assert isinstance(result, list)
+        assert len(result) == 3
+        assert result == ["item1", "item2", "item3"]
+
+    def test_resolve_empty_array(self, workflow_engine_with_context: WorkflowEngine):
+        """Test resolution of empty array (should succeed)."""
+        # Add agent with empty array output
+        workflow_engine_with_context.context.store("empty_agent", {
+            "output": {
+                "items": []
+            }
+        })
+
+        result = workflow_engine_with_context._resolve_array_reference("empty_agent.output.items")
+
+        assert isinstance(result, list)
+        assert len(result) == 0
+
+    def test_resolve_invalid_format_too_short(self, workflow_engine_with_context: WorkflowEngine):
+        """Test error for source with less than 3 parts."""
+        with pytest.raises(ExecutionError) as exc_info:
+            workflow_engine_with_context._resolve_array_reference("finder.output")
+
+        assert "Invalid source reference format: 'finder.output'" in str(exc_info.value)
+        assert "at least 3 parts" in str(exc_info.value.suggestion)
+
+    def test_resolve_agent_not_found(self, workflow_engine_with_context: WorkflowEngine):
+        """Test error when agent hasn't executed yet."""
+        with pytest.raises(ExecutionError) as exc_info:
+            workflow_engine_with_context._resolve_array_reference("nonexistent.output.items")
+
+        assert "Agent 'nonexistent' output not found" in str(exc_info.value)
+        assert "must execute before this for-each group" in str(exc_info.value.suggestion)
+        assert "finder" in str(exc_info.value.suggestion)  # Shows executed agents
+
+    def test_resolve_agent_not_found_no_executed_agents(self):
+        """Test error when no agents have executed yet."""
+        from unittest.mock import MagicMock
+        mock_provider = MagicMock()
+
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="test-workflow",
+                entry_point="finder",
+                runtime=RuntimeConfig(provider="copilot"),
+                context=ContextConfig(mode="accumulate"),
+                limits=LimitsConfig(max_iterations=10),
+            ),
+            agents=[
+                AgentDef(
+                    name="finder",
+                    model="gpt-4",
+                    prompt="Find items",
+                ),
+            ],
+        )
+        engine = WorkflowEngine(config, mock_provider)
+
+        with pytest.raises(ExecutionError) as exc_info:
+            engine._resolve_array_reference("finder.output.items")
+
+        assert "Agent 'finder' output not found" in str(exc_info.value)
+        assert "must execute before this for-each group" in str(exc_info.value.suggestion)
+
+    def test_resolve_field_not_found(self, workflow_engine_with_context: WorkflowEngine):
+        """Test error when field doesn't exist in agent output."""
+        with pytest.raises(ExecutionError) as exc_info:
+            workflow_engine_with_context._resolve_array_reference("finder.output.nonexistent")
+
+        assert "Field 'nonexistent' not found" in str(exc_info.value)
+        assert "Available keys: ['kpis', 'metadata']" in str(exc_info.value.suggestion)
+
+    def test_resolve_nested_field_not_found(self, workflow_engine_with_context: WorkflowEngine):
+        """Test error when nested field doesn't exist."""
+        with pytest.raises(ExecutionError) as exc_info:
+            workflow_engine_with_context._resolve_array_reference("nested_agent.output.data.missing")
+
+        assert "Field 'missing' not found in 'nested_agent.output.data'" in str(exc_info.value)
+        assert "Available keys:" in str(exc_info.value.suggestion)
+
+    def test_resolve_wrong_type_not_dict(self, workflow_engine_with_context: WorkflowEngine):
+        """Test error when trying to navigate through non-dict value."""
+        # Add agent with string output
+        workflow_engine_with_context.context.store("string_agent", {
+            "output": {
+                "result": "just a string"
+            }
+        })
+
+        with pytest.raises(ExecutionError) as exc_info:
+            workflow_engine_with_context._resolve_array_reference("string_agent.output.result.items")
+
+        assert "Cannot navigate to 'items'" in str(exc_info.value)
+        assert "is not a dictionary (type: str)" in str(exc_info.value)
+
+    def test_resolve_wrong_type_not_list(self, workflow_engine_with_context: WorkflowEngine):
+        """Test error when resolved value is not a list."""
+        with pytest.raises(ExecutionError) as exc_info:
+            workflow_engine_with_context._resolve_array_reference("finder.output.metadata")
+
+        assert "resolved to dict, expected list" in str(exc_info.value)
+        assert (
+            "Ensure 'finder.output.metadata' returns an array/list"
+            in str(exc_info.value.suggestion)
+        )
+
+    def test_resolve_wrong_type_string(self, workflow_engine_with_context: WorkflowEngine):
+        """Test error when resolved value is a string instead of list."""
+        workflow_engine_with_context.context.store("text_agent", {
+            "output": {
+                "text": "not an array"
+            }
+        })
+
+        with pytest.raises(ExecutionError) as exc_info:
+            workflow_engine_with_context._resolve_array_reference("text_agent.output.text")
+
+        assert "resolved to str, expected list" in str(exc_info.value)
+
+    def test_resolve_wrong_type_number(self, workflow_engine_with_context: WorkflowEngine):
+        """Test error when resolved value is a number instead of list."""
+        workflow_engine_with_context.context.store("number_agent", {
+            "output": {
+                "count": 42
+            }
+        })
+
+        with pytest.raises(ExecutionError) as exc_info:
+            workflow_engine_with_context._resolve_array_reference("number_agent.output.count")
+
+        assert "resolved to int, expected list" in str(exc_info.value)
+
+    def test_resolve_array_reference_accepts_tuple(
+        self, workflow_engine_with_context: WorkflowEngine
+    ):
+        """Test that array resolution accepts tuples as valid array types."""
+        workflow_engine_with_context.context.store("tuple_agent", {
+            "output": {
+                "items": ("item1", "item2", "item3")
+            }
+        })
+
+        result = workflow_engine_with_context._resolve_array_reference(
+            "tuple_agent.output.items"
+        )
+
+        assert isinstance(result, tuple)
+        assert len(result) == 3
+        assert result == ("item1", "item2", "item3")
