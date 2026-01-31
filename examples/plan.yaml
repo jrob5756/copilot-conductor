@@ -41,7 +41,7 @@ workflow:
     mode: accumulate
 
   limits:
-    max_iterations: 10
+    max_iterations: 50
     # timeout_seconds is unlimited by default
 
 agents:
@@ -129,7 +129,7 @@ agents:
       For each epic, provide:
       - **Goal**: What this epic achieves
       - **Prerequisites**: Dependencies on other epics
-      - **Tasks**: Table with Task ID, Type (IMPL/TEST), Description, Files, Estimate (S/M/L)
+      - **Tasks**: Table with Task ID, Type (IMPL/TEST), Description, Files, and Status (TO DO/IN PROGRESS/DONE)
       - **Acceptance Criteria**: Checkboxes for completion
 
       Keep epics focused—ideally affecting no more than 7 files and completable within 1-2 weeks.

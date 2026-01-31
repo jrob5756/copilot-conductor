@@ -113,7 +113,12 @@ agents:
          - Identify integration points and potential conflicts
          - Document the coding style, naming conventions, and patterns used
 
-      4. **Implement the Changes**
+      4. **Update Plan Status to IN PROGRESS**
+         - Open the plan document and update the current epic's status to "IN PROGRESS"
+         - Update any task statuses within the epic from "TO DO" to "IN PROGRESS"
+         - Save the plan document with these status changes
+
+      5. **Implement the Changes**
          For the current epic:
          - Create or modify files as needed
          - Follow existing code patterns and conventions exactly
@@ -121,12 +126,12 @@ agents:
          - Add proper error handling and logging
          - Write clean, well-documented code
 
-      5. **Create Tests**
+      6. **Create Tests**
          - Write comprehensive tests for all new functionality
          - Ensure tests cover edge cases and error conditions
          - Run tests to verify they pass
 
-      6. **Document Your Changes**
+      7. **Document Your Changes**
          - Add inline comments where helpful
          - Update any relevant documentation
 
@@ -299,8 +304,26 @@ agents:
          - Example: "EPIC-001: Implement user authentication flow"
 
       2. **Update Plan Document**
-         - If the plan is a file, update it to mark this epic as DONE
-         - Add completion date and any relevant notes
+         Open the plan document and make the following updates:
+
+         a. **Update Epic Status**
+            - Change the epic's status from "IN PROGRESS" to "DONE"
+
+         b. **Update Task Statuses**
+            - For each task in the epic, update the status field from "IN PROGRESS" or "TO DO" to "DONE"
+            - Example: Change `Status: IN PROGRESS` to `Status: DONE`
+            - Example: Change `Status: TO DO` to `Status: DONE`
+
+         c. **Check Acceptance Criteria Checkboxes**
+            - For each acceptance criterion that has been satisfied, check the checkbox
+            - Change `- [ ]` to `- [x]` for completed criteria
+            - Only check boxes for criteria that were actually implemented and verified
+
+         d. **Add Completion Notes**
+            - Add completion date if there's a field for it
+            - Add any relevant implementation notes
+
+         Save the updated plan document.
 
       3. **Determine Next Steps**
          - Check if there are more epics in scope
