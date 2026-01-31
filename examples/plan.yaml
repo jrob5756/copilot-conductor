@@ -150,54 +150,12 @@ agents:
       Tests should be created alongside implementation tasks.
 
       Be thorough, specific, and ensure the design is actionable.
-    output:
-      design_document:
-        type: string
-        description: The complete solution design document in markdown format
-      problem_statement:
-        type: string
-        description: Brief summary of the problem being solved
-      key_components:
-        type: array
-        description: List of main components in the solution
-      risk_level:
-        type: string
-        description: Overall risk level (LOW, MEDIUM, HIGH)
-      epics:
-        type: array
-        description: List of epic titles/IDs in the implementation plan
-      total_tasks:
-        type: number
-        description: Total number of tasks across all epics
-      estimated_effort:
-        type: string
-        description: Overall effort estimate (e.g., "2-3 weeks")
-    routes:
-      - to: saver
 
-  - name: saver
-    description: Saves the design document to a file
-    model: sonnet
-    input:
-      - workflow.input.purpose
-      - architect.output
-    system_prompt: |
-      You are a document saver agent. Your only job is to save the design 
-      document to an appropriate file path based on the naming conventions provided.
-      
-      CRITICAL: After saving the file, you MUST explicitly state the structured output:
-      - file_path: The exact path where you saved the document
-      - success: true if saved successfully, false otherwise
-    prompt: |
-      Save the following design document to a file.
+      ---
 
-      **Original Purpose Input:**
-      {{ workflow.input.purpose }}
+      ## SAVING THE DOCUMENT
 
-      **Design Document:**
-      {{ architect.output.design_document }}
-
-      ## FILE NAMING CONVENTION
+      After creating the design document, save it to a file using the following naming convention:
 
       - If the purpose input references a document path, derive the name from that document and save it in the same directory. Examples:
         - `upgrade-database-v2.brainstorm.md` -> `upgrade-database-v2.plan.md`
@@ -208,21 +166,10 @@ agents:
         - Examples:
           - `upgrade-database-v2.plan.md`
           - `add-user-authentication.plan.md`
-
-      ## INSTRUCTIONS
-
-      1. Determine the appropriate file path based on the naming convention
-      2. Save the design document to that file path
-      3. After saving, you MUST explicitly return your output as:
-         - file_path: "<the exact path where you saved the file>"
-         - success: true
     output:
       file_path:
         type: string
-        description: The path where the document was saved
-      success:
-        type: boolean
-        description: Whether the document was saved successfully
+        description: The path where the design document was saved
     routes:
       - to: reviewer
 
@@ -231,8 +178,7 @@ agents:
     model: opus-4.5
     input:
       - workflow.input.purpose
-      - saver.output.file_path
-      - architect.output
+      - architect.output.file_path
     system_prompt: |
       You are a Reviewer agent specializing in design and implementation plan review.
       Your task is to ensure designs are technically sound and plans are comprehensive, 
@@ -245,21 +191,10 @@ agents:
       {{ workflow.input.purpose }}
 
       **Design Document Location:**
-      {{ saver.output.file_path }}
+      {{ architect.output.file_path }}
 
       Read the design document from the file path above and review it.
-
-      **Key Components Identified:**
-      {% for component in architect.output.key_components %}
-      - {{ component }}
-      {% endfor %}
-
-      **Risk Level:** {{ architect.output.risk_level }}
-
-      **Epics Identified:** {{ architect.output.epics | json }}
-      **Total Tasks:** {{ architect.output.total_tasks }}
-      **Estimated Effort:** {{ architect.output.estimated_effort }}
-
+      
       ---
       
       Perform research to validate the technical accuracy of the design.
@@ -307,12 +242,6 @@ agents:
 
 output:
   purpose: "{{ workflow.input.purpose }}"
-  plan_file: "{{ saver.output.file_path }}"
-  problem_statement: "{{ architect.output.problem_statement }}"
-  key_components: "{{ architect.output.key_components | json }}"
-  risk_level: "{{ architect.output.risk_level }}"
-  epics: "{{ architect.output.epics | json }}"
-  total_tasks: "{{ architect.output.total_tasks }}"
-  estimated_effort: "{{ architect.output.estimated_effort }}"
+  plan_file: "{{ architect.output.file_path }}"
   review_score: "{{ reviewer.output.score }}"
   iterations: "{{ context.iteration }}"
