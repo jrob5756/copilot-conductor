@@ -176,24 +176,27 @@ class LifecycleHookResult:
 class ExecutionStep:
     """A single step in the execution plan.
 
-    Represents an agent that will be executed during workflow execution,
+    Represents an agent or parallel group that will be executed during workflow execution,
     along with its configuration and possible routing destinations.
     """
 
     agent_name: str
-    """Name of the agent."""
+    """Name of the agent or parallel group."""
 
     agent_type: str
-    """Type: 'agent' or 'human_gate'."""
+    """Type: 'agent', 'human_gate', or 'parallel_group'."""
 
     model: str | None
-    """Model used by this agent."""
+    """Model used by this agent (None for parallel groups)."""
 
     routes: list[dict[str, Any]] = field(default_factory=list)
-    """Possible routes from this agent."""
+    """Possible routes from this agent or parallel group."""
 
     is_loop_target: bool = False
     """True if this agent could be a loop-back target."""
+
+    parallel_agents: list[str] | None = None
+    """For parallel groups, list of agent names that execute in parallel."""
 
 
 @dataclass
@@ -363,16 +366,18 @@ class WorkflowEngine:
                         # Check timeout after parallel group
                         self.limits.check_timeout()
                         
-                        # EPIC-3 LIMITATION: Parallel groups are terminal nodes
-                        # Routing from parallel groups will be implemented in Epic 6
-                        _verbose_log(
-                            f"Parallel group '{parallel_group.name}' completed as terminal node "
-                            "(routing not yet supported)",
-                            style="dim"
-                        )
-                        result = self._build_final_output()
-                        self._execute_hook("on_complete", result=result)
-                        return result
+                        # Evaluate routes from parallel group
+                        route_result = self._evaluate_parallel_routes(parallel_group, parallel_output_dict)
+                        
+                        # Verbose: Log routing decision
+                        _verbose_log_route(route_result.target)
+                        
+                        if route_result.target == "$end":
+                            result = self._build_final_output(route_result.output_transform)
+                            self._execute_hook("on_complete", result=result)
+                            return result
+                        
+                        current_agent_name = route_result.target
 
                     # Handle regular agent execution
                     if agent is not None:
@@ -873,6 +878,30 @@ class WorkflowEngine:
 
         return self.router.evaluate(agent.routes, output, eval_context)
 
+    def _evaluate_parallel_routes(
+        self, parallel_group: ParallelGroup, output: dict[str, Any]
+    ) -> RouteResult:
+        """Evaluate routes from a parallel group using the Router.
+
+        Uses the Router to evaluate routing rules and determine the next agent
+        after a parallel group completes.
+
+        Args:
+            parallel_group: The parallel group definition.
+            output: The parallel group's aggregated output.
+
+        Returns:
+            RouteResult with target and optional output transform.
+        """
+        if not parallel_group.routes:
+            # No routes defined - default to $end
+            return RouteResult(target="$end")
+
+        # Build context for condition evaluation
+        eval_context = self.context.get_for_template()
+
+        return self.router.evaluate(parallel_group.routes, output, eval_context)
+
     def _build_final_output(
         self, route_output_transform: dict[str, Any] | None = None
     ) -> dict[str, Any]:
@@ -987,22 +1016,25 @@ class WorkflowEngine:
         visited: set[str],
         loop_targets: set[str],
     ) -> None:
-        """Recursively trace execution path from an agent.
+        """Recursively trace execution path from an agent or parallel group.
 
         This method performs a depth-first traversal of the workflow graph,
-        building up the execution plan with all reachable agents.
+        building up the execution plan with all reachable agents and parallel groups.
 
         Args:
-            agent_name: Name of the current agent to trace.
+            agent_name: Name of the current agent or parallel group to trace.
             plan: The execution plan being built.
-            visited: Set of already visited agent names (to detect loops).
-            loop_targets: Set of agents that are targets of loop-back routes.
+            visited: Set of already visited names (to detect loops).
+            loop_targets: Set of names that are targets of loop-back routes.
         """
         if agent_name == "$end":
             return
 
+        # Try to find agent first, then parallel group
         agent = self._find_agent(agent_name)
-        if agent is None:
+        parallel_group = self._find_parallel_group(agent_name)
+        
+        if agent is None and parallel_group is None:
             return
 
         # Check for loop
@@ -1014,40 +1046,74 @@ class WorkflowEngine:
 
         visited.add(agent_name)
 
-        # Get routes from the agent (handle both regular agents and human gates)
-        routes_info: list[dict[str, Any]] = []
-        route_targets: list[str] = []
+        # Handle parallel group
+        if parallel_group is not None:
+            routes_info: list[dict[str, Any]] = []
+            route_targets: list[str] = []
+            
+            if parallel_group.routes:
+                for route in parallel_group.routes:
+                    routes_info.append({
+                        "to": route.to,
+                        "when": route.when,
+                        "is_conditional": route.when is not None,
+                    })
+                    route_targets.append(route.to)
+            
+            # Build step for parallel group
+            step = ExecutionStep(
+                agent_name=parallel_group.name,
+                agent_type="parallel_group",
+                model=None,
+                routes=routes_info,
+                is_loop_target=False,  # Will be updated after traversal
+                parallel_agents=parallel_group.agents.copy(),
+            )
+            plan.steps.append(step)
+            
+            # Trace routes from parallel group
+            for target in route_targets:
+                if target != "$end":
+                    self._trace_path(target, plan, visited, loop_targets)
+            
+            return
 
-        if agent.routes:
-            for route in agent.routes:
-                routes_info.append({
-                    "to": route.to,
-                    "when": route.when,
-                    "is_conditional": route.when is not None,
-                })
-                route_targets.append(route.to)
-        elif agent.options:
-            # Human gate with options
-            for option in agent.options:
-                routes_info.append({
-                    "to": option.route,
-                    "when": f"selection == '{option.value}'",
-                    "is_conditional": True,
-                    "label": option.label,
-                })
-                route_targets.append(option.route)
+        # Handle regular agent
+        if agent is not None:
+            # Get routes from the agent (handle both regular agents and human gates)
+            routes_info = []
+            route_targets = []
 
-        # Build step
-        step = ExecutionStep(
-            agent_name=agent_name,
-            agent_type=agent.type or "agent",
-            model=agent.model,
-            routes=routes_info,
-            is_loop_target=False,  # Will be updated after traversal
-        )
-        plan.steps.append(step)
+            if agent.routes:
+                for route in agent.routes:
+                    routes_info.append({
+                        "to": route.to,
+                        "when": route.when,
+                        "is_conditional": route.when is not None,
+                    })
+                    route_targets.append(route.to)
+            elif agent.options:
+                # Human gate with options
+                for option in agent.options:
+                    routes_info.append({
+                        "to": option.route,
+                        "when": f"selection == '{option.value}'",
+                        "is_conditional": True,
+                        "label": option.label,
+                    })
+                    route_targets.append(option.route)
 
-        # Trace routes
-        for target in route_targets:
-            if target != "$end":
-                self._trace_path(target, plan, visited, loop_targets)
+            # Build step
+            step = ExecutionStep(
+                agent_name=agent_name,
+                agent_type=agent.type or "agent",
+                model=agent.model,
+                routes=routes_info,
+                is_loop_target=False,  # Will be updated after traversal
+            )
+            plan.steps.append(step)
+
+            # Trace routes
+            for target in route_targets:
+                if target != "$end":
+                    self._trace_path(target, plan, visited, loop_targets)

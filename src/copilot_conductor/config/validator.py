@@ -350,6 +350,11 @@ def _validate_parallel_groups(config: WorkflowConfig) -> list[str]:
                     "Human gates cannot be used in parallel groups."
                 )
         
+        # PE-6.2: Validate parallel group route targets
+        all_names = agent_names | parallel_names
+        route_errors = _validate_agent_routes(pg.name, pg.routes, all_names)
+        errors.extend(route_errors)
+        
         # PE-2.4: Validate no cross-agent dependencies within parallel group
         # Check if any agent in the parallel group references another agent in the same group
         pg_agents_set = set(pg.agents)

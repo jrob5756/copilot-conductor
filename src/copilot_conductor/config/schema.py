@@ -124,6 +124,9 @@ class ParallelGroup(BaseModel):
     - all_or_nothing: All agents must succeed or entire group fails
     """
 
+    routes: list[RouteDef] = Field(default_factory=list)
+    """Routing rules evaluated in order after parallel group execution."""
+
     @field_validator("agents")
     @classmethod
     def validate_agents_count(cls, v: list[str]) -> list[str]:

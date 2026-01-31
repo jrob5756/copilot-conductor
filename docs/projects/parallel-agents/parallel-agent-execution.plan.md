@@ -561,27 +561,29 @@ None.
 
 ### Epic 6: Routing Integration
 
+**Status**: DONE
+
 **Goal**: Support routing to/from parallel groups in workflow graph.
 
 **Prerequisites**: Epic 3
 
 **Tasks**:
 
-| Task ID | Type | Description | Files | Estimate |
-|---------|------|-------------|-------|----------|
-| PE-6.1 | IMPL | Update `_evaluate_routes()` to support parallel groups as targets | `engine/router.py` | S |
-| PE-6.2 | IMPL | Update route validation to allow parallel group names | `config/validator.py` | S |
-| PE-6.3 | IMPL | Update `_trace_path()` for execution plan to handle parallel groups | `engine/workflow.py` | M |
-| PE-6.4 | IMPL | Update `ExecutionStep` to mark parallel groups | `engine/workflow.py` | S |
-| PE-6.5 | TEST | Test routing to parallel groups from regular agents | `tests/test_engine/test_router.py` | M |
-| PE-6.6 | TEST | Test routing from parallel groups to downstream agents | `tests/test_engine/test_router.py` | M |
-| PE-6.7 | TEST | Test dry-run execution plan with parallel groups | `tests/test_engine/test_workflow.py` | M |
+| Task ID | Type | Description | Files | Estimate | Status |
+|---------|------|-------------|-------|----------|--------|
+| PE-6.1 | IMPL | Update `_evaluate_routes()` to support parallel groups as targets | `engine/router.py` | S | DONE |
+| PE-6.2 | IMPL | Update route validation to allow parallel group names | `config/validator.py` | S | DONE |
+| PE-6.3 | IMPL | Update `_trace_path()` for execution plan to handle parallel groups | `engine/workflow.py` | M | DONE |
+| PE-6.4 | IMPL | Update `ExecutionStep` to mark parallel groups | `engine/workflow.py` | S | DONE |
+| PE-6.5 | TEST | Test routing to parallel groups from regular agents | `tests/test_engine/test_router.py` | M | DONE |
+| PE-6.6 | TEST | Test routing from parallel groups to downstream agents | `tests/test_engine/test_router.py` | M | DONE |
+| PE-6.7 | TEST | Test dry-run execution plan with parallel groups | `tests/test_engine/test_workflow.py` | M | DONE |
 
 **Acceptance Criteria**:
-- [ ] Agents can route to parallel groups via `to: parallel_group_name`
-- [ ] After parallel group completion, workflow routes to next agent correctly
-- [ ] Execution plan (dry-run) shows parallel groups clearly
-- [ ] Route validation accepts parallel group names as valid targets
+- [x] Agents can route to parallel groups via `to: parallel_group_name`
+- [x] After parallel group completion, workflow routes to next agent correctly
+- [x] Execution plan (dry-run) shows parallel groups clearly
+- [x] Route validation accepts parallel group names as valid targets
 
 ---
 

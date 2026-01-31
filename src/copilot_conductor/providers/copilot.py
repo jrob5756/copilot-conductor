@@ -416,7 +416,7 @@ class CopilotProvider(AgentProvider):
         from rich.console import Console
         from rich.text import Text
 
-        console = Console(stderr=True, highlight=False, no_wrap=True)
+        console = Console(stderr=True, highlight=False)
 
         # Log interesting events with Rich styling
         if event_type == "tool.execution_start":

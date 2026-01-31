@@ -184,6 +184,10 @@ agents:
     system_prompt: |
       You are a document saver agent. Your only job is to save the design 
       document to an appropriate file path based on the naming conventions provided.
+      
+      CRITICAL: After saving the file, you MUST explicitly state the structured output:
+      - file_path: The exact path where you saved the document
+      - success: true if saved successfully, false otherwise
     prompt: |
       Save the following design document to a file.
 
@@ -205,7 +209,13 @@ agents:
           - `upgrade-database-v2.plan.md`
           - `add-user-authentication.plan.md`
 
-      Save the document now using the appropriate file path.
+      ## INSTRUCTIONS
+
+      1. Determine the appropriate file path based on the naming convention
+      2. Save the design document to that file path
+      3. After saving, you MUST explicitly return your output as:
+         - file_path: "<the exact path where you saved the file>"
+         - success: true
     output:
       file_path:
         type: string

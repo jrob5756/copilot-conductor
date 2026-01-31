@@ -16,6 +16,7 @@ from copilot_conductor.config.schema import (
     GateOption,
     LimitsConfig,
     OutputField,
+    ParallelGroup,
     RouteDef,
     RuntimeConfig,
     WorkflowConfig,
@@ -392,7 +393,7 @@ class TestWorkflowEngineErrors:
         provider = CopilotProvider(mock_handler=mock_handler)
         engine = WorkflowEngine(simple_workflow_config, provider)
 
-        with pytest.raises(ExecutionError, match="Agent not found"):
+        with pytest.raises(ExecutionError, match="Agent or parallel group not found"):
             await engine.run({"question": "test"})
 
     @pytest.mark.asyncio
@@ -1238,3 +1239,125 @@ class TestWorkflowEngineContextTrimming:
         assert len(engine.context.agent_outputs["agent1"]["result"]) > 500
         assert len(engine.context.agent_outputs["agent2"]["result"]) > 500
 
+
+
+
+
+class TestExecutionPlanWithParallelGroups:
+    """Tests for execution plan generation with parallel groups."""
+
+    def test_execution_plan_with_parallel_group(self) -> None:
+        """Test execution plan includes parallel groups."""
+        from unittest.mock import MagicMock
+        mock_provider = MagicMock()
+        
+        workflow = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="plan-with-parallel",
+                entry_point="planner",
+                runtime=RuntimeConfig(provider="copilot"),
+                context=ContextConfig(mode="accumulate"),
+                limits=LimitsConfig(max_iterations=10),
+            ),
+            agents=[
+                AgentDef(
+                    name="planner",
+                    model="gpt-4",
+                    prompt="Plan",
+                    routes=[RouteDef(to="validators")],
+                ),
+                AgentDef(
+                    name="validator1",
+                    model="gpt-4",
+                    prompt="Validate 1",
+                ),
+                AgentDef(
+                    name="validator2",
+                    model="gpt-4",
+                    prompt="Validate 2",
+                ),
+                AgentDef(
+                    name="aggregator",
+                    model="gpt-4",
+                    prompt="Aggregate",
+                    routes=[RouteDef(to="$end")],
+                ),
+            ],
+            parallel=[
+                ParallelGroup(
+                    name="validators",
+                    agents=["validator1", "validator2"],
+                    routes=[RouteDef(to="aggregator")],
+                ),
+            ],
+        )
+
+        engine = WorkflowEngine(workflow, mock_provider)
+        plan = engine.build_execution_plan()
+
+        # Should have 3 steps: planner, validators (parallel group), aggregator
+        assert len(plan.steps) == 3
+        
+        # Check planner step
+        planner_step = plan.steps[0]
+        assert planner_step.agent_name == "planner"
+        assert planner_step.agent_type == "agent"
+        assert len(planner_step.routes) == 1
+        assert planner_step.routes[0]["to"] == "validators"
+        
+        # Check validators parallel group step
+        validators_step = plan.steps[1]
+        assert validators_step.agent_name == "validators"
+        assert validators_step.agent_type == "parallel_group"
+        assert validators_step.model is None
+        assert validators_step.parallel_agents == ["validator1", "validator2"]
+        assert len(validators_step.routes) == 1
+        assert validators_step.routes[0]["to"] == "aggregator"
+        
+        # Check aggregator step
+        aggregator_step = plan.steps[2]
+        assert aggregator_step.agent_name == "aggregator"
+        assert aggregator_step.agent_type == "agent"
+
+    def test_execution_plan_parallel_group_as_entry(self) -> None:
+        """Test execution plan with parallel group as entry point."""
+        from unittest.mock import MagicMock
+        mock_provider = MagicMock()
+        
+        workflow = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="parallel-entry",
+                entry_point="parallel_tasks",
+                runtime=RuntimeConfig(provider="copilot"),
+                context=ContextConfig(mode="accumulate"),
+                limits=LimitsConfig(max_iterations=10),
+            ),
+            agents=[
+                AgentDef(
+                    name="task1",
+                    model="gpt-4",
+                    prompt="Task 1",
+                ),
+                AgentDef(
+                    name="task2",
+                    model="gpt-4",
+                    prompt="Task 2",
+                ),
+            ],
+            parallel=[
+                ParallelGroup(
+                    name="parallel_tasks",
+                    agents=["task1", "task2"],
+                    routes=[RouteDef(to="$end")],
+                ),
+            ],
+        )
+
+        engine = WorkflowEngine(workflow, mock_provider)
+        plan = engine.build_execution_plan()
+
+        # Should have 1 step: parallel_tasks
+        assert len(plan.steps) == 1
+        assert plan.steps[0].agent_name == "parallel_tasks"
+        assert plan.steps[0].agent_type == "parallel_group"
+        assert plan.steps[0].parallel_agents == ["task1", "task2"]

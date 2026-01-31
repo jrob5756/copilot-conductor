@@ -742,3 +742,228 @@ async def test_error_message_distinguishes_exception_types(
     assert "Invalid value" in error_msg
     assert "Missing key" in error_msg
 
+
+
+class TestParallelGroupRouting:
+    """Tests for routing to and from parallel groups."""
+
+    @pytest.mark.asyncio
+    async def test_route_to_parallel_group(self, mock_provider: MockProvider) -> None:
+        """Test routing from agent to parallel group."""
+        workflow = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="route-to-parallel",
+                entry_point="planner",
+                runtime=RuntimeConfig(provider="copilot"),
+                context=ContextConfig(mode="accumulate"),
+                limits=LimitsConfig(max_iterations=10),
+            ),
+            agents=[
+                AgentDef(
+                    name="planner",
+                    model="gpt-4",
+                    prompt="Create plan",
+                    output={"plan": OutputField(type="string")},
+                    routes=[RouteDef(to="validators")],
+                ),
+                AgentDef(
+                    name="validator1",
+                    model="gpt-4",
+                    prompt="Validate plan",
+                    output={"valid": OutputField(type="boolean")},
+                ),
+                AgentDef(
+                    name="validator2",
+                    model="gpt-4",
+                    prompt="Check plan",
+                    output={"checked": OutputField(type="boolean")},
+                ),
+            ],
+            parallel=[
+                ParallelGroup(
+                    name="validators",
+                    agents=["validator1", "validator2"],
+                    routes=[RouteDef(to="$end")],
+                ),
+            ],
+        )
+
+        mock_provider.execute.side_effect = [
+            AgentOutput(content={"plan": "test plan"}, raw_response={}, model="gpt-4"),
+            AgentOutput(content={"valid": True}, raw_response={}, model="gpt-4"),
+            AgentOutput(content={"checked": True}, raw_response={}, model="gpt-4"),
+        ]
+
+        engine = WorkflowEngine(workflow, mock_provider)
+        result = await engine.run({})
+
+        # Planner should execute, then parallel group
+        assert mock_provider.execute.call_count == 3
+        assert result is not None
+
+    @pytest.mark.asyncio
+    async def test_route_from_parallel_group(self, mock_provider: MockProvider) -> None:
+        """Test routing from parallel group to downstream agent."""
+        workflow = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="route-from-parallel",
+                entry_point="parallel_tasks",
+                runtime=RuntimeConfig(provider="copilot"),
+                context=ContextConfig(mode="accumulate"),
+                limits=LimitsConfig(max_iterations=10),
+            ),
+            agents=[
+                AgentDef(
+                    name="task1",
+                    model="gpt-4",
+                    prompt="Task 1",
+                    output={"result": OutputField(type="string")},
+                ),
+                AgentDef(
+                    name="task2",
+                    model="gpt-4",
+                    prompt="Task 2",
+                    output={"result": OutputField(type="string")},
+                ),
+                AgentDef(
+                    name="aggregator",
+                    model="gpt-4",
+                    prompt="Aggregate results",
+                    output={"summary": OutputField(type="string")},
+                    routes=[RouteDef(to="$end")],
+                ),
+            ],
+            parallel=[
+                ParallelGroup(
+                    name="parallel_tasks",
+                    agents=["task1", "task2"],
+                    routes=[RouteDef(to="aggregator")],
+                ),
+            ],
+        )
+
+        mock_provider.execute.side_effect = [
+            AgentOutput(content={"result": "result1"}, raw_response={}, model="gpt-4"),
+            AgentOutput(content={"result": "result2"}, raw_response={}, model="gpt-4"),
+            AgentOutput(content={"summary": "combined"}, raw_response={}, model="gpt-4"),
+        ]
+
+        engine = WorkflowEngine(workflow, mock_provider)
+        result = await engine.run({})
+
+        # Parallel tasks should execute, then aggregator
+        assert mock_provider.execute.call_count == 3
+        assert result is not None
+
+    @pytest.mark.asyncio
+    async def test_conditional_route_from_parallel_group(self, mock_provider: MockProvider) -> None:
+        """Test conditional routing from parallel group based on outputs."""
+        workflow = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="conditional-parallel-route",
+                entry_point="checkers",
+                runtime=RuntimeConfig(provider="copilot"),
+                context=ContextConfig(mode="accumulate"),
+                limits=LimitsConfig(max_iterations=10),
+            ),
+            agents=[
+                AgentDef(
+                    name="check1",
+                    model="gpt-4",
+                    prompt="Check 1",
+                    output={"passed": OutputField(type="boolean")},
+                ),
+                AgentDef(
+                    name="check2",
+                    model="gpt-4",
+                    prompt="Check 2",
+                    output={"passed": OutputField(type="boolean")},
+                ),
+                AgentDef(
+                    name="success_handler",
+                    model="gpt-4",
+                    prompt="Handle success",
+                    output={"message": OutputField(type="string")},
+                    routes=[RouteDef(to="$end")],
+                ),
+                AgentDef(
+                    name="failure_handler",
+                    model="gpt-4",
+                    prompt="Handle failure",
+                    output={"message": OutputField(type="string")},
+                    routes=[RouteDef(to="$end")],
+                ),
+            ],
+            parallel=[
+                ParallelGroup(
+                    name="checkers",
+                    agents=["check1", "check2"],
+                    routes=[
+                        RouteDef(
+                            to="success_handler",
+                            when="{{ output.outputs.check1.passed and output.outputs.check2.passed }}",
+                        ),
+                        RouteDef(to="failure_handler"),
+                    ],
+                ),
+            ],
+        )
+
+        # Test success path
+        mock_provider.execute.side_effect = [
+            AgentOutput(content={"passed": True}, raw_response={}, model="gpt-4"),
+            AgentOutput(content={"passed": True}, raw_response={}, model="gpt-4"),
+            AgentOutput(content={"message": "All checks passed"}, raw_response={}, model="gpt-4"),
+        ]
+
+        engine = WorkflowEngine(workflow, mock_provider)
+        result = await engine.run({})
+
+        # Should execute parallel group then success_handler
+        assert mock_provider.execute.call_count == 3
+
+    @pytest.mark.asyncio
+    async def test_parallel_group_default_route_to_end(self, mock_provider: MockProvider) -> None:
+        """Test parallel group with no routes defaults to $end."""
+        workflow = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="parallel-default-end",
+                entry_point="parallel_tasks",
+                runtime=RuntimeConfig(provider="copilot"),
+                context=ContextConfig(mode="accumulate"),
+                limits=LimitsConfig(max_iterations=10),
+            ),
+            agents=[
+                AgentDef(
+                    name="task1",
+                    model="gpt-4",
+                    prompt="Task 1",
+                    output={"result": OutputField(type="string")},
+                ),
+                AgentDef(
+                    name="task2",
+                    model="gpt-4",
+                    prompt="Task 2",
+                    output={"result": OutputField(type="string")},
+                ),
+            ],
+            parallel=[
+                ParallelGroup(
+                    name="parallel_tasks",
+                    agents=["task1", "task2"],
+                    # No routes - should default to $end
+                ),
+            ],
+        )
+
+        mock_provider.execute.side_effect = [
+            AgentOutput(content={"result": "result1"}, raw_response={}, model="gpt-4"),
+            AgentOutput(content={"result": "result2"}, raw_response={}, model="gpt-4"),
+        ]
+
+        engine = WorkflowEngine(workflow, mock_provider)
+        result = await engine.run({})
+
+        # Should execute parallel group and end
+        assert mock_provider.execute.call_count == 2
+        assert result is not None
