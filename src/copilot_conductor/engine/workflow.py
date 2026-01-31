@@ -106,7 +106,7 @@ def _verbose_log_parallel_summary(
     )
 
 if TYPE_CHECKING:
-    from copilot_conductor.config.schema import AgentDef, ParallelGroup, WorkflowConfig
+    from copilot_conductor.config.schema import AgentDef, ForEachDef, ParallelGroup, WorkflowConfig
     from copilot_conductor.providers.base import AgentProvider
 
 
@@ -153,6 +153,62 @@ class ParallelGroupOutput:
 
     outputs: dict[str, Any] = field(default_factory=dict)
     errors: dict[str, ParallelAgentError] = field(default_factory=dict)
+
+
+@dataclass
+class ForEachError:
+    """Error information from a failed for-each item execution.
+
+    Attributes:
+        item_key: Key or index of the item that failed (string representation).
+        exception_type: Type of the exception (e.g., "ValidationError").
+        message: Error message.
+        suggestion: Optional suggestion for fixing the error.
+
+    Example:
+        error = ForEachError(
+            item_key="2",
+            exception_type="ValidationError",
+            message="Missing required field 'email'",
+            suggestion="Ensure all required fields are present"
+        )
+    """
+
+    item_key: str
+    exception_type: str
+    message: str
+    suggestion: str | None = None
+
+
+@dataclass
+class ForEachGroupOutput:
+    """Aggregated output from a for-each group execution.
+
+    Attributes:
+        outputs: List or dict of successful outputs (list by default, dict if key_by used).
+        errors: Dictionary mapping item key/index to error info.
+        count: Total number of items processed.
+
+    Example (list-based):
+        output = ForEachGroupOutput(
+            outputs=[{"result": "success"}, {"result": "success"}],
+            errors={"3": ForEachError(...)},
+            count=5
+        )
+        # Access via: output.outputs[0]["result"]
+
+    Example (dict-based with key_by):
+        output = ForEachGroupOutput(
+            outputs={"KPI123": {"result": "success"}, "KPI456": {"result": "success"}},
+            errors={"KPI789": ForEachError(...)},
+            count=3
+        )
+        # Access via: output.outputs["KPI123"]["result"]
+    """
+
+    outputs: list[Any] | dict[str, Any] = field(default_factory=list)
+    errors: dict[str, ForEachError] = field(default_factory=dict)
+    count: int = 0
 
 
 @dataclass
@@ -310,15 +366,85 @@ class WorkflowEngine:
         try:
             async with self.limits.timeout_context():
                 while True:
-                    # Try to find agent or parallel group
+                    # Try to find agent, parallel group, or for-each group
                     agent = self._find_agent(current_agent_name)
                     parallel_group = self._find_parallel_group(current_agent_name)
+                    for_each_group = self._find_for_each_group(current_agent_name)
 
-                    if agent is None and parallel_group is None:
+                    if agent is None and parallel_group is None and for_each_group is None:
                         raise ExecutionError(
-                            f"Agent or parallel group not found: {current_agent_name}",
+                            f"Agent, parallel group, or for-each group not found: {current_agent_name}",
                             suggestion=f"Ensure '{current_agent_name}' is defined in the workflow",
                         )
+
+                    # Handle for-each group execution
+                    if for_each_group is not None:
+                        # Check iteration limit (count TBD based on array size, estimate with max_concurrent)
+                        # For safety, check with current limit before resolving array
+                        self.limits.check_iteration(for_each_group.name)
+
+                        # Verbose: Log for-each group execution start
+                        iteration = self.limits.current_iteration + 1
+                        _verbose_log(
+                            f"[{iteration}] Executing for-each group: {for_each_group.name} "
+                            f"(source: {for_each_group.source}, {for_each_group.failure_mode} mode)",
+                            style="bold cyan"
+                        )
+
+                        # Trim context if max_tokens is configured
+                        self._trim_context_if_needed()
+
+                        # Execute for-each group with timeout enforcement
+                        _group_start = _time.time()
+                        for_each_output = await self.limits.wait_for_with_timeout(
+                            self._execute_for_each_group(for_each_group),
+                            operation_name=f"for-each group '{for_each_group.name}'"
+                        )
+                        _group_elapsed = _time.time() - _group_start
+
+                        # Verbose: Log for-each group completion
+                        _verbose_log_timing(
+                            f"For-each group '{for_each_group.name}' completed",
+                            _group_elapsed
+                        )
+
+                        # Store for-each group output in context
+                        # Format: {outputs: [...] or {...}, errors: {key: {...}}, count: N}
+                        for_each_output_dict = {
+                            "outputs": for_each_output.outputs,
+                            "errors": {
+                                key: {
+                                    "item_key": error.item_key,
+                                    "exception_type": error.exception_type,
+                                    "message": error.message,
+                                    "suggestion": error.suggestion,
+                                }
+                                for key, error in for_each_output.errors.items()
+                            },
+                            "count": for_each_output.count,
+                        }
+                        self.context.store(for_each_group.name, for_each_output_dict)
+
+                        # Record execution: count all items that executed
+                        self.limits.record_execution(for_each_group.name, count=for_each_output.count)
+
+                        # Check timeout after for-each group
+                        self.limits.check_timeout()
+
+                        # Evaluate routes from for-each group
+                        route_result = self._evaluate_for_each_routes(
+                            for_each_group, for_each_output_dict
+                        )
+
+                        # Verbose: Log routing decision
+                        _verbose_log_route(route_result.target)
+
+                        if route_result.target == "$end":
+                            result = self._build_final_output(route_result.output_transform)
+                            self._execute_hook("on_complete", result=result)
+                            return result
+
+                        current_agent_name = route_result.target
 
                     # Handle parallel group execution
                     if parallel_group is not None:
@@ -614,16 +740,30 @@ class WorkflowEngine:
         """
         return next((p for p in self.config.parallel if p.name == name), None)
 
+    def _find_for_each_group(self, name: str) -> ForEachDef | None:
+        """Find for-each group by name.
+
+        Args:
+            name: The for-each group name to find.
+
+        Returns:
+            The for-each group definition if found, None otherwise.
+        """
+        return next((f for f in self.config.for_each if f.name == name), None)
+
     def _resolve_array_reference(self, source: str) -> list[Any]:
         """Resolve a source reference to a runtime array from workflow context.
 
         Navigates dotted path notation to extract an array from agent outputs.
+        Handles the same wrapping logic as build_for_agent (regular agents are
+        wrapped with {"output": ...}, parallel/for-each groups are stored directly).
 
         Example:
             source = "finder.output.kpis"
             1. Lookup agent_outputs["finder"]
-            2. Navigate to ["output"]["kpis"]
-            3. Return the array value
+            2. Wrap with {"output": ...} if not a parallel/for-each group
+            3. Navigate to ["output"]["kpis"]
+            4. Return the array value
 
         Args:
             source: Dotted path reference (e.g., 'finder.output.kpis').
@@ -661,8 +801,26 @@ class WorkflowEngine:
                     suggestion=f"Agent '{agent_name}' must execute before this for-each group"
                 )
 
-        # Navigate through the dotted path
-        current = self.context.agent_outputs[agent_name]
+        # Get the agent's raw output
+        raw_output = self.context.agent_outputs[agent_name]
+
+        # Check if this is a parallel/for-each group output
+        # (has 'outputs' and 'errors' keys at top level)
+        is_group_output = (
+            isinstance(raw_output, dict)
+            and "outputs" in raw_output
+            and "errors" in raw_output
+        )
+
+        # Wrap regular agent outputs with {"output": ...}
+        # (matches the behavior of build_for_agent)
+        if is_group_output:
+            wrapped_output = raw_output
+        else:
+            wrapped_output = {"output": raw_output}
+
+        # Navigate through the dotted path (starting from second part)
+        current = wrapped_output
         path_traversed = [agent_name]
 
         for part in parts[1:]:
@@ -990,6 +1148,307 @@ class WorkflowEngine:
 
         return parallel_output
 
+    async def _execute_for_each_group(
+        self, for_each_group: ForEachDef
+    ) -> ForEachGroupOutput:
+        """Execute for-each group with batched parallel execution.
+
+        This method:
+        1. Resolves the source array from workflow context
+        2. Creates an immutable context snapshot for all items
+        3. Processes items in sequential batches of max_concurrent size
+        4. Injects loop variables ({{ var }}, {{ _index }}, {{ _key }}) into each agent's context
+        5. Aggregates outputs (list or dict based on key_by)
+        6. Applies the failure mode policy
+
+        Args:
+            for_each_group: The for-each group definition.
+
+        Returns:
+            ForEachGroupOutput with aggregated outputs and errors.
+
+        Raises:
+            ExecutionError: Based on failure_mode:
+                - fail_fast: Immediately on first item failure
+                - all_or_nothing: If any item fails after all complete
+                - continue_on_error: If all items fail
+        """
+        # Resolve the source array from context
+        items = self._resolve_array_reference(for_each_group.source)
+
+        # Handle empty arrays gracefully
+        if not items:
+            _verbose_log(
+                f"For-each group '{for_each_group.name}': Empty array, skipping execution",
+                style="dim yellow"
+            )
+            # Return empty output with appropriate structure
+            empty_outputs = {} if for_each_group.key_by else []
+            return ForEachGroupOutput(outputs=empty_outputs, errors={}, count=0)
+
+        # Verbose: Log for-each group start
+        _verbose_log(
+            f"For-each group '{for_each_group.name}': {len(items)} items, "
+            f"max_concurrent={for_each_group.max_concurrent}, "
+            f"{for_each_group.failure_mode} mode",
+            style="bold cyan"
+        )
+
+        # Track timing for summary
+        _group_start = _time.time()
+
+        # Create immutable context snapshot (shared across all items)
+        context_snapshot = copy.deepcopy(self.context)
+
+        # Extract keys if key_by is specified
+        item_keys: list[str] = []
+        if for_each_group.key_by:
+            for idx, item in enumerate(items):
+                try:
+                    # Navigate key_by path (e.g., "kpi.kpi_id")
+                    key_parts = for_each_group.key_by.split(".")
+                    current = item
+                    for part in key_parts:
+                        if isinstance(current, dict):
+                            current = current[part]
+                        else:
+                            current = getattr(current, part)
+                    item_keys.append(str(current))
+                except (KeyError, AttributeError, IndexError) as e:
+                    # Fallback to index-based key if extraction fails
+                    _verbose_log(
+                        f"Warning: Failed to extract key from item {idx} using '{for_each_group.key_by}': {e}. "
+                        f"Falling back to index-based key.",
+                        style="dim yellow"
+                    )
+                    item_keys.append(str(idx))
+        else:
+            # Use index-based keys
+            item_keys = [str(i) for i in range(len(items))]
+
+        async def execute_single_item(
+            item: Any, index: int, key: str
+        ) -> tuple[str, Any]:
+            """Execute a single for-each item with injected loop variables.
+
+            Returns:
+                Tuple of (item_key, output_content)
+
+            Raises:
+                Exception: Any exception from agent execution (wrapped with metadata).
+            """
+            _item_start = _time.time()
+            try:
+                # Build context for this item using the snapshot
+                agent_context = context_snapshot.build_for_agent(
+                    for_each_group.agent.name,
+                    for_each_group.agent.input,
+                    mode=self.config.workflow.context.mode,
+                )
+
+                # Inject loop variables into context
+                self._inject_loop_variables(
+                    agent_context,
+                    for_each_group.as_,
+                    item,
+                    index,
+                    key if for_each_group.key_by else None,
+                )
+
+                # Execute agent with injected context
+                output = await self.executor.execute(for_each_group.agent, agent_context)
+                _item_elapsed = _time.time() - _item_start
+
+                # Verbose: Log item completion
+                _verbose_log(
+                    f"  [{key}] Completed in {_item_elapsed:.2f}s "
+                    f"({output.tokens_used} tokens)",
+                    style="dim green"
+                )
+
+                return (key, output.content)
+            except Exception as e:
+                _item_elapsed = _time.time() - _item_start
+
+                # Verbose: Log item failure
+                _verbose_log(
+                    f"  [{key}] Failed in {_item_elapsed:.2f}s: {type(e).__name__}: {str(e)}",
+                    style="dim red"
+                )
+
+                # Attach metadata for error reporting
+                if not hasattr(e, '_for_each_item_key'):
+                    e._for_each_item_key = key  # type: ignore
+                if not hasattr(e, '_for_each_item_elapsed'):
+                    e._for_each_item_elapsed = _item_elapsed  # type: ignore
+                raise
+
+        # Process items in sequential batches
+        for_each_output = ForEachGroupOutput(
+            outputs={} if for_each_group.key_by else [],
+            errors={},
+            count=len(items)
+        )
+
+        # Determine batch size
+        max_concurrent = for_each_group.max_concurrent
+        batch_count = (len(items) + max_concurrent - 1) // max_concurrent
+
+        for batch_idx in range(batch_count):
+            batch_start_idx = batch_idx * max_concurrent
+            batch_end_idx = min((batch_idx + 1) * max_concurrent, len(items))
+            batch_items = items[batch_start_idx:batch_end_idx]
+            batch_keys = item_keys[batch_start_idx:batch_end_idx]
+
+            _verbose_log(
+                f"Batch {batch_idx + 1}/{batch_count}: Processing items {batch_start_idx} to {batch_end_idx - 1}",
+                style="dim cyan"
+            )
+
+            # Execute based on failure mode
+            if for_each_group.failure_mode == "fail_fast":
+                # Fail immediately on first error
+                try:
+                    results = await asyncio.gather(
+                        *[
+                            execute_single_item(item, batch_start_idx + i, batch_keys[i])
+                            for i, item in enumerate(batch_items)
+                        ],
+                        return_exceptions=False,
+                    )
+                    # All succeeded - store outputs
+                    for item_key, output_content in results:
+                        if for_each_group.key_by:
+                            for_each_output.outputs[item_key] = output_content  # type: ignore
+                        else:
+                            for_each_output.outputs.append(output_content)  # type: ignore
+
+                except Exception as e:
+                    # Extract item key from wrapped exception
+                    item_key = getattr(e, '_for_each_item_key', 'unknown')
+                    exception_type = type(e).__name__
+
+                    error_msg = (
+                        f"Item '{item_key}' in for-each group '{for_each_group.name}' "
+                        f"failed (fail_fast mode): {exception_type}: {str(e)}"
+                    )
+
+                    suggestion = getattr(e, "suggestion", None)
+                    raise ExecutionError(
+                        error_msg,
+                        suggestion=suggestion or "Check item data and agent configuration",
+                    ) from e
+
+            elif for_each_group.failure_mode == "continue_on_error":
+                # Collect all results and exceptions
+                results = await asyncio.gather(
+                    *[
+                        execute_single_item(item, batch_start_idx + i, batch_keys[i])
+                        for i, item in enumerate(batch_items)
+                    ],
+                    return_exceptions=True,
+                )
+
+                # Separate successes and failures
+                for i, result in enumerate(results):
+                    item_key = batch_keys[i]
+
+                    if isinstance(result, Exception):
+                        # Item failed - store error
+                        for_each_output.errors[item_key] = ForEachError(
+                            item_key=item_key,
+                            exception_type=type(result).__name__,
+                            message=str(result),
+                            suggestion=getattr(result, "suggestion", None),
+                        )
+                    else:
+                        # Item succeeded - store output
+                        key_from_result, output_content = result
+                        if for_each_group.key_by:
+                            for_each_output.outputs[key_from_result] = output_content  # type: ignore
+                        else:
+                            for_each_output.outputs.append(output_content)  # type: ignore
+
+            elif for_each_group.failure_mode == "all_or_nothing":
+                # Execute all items and collect results
+                results = await asyncio.gather(
+                    *[
+                        execute_single_item(item, batch_start_idx + i, batch_keys[i])
+                        for i, item in enumerate(batch_items)
+                    ],
+                    return_exceptions=True,
+                )
+
+                # Separate successes and failures
+                for i, result in enumerate(results):
+                    item_key = batch_keys[i]
+
+                    if isinstance(result, Exception):
+                        # Item failed - store error
+                        for_each_output.errors[item_key] = ForEachError(
+                            item_key=item_key,
+                            exception_type=type(result).__name__,
+                            message=str(result),
+                            suggestion=getattr(result, "suggestion", None),
+                        )
+                    else:
+                        # Item succeeded - store output
+                        key_from_result, output_content = result
+                        if for_each_group.key_by:
+                            for_each_output.outputs[key_from_result] = output_content  # type: ignore
+                        else:
+                            for_each_output.outputs.append(output_content)  # type: ignore
+
+        # Verbose: Log summary
+        _group_elapsed = _time.time() - _group_start
+        success_count = len(for_each_output.outputs) if isinstance(for_each_output.outputs, dict) else len(for_each_output.outputs)  # type: ignore
+        failure_count = len(for_each_output.errors)
+        _verbose_log(
+            f"For-each group '{for_each_group.name}' completed in {_group_elapsed:.2f}s: "
+            f"{success_count} succeeded, {failure_count} failed",
+            style="bold green"
+        )
+
+        # Apply failure mode policy (for continue_on_error and all_or_nothing)
+        if for_each_group.failure_mode == "continue_on_error":
+            # Fail if ALL items failed
+            if success_count == 0:
+                error_details = []
+                for item_key, error in for_each_output.errors.items():
+                    error_line = f"  - [{item_key}]: {error.exception_type}: {error.message}"
+                    if error.suggestion:
+                        error_line += f" (Suggestion: {error.suggestion})"
+                    error_details.append(error_line)
+                error_msg = (
+                    f"All items in for-each group '{for_each_group.name}' failed:\n"
+                    + "\n".join(error_details)
+                )
+                raise ExecutionError(
+                    error_msg,
+                    suggestion="At least one item must succeed in continue_on_error mode",
+                )
+
+        elif for_each_group.failure_mode == "all_or_nothing":
+            # Fail if ANY item failed
+            if failure_count > 0:
+                error_details = []
+                for item_key, error in for_each_output.errors.items():
+                    error_line = f"  - [{item_key}]: {error.exception_type}: {error.message}"
+                    if error.suggestion:
+                        error_line += f" (Suggestion: {error.suggestion})"
+                    error_details.append(error_line)
+                error_msg = (
+                    f"For-each group '{for_each_group.name}' failed "
+                    f"({success_count} succeeded, {failure_count} failed):\n"
+                    + "\n".join(error_details)
+                )
+                raise ExecutionError(
+                    error_msg,
+                    suggestion="All items must succeed in all_or_nothing mode",
+                )
+
+        return for_each_output
+
     def _get_next_agent(self, agent: AgentDef, output: dict[str, Any]) -> str:
         """Get next agent from routes (legacy method, use _evaluate_routes instead).
 
@@ -1050,6 +1509,30 @@ class WorkflowEngine:
         eval_context = self.context.get_for_template()
 
         return self.router.evaluate(parallel_group.routes, output, eval_context)
+
+    def _evaluate_for_each_routes(
+        self, for_each_group: ForEachDef, output: dict[str, Any]
+    ) -> RouteResult:
+        """Evaluate routes from a for-each group using the Router.
+
+        Uses the Router to evaluate routing rules and determine the next agent
+        after a for-each group completes.
+
+        Args:
+            for_each_group: The for-each group definition.
+            output: The for-each group's aggregated output.
+
+        Returns:
+            RouteResult with target and optional output transform.
+        """
+        if not for_each_group.routes:
+            # No routes defined - default to $end
+            return RouteResult(target="$end")
+
+        # Build context for condition evaluation
+        eval_context = self.context.get_for_template()
+
+        return self.router.evaluate(for_each_group.routes, output, eval_context)
 
     def _build_final_output(
         self, route_output_transform: dict[str, Any] | None = None

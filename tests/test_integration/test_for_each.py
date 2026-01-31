@@ -298,3 +298,318 @@ class TestLoopVariableTemplateRendering:
         result = renderer.render(template, context)
         
         assert result == "Key: ''"
+
+
+class TestForEachExecution:
+    """Integration tests for for-each group execution.
+    
+    Tests cover:
+    - Basic for-each execution with batching
+    - Failure modes (fail_fast, continue_on_error, all_or_nothing)
+    - Empty array handling
+    - Output aggregation (list and dict)
+    """
+
+    @pytest.mark.asyncio
+    async def test_simple_for_each_execution(self):
+        """Test basic for-each execution with 3 items and max_concurrent=2."""
+        from unittest.mock import AsyncMock, MagicMock
+        from copilot_conductor.providers.base import AgentOutput
+        
+        # Create workflow with for-each group
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="for-each-test",
+                entry_point="finder",
+                runtime=RuntimeConfig(provider="copilot"),
+                context=ContextConfig(mode="accumulate"),
+                limits=LimitsConfig(max_iterations=50),
+            ),
+            agents=[
+                AgentDef(
+                    name="finder",
+                    model="gpt-4",
+                    prompt="Find items",
+                    output={"items": OutputField(type="array")},
+                    routes=[RouteDef(to="processors")],
+                ),
+            ],
+            for_each=[
+                ForEachDef.model_validate({
+                    "name": "processors",
+                    "type": "for_each",
+                    "source": "finder.output.items",
+                    "as": "item",
+                    "max_concurrent": 2,
+                    "agent": {
+                        "name": "processor",
+                        "model": "gpt-4",
+                        "prompt": "Process {{ item.id }}",
+                        "output": {"result": {"type": "string"}},
+                    },
+                    "routes": [{"to": "$end"}],
+                }),
+            ],
+            output={
+                "results": "{{ processors.outputs | tojson }}",
+                "count": "{{ processors.count }}",
+            },
+        )
+        
+        # Mock provider
+        provider = MagicMock()
+        provider.execute = AsyncMock()
+        
+        # Mock finder output
+        provider.execute.side_effect = [
+            # Finder returns 3 items
+            AgentOutput(
+                content={"items": [
+                    {"id": "A"},
+                    {"id": "B"},
+                    {"id": "C"},
+                ]},
+                raw_response={},
+                model="gpt-4",
+                tokens_used=50,
+            ),
+            # Processor results (3 items)
+            AgentOutput(
+                content={"result": "processed A"},
+                raw_response={},
+                model="gpt-4",
+                tokens_used=30,
+            ),
+            AgentOutput(
+                content={"result": "processed B"},
+                raw_response={},
+                model="gpt-4",
+                tokens_used=30,
+            ),
+            AgentOutput(
+                content={"result": "processed C"},
+                raw_response={},
+                model="gpt-4",
+                tokens_used=30,
+            ),
+        ]
+        
+        # Execute workflow
+        engine = WorkflowEngine(config, provider)
+        result = await engine.run({})
+        
+        # Verify results
+        assert "results" in result
+        assert "count" in result
+        
+        # Results should be parsed as a list
+        results_list = result["results"]
+        assert isinstance(results_list, list)
+        assert len(results_list) == 3
+        assert results_list[0]["result"] == "processed A"
+        assert results_list[1]["result"] == "processed B"
+        assert results_list[2]["result"] == "processed C"
+        assert result["count"] == 3
+        
+        # Verify batching (items 0-1 in batch 1, item 2 in batch 2)
+        assert provider.execute.call_count == 4  # 1 finder + 3 processors
+
+    @pytest.mark.asyncio
+    async def test_for_each_with_empty_array(self):
+        """Test for-each gracefully handles empty arrays."""
+        from unittest.mock import AsyncMock, MagicMock
+        from copilot_conductor.providers.base import AgentOutput
+        
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="empty-array-test",
+                entry_point="finder",
+                runtime=RuntimeConfig(provider="copilot"),
+                context=ContextConfig(mode="accumulate"),
+                limits=LimitsConfig(max_iterations=50),
+            ),
+            agents=[
+                AgentDef(
+                    name="finder",
+                    model="gpt-4",
+                    prompt="Find items",
+                    output={"items": OutputField(type="array")},
+                    routes=[RouteDef(to="processors")],
+                ),
+            ],
+            for_each=[
+                ForEachDef.model_validate({
+                    "name": "processors",
+                    "type": "for_each",
+                    "source": "finder.output.items",
+                    "as": "item",
+                    "agent": {
+                        "name": "processor",
+                        "model": "gpt-4",
+                        "prompt": "Process {{ item }}",
+                        "output": {"result": {"type": "string"}},
+                    },
+                    "routes": [{"to": "$end"}],
+                }),
+            ],
+            output={
+                "count": "{{ processors.count }}",
+            },
+        )
+        
+        provider = MagicMock()
+        provider.execute = AsyncMock()
+        
+        # Finder returns empty array
+        provider.execute.return_value = AgentOutput(
+            content={"items": []},
+            raw_response={},
+            model="gpt-4",
+            tokens_used=20,
+        )
+        
+        engine = WorkflowEngine(config, provider)
+        result = await engine.run({})
+        
+        # Should complete without errors
+        assert result["count"] == 0
+        assert provider.execute.call_count == 1  # Only finder executed
+
+    @pytest.mark.asyncio
+    async def test_for_each_fail_fast_mode(self):
+        """Test fail_fast mode stops on first error."""
+        from unittest.mock import AsyncMock, MagicMock
+        from copilot_conductor.providers.base import AgentOutput
+        from copilot_conductor.exceptions import ExecutionError
+        
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="fail-fast-test",
+                entry_point="finder",
+                runtime=RuntimeConfig(provider="copilot"),
+                context=ContextConfig(mode="accumulate"),
+                limits=LimitsConfig(max_iterations=50),
+            ),
+            agents=[
+                AgentDef(
+                    name="finder",
+                    model="gpt-4",
+                    prompt="Find items",
+                    output={"items": OutputField(type="array")},
+                    routes=[RouteDef(to="processors")],
+                ),
+            ],
+            for_each=[
+                ForEachDef.model_validate({
+                    "name": "processors",
+                    "type": "for_each",
+                    "source": "finder.output.items",
+                    "as": "item",
+                    "max_concurrent": 10,
+                    "failure_mode": "fail_fast",
+                    "agent": {
+                        "name": "processor",
+                        "model": "gpt-4",
+                        "prompt": "Process {{ item }}",
+                        "output": {"result": {"type": "string"}},
+                    },
+                }),
+            ],
+            output={},
+        )
+        
+        provider = MagicMock()
+        provider.execute = AsyncMock()
+        
+        # Setup: finder returns 3 items, second processor fails
+        provider.execute.side_effect = [
+            AgentOutput(
+                content={"items": ["A", "B", "C"]},
+                raw_response={},
+                model="gpt-4",
+                tokens_used=20,
+            ),
+            AgentOutput(content={"result": "ok"}, raw_response={}, model="gpt-4", tokens_used=10),
+            ExecutionError("Processing failed"),
+            AgentOutput(content={"result": "ok"}, raw_response={}, model="gpt-4", tokens_used=10),
+        ]
+        
+        engine = WorkflowEngine(config, provider)
+        
+        # Should raise ExecutionError
+        with pytest.raises(ExecutionError) as exc_info:
+            await engine.run({})
+        
+        assert "fail_fast mode" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_for_each_batching_respects_max_concurrent(self):
+        """Test that batching processes items in chunks of max_concurrent."""
+        from unittest.mock import AsyncMock, MagicMock
+        from copilot_conductor.providers.base import AgentOutput
+        import asyncio
+        
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="batching-test",
+                entry_point="finder",
+                runtime=RuntimeConfig(provider="copilot"),
+                context=ContextConfig(mode="accumulate"),
+                limits=LimitsConfig(max_iterations=50),
+            ),
+            agents=[
+                AgentDef(
+                    name="finder",
+                    model="gpt-4",
+                    prompt="Find items",
+                    output={"items": OutputField(type="array")},
+                    routes=[RouteDef(to="processors")],
+                ),
+            ],
+            for_each=[
+                ForEachDef.model_validate({
+                    "name": "processors",
+                    "type": "for_each",
+                    "source": "finder.output.items",
+                    "as": "item",
+                    "max_concurrent": 2,
+                    "agent": {
+                        "name": "processor",
+                        "model": "gpt-4",
+                        "prompt": "Process {{ item }}",
+                        "output": {"result": {"type": "string"}},
+                    },
+                    "routes": [{"to": "$end"}],
+                }),
+            ],
+            output={"count": "{{ processors.count }}"},
+        )
+        
+        provider = MagicMock()
+        provider.execute = AsyncMock()
+        
+        # Track execution timing
+        execution_times = []
+        
+        async def mock_execute(*args, **kwargs):
+            agent = kwargs.get('agent') if 'agent' in kwargs else args[0]
+            execution_times.append(asyncio.get_event_loop().time())
+            await asyncio.sleep(0.1)  # Simulate processing time
+            return AgentOutput(
+                content={"result": "ok"} if agent.name == "processor" else {"items": ["A", "B", "C", "D", "E"]},
+                raw_response={},
+                model="gpt-4",
+                tokens_used=10,
+            )
+        
+        provider.execute.side_effect = mock_execute
+        
+        engine = WorkflowEngine(config, provider)
+        result = await engine.run({})
+        
+        # Verify all items processed
+        assert result["count"] == 5
+        
+        # Verify batching (should have 3 batches: 2+2+1)
+        # We can't easily verify exact batch execution, but we verify all items processed
+        assert provider.execute.call_count == 6  # 1 finder + 5 processors

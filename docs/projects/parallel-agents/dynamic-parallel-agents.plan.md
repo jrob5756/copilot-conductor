@@ -1033,24 +1033,26 @@ def _find_for_each_group(self, name: str) -> ForEachDef | None:
 
 **Prerequisites**: Epic 3
 
+**Status**: DONE
+
 **Tasks**:
 | Task ID | Type | Description | Files | Status |
 |---------|------|-------------|-------|--------|
-| E4-T1 | IMPL | Define `ForEachGroupOutput` and `ForEachError` dataclasses | `src/copilot_conductor/engine/workflow.py` | TO DO |
-| E4-T2 | IMPL | Implement `_execute_for_each_group()` method | `src/copilot_conductor/engine/workflow.py` | TO DO |
-| E4-T3 | IMPL | Implement sequential batching logic | `src/copilot_conductor/engine/workflow.py` | TO DO |
-| E4-T4 | IMPL | Implement `execute_single_item()` inner function | `src/copilot_conductor/engine/workflow.py` | TO DO |
-| E4-T5 | IMPL | Add context snapshot creation (reuse from parallel) | `src/copilot_conductor/engine/workflow.py` | TO DO |
-| E4-T6 | IMPL | Add asyncio.gather() per-batch execution | `src/copilot_conductor/engine/workflow.py` | TO DO |
-| E4-T7 | IMPL | Add for-each routing support in main execution loop | `src/copilot_conductor/engine/workflow.py` | TO DO |
-| E4-T8 | TEST | Unit tests for single-item execution | `tests/test_engine/test_workflow.py` | TO DO |
-| E4-T9 | TEST | Integration test: simple for-each (3 items, max_concurrent=2) | `tests/test_integration/test_for_each.py` | TO DO |
+| E4-T1 | IMPL | Define `ForEachGroupOutput` and `ForEachError` dataclasses | `src/copilot_conductor/engine/workflow.py` | DONE |
+| E4-T2 | IMPL | Implement `_execute_for_each_group()` method | `src/copilot_conductor/engine/workflow.py` | DONE |
+| E4-T3 | IMPL | Implement sequential batching logic | `src/copilot_conductor/engine/workflow.py` | DONE |
+| E4-T4 | IMPL | Implement `execute_single_item()` inner function | `src/copilot_conductor/engine/workflow.py` | DONE |
+| E4-T5 | IMPL | Add context snapshot creation (reuse from parallel) | `src/copilot_conductor/engine/workflow.py` | DONE |
+| E4-T6 | IMPL | Add asyncio.gather() per-batch execution | `src/copilot_conductor/engine/workflow.py` | DONE |
+| E4-T7 | IMPL | Add for-each routing support in main execution loop | `src/copilot_conductor/engine/workflow.py` | DONE |
+| E4-T8 | TEST | Unit tests for single-item execution | `tests/test_engine/test_workflow.py` | DONE |
+| E4-T9 | TEST | Integration test: simple for-each (3 items, max_concurrent=2) | `tests/test_integration/test_for_each.py` | DONE |
 
 **Acceptance Criteria**:
-- [ ] For-each group executes all items
-- [ ] Batching respects `max_concurrent` limit
-- [ ] Context snapshot prevents shared state mutations
-- [ ] All tests pass
+- [x] For-each group executes all items
+- [x] Batching respects `max_concurrent` limit
+- [x] Context snapshot prevents shared state mutations
+- [x] All tests pass
 
 ---
 

@@ -393,7 +393,7 @@ class TestWorkflowEngineErrors:
         provider = CopilotProvider(mock_handler=mock_handler)
         engine = WorkflowEngine(simple_workflow_config, provider)
 
-        with pytest.raises(ExecutionError, match="Agent or parallel group not found"):
+        with pytest.raises(ExecutionError, match="Agent, parallel group, or for-each group not found"):
             await engine.run({"question": "test"})
 
     @pytest.mark.asyncio
@@ -1460,26 +1460,22 @@ class TestResolveArrayReference:
         )
         engine = WorkflowEngine(config, mock_provider)
 
-        # Populate context with test data
+        # Populate context with test data (stored directly, will be wrapped by resolution logic)
         engine.context.store("finder", {
-            "output": {
-                "kpis": [
-                    {"kpi_id": "K1", "name": "Revenue"},
-                    {"kpi_id": "K2", "name": "Profit"},
-                    {"kpi_id": "K3", "name": "Growth"},
-                ],
-                "metadata": {
-                    "total": 3
-                }
+            "kpis": [
+                {"kpi_id": "K1", "name": "Revenue"},
+                {"kpi_id": "K2", "name": "Profit"},
+                {"kpi_id": "K3", "name": "Growth"},
+            ],
+            "metadata": {
+                "total": 3
             }
         })
 
         engine.context.store("nested_agent", {
-            "output": {
-                "data": {
-                    "items": ["item1", "item2", "item3"],
-                    "count": 3
-                }
+            "data": {
+                "items": ["item1", "item2", "item3"],
+                "count": 3
             }
         })
 
@@ -1509,9 +1505,7 @@ class TestResolveArrayReference:
         """Test resolution of empty array (should succeed)."""
         # Add agent with empty array output
         workflow_engine_with_context.context.store("empty_agent", {
-            "output": {
-                "items": []
-            }
+            "items": []
         })
 
         result = workflow_engine_with_context._resolve_array_reference("empty_agent.output.items")
@@ -1585,9 +1579,7 @@ class TestResolveArrayReference:
         """Test error when trying to navigate through non-dict value."""
         # Add agent with string output
         workflow_engine_with_context.context.store("string_agent", {
-            "output": {
-                "result": "just a string"
-            }
+            "result": "just a string"
         })
 
         with pytest.raises(ExecutionError) as exc_info:
@@ -1610,9 +1602,7 @@ class TestResolveArrayReference:
     def test_resolve_wrong_type_string(self, workflow_engine_with_context: WorkflowEngine):
         """Test error when resolved value is a string instead of list."""
         workflow_engine_with_context.context.store("text_agent", {
-            "output": {
-                "text": "not an array"
-            }
+            "text": "not an array"
         })
 
         with pytest.raises(ExecutionError) as exc_info:
@@ -1623,9 +1613,7 @@ class TestResolveArrayReference:
     def test_resolve_wrong_type_number(self, workflow_engine_with_context: WorkflowEngine):
         """Test error when resolved value is a number instead of list."""
         workflow_engine_with_context.context.store("number_agent", {
-            "output": {
-                "count": 42
-            }
+            "count": 42
         })
 
         with pytest.raises(ExecutionError) as exc_info:
@@ -1638,9 +1626,7 @@ class TestResolveArrayReference:
     ):
         """Test that array resolution accepts tuples as valid array types."""
         workflow_engine_with_context.context.store("tuple_agent", {
-            "output": {
-                "items": ("item1", "item2", "item3")
-            }
+            "items": ("item1", "item2", "item3")
         })
 
         result = workflow_engine_with_context._resolve_array_reference(
