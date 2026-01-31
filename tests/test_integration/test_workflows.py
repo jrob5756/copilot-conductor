@@ -687,3 +687,173 @@ class TestErrorHandlingIntegration:
             load_config(workflow_file)
 
         assert "entry" in str(exc_info.value).lower() or "not found" in str(exc_info.value).lower()
+
+
+class TestBackwardCompatibility:
+    """PE-7.6: Test that existing workflows are not affected by parallel execution feature."""
+
+    def test_existing_simple_workflow_unchanged(self, fixtures_dir: Path) -> None:
+        """Test that simple workflows without parallel groups work identically."""
+        workflow_file = fixtures_dir / "valid_simple.yaml"
+        config = load_config(workflow_file)
+
+        # Verify no parallel groups in config
+        assert not hasattr(config, 'parallel') or config.parallel is None or len(config.parallel) == 0
+
+        def mock_handler(agent, prompt, context):
+            if agent.name == "greeter":
+                return {"greeting": "Hello, Tester!"}
+            return {}
+
+        provider = CopilotProvider(mock_handler=mock_handler)
+        engine = WorkflowEngine(config, provider)
+
+        import asyncio
+        result = asyncio.run(engine.run({"name": "Tester"}))
+
+        # Should work exactly as before
+        assert result["message"] == "Hello, Tester!"
+
+    def test_existing_full_workflow_unchanged(self, fixtures_dir: Path) -> None:
+        """Test that complex workflows without parallel groups work identically."""
+        workflow_file = fixtures_dir / "valid_full.yaml"
+        config = load_config(workflow_file)
+
+        # Verify no parallel groups
+        assert not hasattr(config, 'parallel') or config.parallel is None or len(config.parallel) == 0
+
+        agent_calls: list[str] = []
+
+        def mock_handler(agent, prompt, context):
+            agent_calls.append(agent.name)
+
+            if agent.name == "planner":
+                return {"plan": [{"step": "1"}], "confidence": 0.9}
+            elif agent.name == "executor":
+                return {"result": {"success": True, "output": "Done"}}
+            return {}
+
+        provider = CopilotProvider(mock_handler=mock_handler)
+        engine = WorkflowEngine(config, provider, skip_gates=True)
+
+        import asyncio
+        asyncio.run(engine.run({"goal": "Test", "max_steps": 1}))
+
+        # Should execute as before
+        assert "planner" in agent_calls
+
+    def test_loop_workflows_still_work(self) -> None:
+        """Test that loop patterns continue to work without parallel."""
+        from copilot_conductor.config.schema import (
+            AgentDef,
+            LimitsConfig,
+            OutputField,
+            RouteDef,
+            WorkflowConfig,
+            WorkflowDef,
+        )
+
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="loop-workflow",
+                entry_point="counter",
+                limits=LimitsConfig(max_iterations=20),
+            ),
+            agents=[
+                AgentDef(
+                    name="counter",
+                    model="gpt-4",
+                    prompt="Count",
+                    output={"count": OutputField(type="number")},
+                    routes=[
+                        RouteDef(to="$end", when="count >= 5"),
+                        RouteDef(to="counter"),
+                    ],
+                ),
+            ],
+            output={"final_count": "{{ counter.output.count }}"},
+        )
+
+        call_count = {"count": 0}
+
+        def mock_handler(agent, prompt, context):
+            call_count["count"] += 1
+            return {"count": call_count["count"]}
+
+        provider = CopilotProvider(mock_handler=mock_handler)
+        engine = WorkflowEngine(config, provider)
+
+        import asyncio
+        result = asyncio.run(engine.run({}))
+
+        # Should still loop correctly
+        assert result["final_count"] == 5
+        assert call_count["count"] == 5
+
+    def test_routing_workflows_still_work(self) -> None:
+        """Test that conditional routing still works without parallel."""
+        from copilot_conductor.config.schema import (
+            AgentDef,
+            OutputField,
+            RouteDef,
+            WorkflowConfig,
+            WorkflowDef,
+        )
+
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="routing-workflow",
+                entry_point="classifier",
+            ),
+            agents=[
+                AgentDef(
+                    name="classifier",
+                    model="gpt-4",
+                    prompt="Classify",
+                    output={"category": OutputField(type="string")},
+                    routes=[
+                        RouteDef(to="handler_a", when="category == 'A'"),
+                        RouteDef(to="handler_b", when="category == 'B'"),
+                        RouteDef(to="handler_default"),
+                    ],
+                ),
+                AgentDef(
+                    name="handler_a",
+                    model="gpt-4",
+                    prompt="Handle A",
+                    output={"result": OutputField(type="string")},
+                    routes=[RouteDef(to="$end")],
+                ),
+                AgentDef(
+                    name="handler_b",
+                    model="gpt-4",
+                    prompt="Handle B",
+                    output={"result": OutputField(type="string")},
+                    routes=[RouteDef(to="$end")],
+                ),
+                AgentDef(
+                    name="handler_default",
+                    model="gpt-4",
+                    prompt="Handle default",
+                    output={"result": OutputField(type="string")},
+                    routes=[RouteDef(to="$end")],
+                ),
+            ],
+            output={"result": "{{ handler_a.output.result if handler_a is defined else (handler_b.output.result if handler_b is defined else handler_default.output.result) }}"},
+        )
+
+        def mock_handler(agent, prompt, context):
+            if agent.name == "classifier":
+                return {"category": "A"}
+            elif agent.name == "handler_a":
+                return {"result": "Handled by A"}
+            return {"result": "default"}
+
+        provider = CopilotProvider(mock_handler=mock_handler)
+        engine = WorkflowEngine(config, provider)
+
+        import asyncio
+        result = asyncio.run(engine.run({}))
+
+        # Should route correctly
+        assert result["result"] == "Handled by A"

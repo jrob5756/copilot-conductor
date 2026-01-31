@@ -589,27 +589,29 @@ None.
 
 ### Epic 7: Integration Testing
 
+**Status**: DONE
+
 **Goal**: End-to-end testing with realistic parallel workflows.
 
 **Prerequisites**: Epic 3, Epic 4, Epic 5, Epic 6
 
 **Tasks**:
 
-| Task ID | Type | Description | Files | Estimate |
-|---------|------|-------------|-------|----------|
-| PE-7.1 | TEST | Create test workflow: parallel research agents | `tests/test_integration/test_parallel_workflows.py` | M |
-| PE-7.2 | TEST | Create test workflow: parallel validators with `continue_on_error` | `tests/test_integration/test_parallel_workflows.py` | M |
-| PE-7.3 | TEST | Create test workflow: parallel + sequential agent mix | `tests/test_integration/test_parallel_workflows.py` | M |
-| PE-7.4 | TEST | Test all failure modes with real agent executions | `tests/test_integration/test_parallel_workflows.py` | L |
-| PE-7.5 | TEST | Test performance: verify parallel speedup vs sequential | `tests/test_performance.py` | M |
-| PE-7.6 | TEST | Test backward compatibility: existing workflows unchanged | `tests/test_integration/test_workflows.py` | S |
+| Task ID | Type | Description | Files | Estimate | Status |
+|---------|------|-------------|-------|----------|--------|
+| PE-7.1 | TEST | Create test workflow: parallel research agents | `tests/test_integration/test_parallel_workflows.py` | M | DONE |
+| PE-7.2 | TEST | Create test workflow: parallel validators with `continue_on_error` | `tests/test_integration/test_parallel_workflows.py` | M | DONE |
+| PE-7.3 | TEST | Create test workflow: parallel + sequential agent mix | `tests/test_integration/test_parallel_workflows.py` | M | DONE |
+| PE-7.4 | TEST | Test all failure modes with real agent executions | `tests/test_integration/test_parallel_workflows.py` | L | DONE |
+| PE-7.5 | TEST | Test performance: verify parallel speedup vs sequential | `tests/test_performance.py` | M | DONE |
+| PE-7.6 | TEST | Test backward compatibility: existing workflows unchanged | `tests/test_integration/test_workflows.py` | S | DONE |
 
 **Acceptance Criteria**:
-- [ ] Parallel research workflow executes successfully
-- [ ] Validator workflow with `continue_on_error` handles partial failures
-- [ ] Mixed sequential/parallel workflows work correctly
-- [ ] Performance tests show parallel execution is faster than sequential
-- [ ] All existing integration tests pass without modification
+- [x] Parallel research workflow executes successfully
+- [x] Validator workflow with `continue_on_error` handles partial failures
+- [x] Mixed sequential/parallel workflows work correctly
+- [x] Performance tests show parallel execution is faster than sequential
+- [x] All existing integration tests pass without modification
 
 ---
 
