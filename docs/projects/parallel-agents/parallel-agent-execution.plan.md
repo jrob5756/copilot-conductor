@@ -435,33 +435,35 @@ None.
 
 ### Epic 2: Validation Rules
 
+**Status**: DONE
+
 **Goal**: Prevent invalid parallel group configurations at workflow load time.
 
 **Prerequisites**: Epic 1
 
 **Tasks**:
 
-| Task ID | Type | Description | Files | Estimate |
-|---------|------|-------------|-------|----------|
-| PE-2.1 | IMPL | Add `_validate_parallel_groups()` to validator.py | `config/validator.py` | M |
-| PE-2.2 | IMPL | Validate parallel agent references exist | `config/validator.py` | S |
-| PE-2.3 | IMPL | Validate parallel agents have no routes | `config/validator.py` | S |
-| PE-2.4 | IMPL | Validate no cross-agent dependencies within parallel group | `config/validator.py` | M |
-| PE-2.5 | IMPL | Validate unique names (parallel groups vs agents) | `config/validator.py` | S |
-| PE-2.6 | IMPL | Validate no nested parallel groups | `config/validator.py` | S |
-| PE-2.7 | IMPL | Validate no human gates in parallel groups | `config/validator.py` | S |
-| PE-2.8 | IMPL | Update cycle detection to treat parallel groups as single nodes | `config/validator.py` | M |
-| PE-2.9 | TEST | Unit tests for all validation rules | `tests/test_config/test_parallel_validation.py` | M |
-| PE-2.10 | TEST | Test error messages for validation failures | `tests/test_config/test_parallel_validation.py` | S |
+| Task ID | Type | Description | Files | Estimate | Status |
+|---------|------|-------------|-------|----------|--------|
+| PE-2.1 | IMPL | Add `_validate_parallel_groups()` to validator.py | `config/validator.py` | M | DONE |
+| PE-2.2 | IMPL | Validate parallel agent references exist | `config/validator.py` | S | DONE |
+| PE-2.3 | IMPL | Validate parallel agents have no routes | `config/validator.py` | S | DONE |
+| PE-2.4 | IMPL | Validate no cross-agent dependencies within parallel group | `config/validator.py` | M | DONE |
+| PE-2.5 | IMPL | Validate unique names (parallel groups vs agents) | `config/validator.py` | S | DONE |
+| PE-2.6 | IMPL | Validate no nested parallel groups | `config/validator.py` | S | DONE |
+| PE-2.7 | IMPL | Validate no human gates in parallel groups | `config/validator.py` | S | DONE |
+| PE-2.8 | IMPL | Update cycle detection to treat parallel groups as single nodes | `config/validator.py` | M | DONE |
+| PE-2.9 | TEST | Unit tests for all validation rules | `tests/test_config/test_parallel_validation.py` | M | DONE |
+| PE-2.10 | TEST | Test error messages for validation failures | `tests/test_config/test_parallel_validation.py` | S | DONE |
 
 **Acceptance Criteria**:
-- [ ] Workflows with routes in parallel agents are rejected
-- [ ] Workflows with cross-agent references in parallel groups are rejected
-- [ ] Workflows with nested parallel groups are rejected
-- [ ] Workflows with duplicate names (agent/parallel) are rejected
-- [ ] Workflows with human gates in parallel groups are rejected
-- [ ] Validation errors include clear messages and suggestions
-- [ ] Cycle detection correctly handles parallel groups
+- [x] Workflows with routes in parallel agents are rejected
+- [x] Workflows with cross-agent references in parallel groups are rejected
+- [x] Workflows with nested parallel groups are rejected
+- [x] Workflows with duplicate names (agent/parallel) are rejected
+- [x] Workflows with human gates in parallel groups are rejected
+- [x] Validation errors include clear messages and suggestions
+- [x] Cycle detection correctly handles parallel groups
 
 ---
 
