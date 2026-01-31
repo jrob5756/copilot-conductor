@@ -418,6 +418,75 @@ class TestWorkflowEngineErrors:
         assert summary["agents_executed"] == ["planner", "executor"]
         assert summary["context_mode"] == "accumulate"
 
+    @pytest.mark.asyncio
+    async def test_execution_summary_with_parallel_groups(self) -> None:
+        """Test execution summary includes parallel group statistics."""
+        from copilot_conductor.config.schema import ParallelGroup
+
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="parallel-summary-test",
+                entry_point="coordinator",
+            ),
+            agents=[
+                AgentDef(
+                    name="coordinator",
+                    model="gpt-4",
+                    prompt="Start",
+                    output={"result": OutputField(type="string")},
+                    routes=[RouteDef(to="parallel_tasks")],
+                ),
+                AgentDef(
+                    name="task_a",
+                    model="gpt-4",
+                    prompt="Task A",
+                    output={"result": OutputField(type="string")},
+                ),
+                AgentDef(
+                    name="task_b",
+                    model="gpt-4",
+                    prompt="Task B",
+                    output={"result": OutputField(type="string")},
+                ),
+                AgentDef(
+                    name="task_c",
+                    model="gpt-4",
+                    prompt="Task C",
+                    output={"result": OutputField(type="string")},
+                ),
+            ],
+            parallel=[
+                ParallelGroup(
+                    name="parallel_tasks",
+                    agents=["task_a", "task_b", "task_c"],
+                    failure_mode="fail_fast",
+                    routes=[RouteDef(to="$end")],
+                ),
+            ],
+            output={"result": "done"},
+        )
+
+        def mock_handler(agent, prompt, context):
+            return {"result": f"Output from {agent.name}"}
+
+        provider = CopilotProvider(mock_handler=mock_handler)
+        engine = WorkflowEngine(config, provider)
+
+        await engine.run({})
+
+        summary = engine.get_execution_summary()
+
+        # Verify basic stats
+        assert summary["iterations"] == 4  # coordinator + 3 parallel agents
+        assert "coordinator" in summary["agents_executed"]
+        assert "parallel_tasks" in summary["agents_executed"]
+
+        # Verify parallel group stats
+        assert "parallel_groups_executed" in summary
+        assert summary["parallel_groups_executed"] == ["parallel_tasks"]
+        assert "parallel_agents_count" in summary
+        assert summary["parallel_agents_count"] == 3
+
 
 class TestWorkflowEngineOutputTemplates:
     """Tests for output template rendering."""

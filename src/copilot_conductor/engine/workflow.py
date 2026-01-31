@@ -197,6 +197,9 @@ class ExecutionStep:
 
     parallel_agents: list[str] | None = None
     """For parallel groups, list of agent names that execute in parallel."""
+    
+    failure_mode: str | None = None
+    """For parallel groups, the failure handling mode."""
 
 
 @dataclass
@@ -971,9 +974,24 @@ class WorkflowEngine:
 
         Returns:
             Dict with execution statistics including iterations,
-            agents executed, context mode, elapsed time, and limits.
+            agents executed, context mode, elapsed time, limits, and
+            parallel group statistics.
         """
-        return {
+        # Count parallel group executions from execution history
+        parallel_groups_executed = []
+        for name in self.limits.execution_history:
+            # Check if this name corresponds to a parallel group
+            if self._find_parallel_group(name) is not None:
+                parallel_groups_executed.append(name)
+        
+        # Count individual parallel agents that executed
+        parallel_agents_count = 0
+        for group_name in parallel_groups_executed:
+            parallel_group = self._find_parallel_group(group_name)
+            if parallel_group is not None:
+                parallel_agents_count += len(parallel_group.agents)
+        
+        summary = {
             "iterations": self.limits.current_iteration,
             "agents_executed": self.limits.execution_history.copy(),
             "context_mode": self.config.workflow.context.mode,
@@ -981,6 +999,13 @@ class WorkflowEngine:
             "max_iterations": self.limits.max_iterations,
             "timeout_seconds": self.limits.timeout_seconds,
         }
+        
+        # Add parallel group stats if any were executed
+        if parallel_groups_executed:
+            summary["parallel_groups_executed"] = parallel_groups_executed
+            summary["parallel_agents_count"] = parallel_agents_count
+        
+        return summary
 
     def build_execution_plan(self) -> ExecutionPlan:
         """Build an execution plan by analyzing the workflow.
@@ -1075,6 +1100,7 @@ class WorkflowEngine:
                 routes=routes_info,
                 is_loop_target=False,  # Will be updated after traversal
                 parallel_agents=parallel_group.agents.copy(),
+                failure_mode=parallel_group.failure_mode,
             )
             plan.steps.append(step)
             

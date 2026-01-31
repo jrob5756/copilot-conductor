@@ -675,25 +675,27 @@ None.
 
 ### Epic 10: Dry-Run & Debugging Support
 
+**Status**: DONE
+
 **Goal**: Enhance dry-run and debugging tools for parallel workflows.
 
 **Prerequisites**: Epic 6
 
 **Tasks**:
 
-| Task ID | Type | Description | Files | Estimate |
-|---------|------|-------------|-------|----------|
-| PE-10.1 | IMPL | Update `build_execution_plan()` to show parallel groups | `engine/workflow.py` | M |
-| PE-10.2 | IMPL | Add parallel group visualization in dry-run output | `cli/run.py` | M |
-| PE-10.3 | IMPL | Update execution summary to include parallel group stats | `engine/workflow.py` | S |
-| PE-10.4 | TEST | Test dry-run output with parallel workflows | `tests/test_cli/test_run.py` | M |
-| PE-10.5 | TEST | Test execution summary with parallel groups | `tests/test_engine/test_workflow.py` | S |
+| Task ID | Type | Description | Files | Estimate | Status |
+|---------|------|-------------|-------|----------|--------|
+| PE-10.1 | IMPL | Update `build_execution_plan()` to show parallel groups | `engine/workflow.py` | M | DONE |
+| PE-10.2 | IMPL | Add parallel group visualization in dry-run output | `cli/run.py` | M | DONE |
+| PE-10.3 | IMPL | Update execution summary to include parallel group stats | `engine/workflow.py` | S | DONE |
+| PE-10.4 | TEST | Test dry-run output with parallel workflows | `tests/test_cli/test_run.py` | M | DONE |
+| PE-10.5 | TEST | Test execution summary with parallel groups | `tests/test_engine/test_workflow.py` | S | DONE |
 
 **Acceptance Criteria**:
-- [ ] Dry-run output clearly shows parallel groups
-- [ ] Dry-run indicates which agents execute in parallel
-- [ ] Execution summary includes parallel group execution stats
-- [ ] Dry-run shows failure modes for parallel groups
+- [x] Dry-run output clearly shows parallel groups
+- [x] Dry-run indicates which agents execute in parallel
+- [x] Execution summary includes parallel group execution stats
+- [x] Dry-run shows failure modes for parallel groups
 
 ---
 

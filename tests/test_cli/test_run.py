@@ -571,6 +571,119 @@ output: {}
         # Should fail with validation error
         assert result.exit_code != 0
 
+    def test_dry_run_parallel_workflow(self, tmp_path: Path) -> None:
+        """Test dry-run output with parallel groups."""
+        workflow_file = tmp_path / "parallel.yaml"
+        workflow_file.write_text("""\
+workflow:
+  name: parallel-test
+  entry_point: coordinator
+
+agents:
+  - name: coordinator
+    model: gpt-4
+    prompt: "Start parallel tasks"
+    routes:
+      - to: parallel_research
+
+  - name: research_a
+    model: gpt-4
+    prompt: "Research A"
+
+  - name: research_b
+    model: gpt-4
+    prompt: "Research B"
+
+  - name: synthesizer
+    model: gpt-4
+    prompt: "Synthesize results"
+    routes:
+      - to: $end
+
+parallel:
+  - name: parallel_research
+    agents:
+      - research_a
+      - research_b
+    failure_mode: fail_fast
+    routes:
+      - to: synthesizer
+
+output:
+  result: "{{ synthesizer.output }}"
+""")
+
+        result = runner.invoke(app, ["run", str(workflow_file), "--dry-run"])
+
+        # Should succeed
+        assert result.exit_code == 0
+        # Should show parallel group (may be truncated in narrow display)
+        assert "parallel_res" in result.output
+        # Type column shows truncated "parallel_gr..." for space, so check Type header instead
+        assert "Type" in result.output
+        # Should show failure mode
+        assert "fail_fast" in result.output
+        # Should show parallel agents
+        assert "research_a" in result.output
+        assert "research_b" in result.output
+        # Should show parallel stats in summary
+        assert "Parallel groups:" in result.output
+        assert "Parallel agents:" in result.output
+
+    def test_dry_run_parallel_with_continue_on_error(self, tmp_path: Path) -> None:
+        """Test dry-run with continue_on_error failure mode."""
+        workflow_file = tmp_path / "parallel_continue.yaml"
+        workflow_file.write_text("""\
+workflow:
+  name: parallel-continue
+  entry_point: parallel_validators
+
+agents:
+  - name: validator_a
+    model: gpt-4
+    prompt: "Validate A"
+
+  - name: validator_b
+    model: gpt-4
+    prompt: "Validate B"
+
+  - name: validator_c
+    model: gpt-4
+    prompt: "Validate C"
+
+  - name: report
+    model: gpt-4
+    prompt: "Generate report"
+    routes:
+      - to: $end
+
+parallel:
+  - name: parallel_validators
+    agents:
+      - validator_a
+      - validator_b
+      - validator_c
+    failure_mode: continue_on_error
+    routes:
+      - to: report
+
+output:
+  result: "{{ report.output }}"
+""")
+
+        result = runner.invoke(app, ["run", str(workflow_file), "--dry-run"])
+
+        # Should succeed
+        assert result.exit_code == 0
+        # Should show continue_on_error mode
+        assert "continue_on_error" in result.output
+        # Should show all three validators
+        assert "validator_a" in result.output
+        assert "validator_b" in result.output
+        assert "validator_c" in result.output
+        # Should show parallel group stats in summary
+        assert "Parallel groups:" in result.output
+
 
 class TestDryRunDisplayFunctions:
     """Tests for dry-run display helper functions."""

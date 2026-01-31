@@ -567,23 +567,61 @@ def display_execution_plan(plan: ExecutionPlan, console: Console | None = None) 
     for i, step in enumerate(plan.steps, 1):
         routes_str = format_routes(step.routes)
         loop_marker = " [yellow](loop target)[/yellow]" if step.is_loop_target else ""
-
-        table.add_row(
-            str(i),
-            f"{step.agent_name}{loop_marker}",
-            step.agent_type,
-            step.model or "[dim]default[/dim]",
-            routes_str,
-        )
+        
+        # Handle parallel groups differently
+        if step.agent_type == "parallel_group":
+            # Show parallel group with failure mode
+            failure_mode_display = step.failure_mode or "fail_fast"
+            model_info = f"[dim]{failure_mode_display}[/dim]"
+            
+            table.add_row(
+                str(i),
+                f"{step.agent_name}{loop_marker}",
+                step.agent_type,
+                model_info,
+                routes_str,
+            )
+            
+            # Add a detail row showing which agents execute in parallel
+            if step.parallel_agents:
+                agents_display = ", ".join(f"[cyan]{agent}[/cyan]" for agent in step.parallel_agents)
+                table.add_row(
+                    "",
+                    f"[dim]  ⚡ {agents_display}[/dim]",
+                    "",
+                    "",
+                    "",
+                )
+        else:
+            table.add_row(
+                str(i),
+                f"{step.agent_name}{loop_marker}",
+                step.agent_type,
+                step.model or "[dim]default[/dim]",
+                routes_str,
+            )
 
     output_console.print(table)
 
     # Print summary
     output_console.print()
-    output_console.print(
-        f"[dim]Total agents:[/dim] {len(plan.steps)} | "
-        f"[dim]Loop targets:[/dim] {sum(1 for s in plan.steps if s.is_loop_target)}"
+    parallel_group_count = sum(1 for s in plan.steps if s.agent_type == "parallel_group")
+    total_parallel_agents = sum(
+        len(s.parallel_agents or []) 
+        for s in plan.steps 
+        if s.agent_type == "parallel_group"
     )
+    
+    summary_parts = [
+        f"[dim]Total steps:[/dim] {len(plan.steps)}",
+        f"[dim]Loop targets:[/dim] {sum(1 for s in plan.steps if s.is_loop_target)}",
+    ]
+    
+    if parallel_group_count > 0:
+        summary_parts.append(f"[dim]Parallel groups:[/dim] {parallel_group_count}")
+        summary_parts.append(f"[dim]Parallel agents:[/dim] {total_parallel_agents}")
+    
+    output_console.print(" | ".join(summary_parts))
 
 
 def build_dry_run_plan(workflow_path: Path) -> ExecutionPlan:
