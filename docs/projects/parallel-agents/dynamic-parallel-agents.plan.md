@@ -1061,21 +1061,23 @@ def _find_for_each_group(self, name: str) -> ForEachDef | None:
 
 **Prerequisites**: Epic 4
 
+**Status**: DONE
+
 **Tasks**:
 | Task ID | Type | Description | Files | Status |
 |---------|------|-------------|-------|--------|
-| E5-T1 | IMPL | Implement fail_fast mode (stop on first error) | `src/copilot_conductor/engine/workflow.py` | TO DO |
-| E5-T2 | IMPL | Implement continue_on_error mode (fail if all fail) | `src/copilot_conductor/engine/workflow.py` | TO DO |
-| E5-T3 | IMPL | Implement all_or_nothing mode (fail if any fail) | `src/copilot_conductor/engine/workflow.py` | TO DO |
-| E5-T4 | TEST | Test fail_fast: verify early termination | `tests/test_integration/test_for_each.py` | TO DO |
-| E5-T5 | TEST | Test continue_on_error: verify partial success | `tests/test_integration/test_for_each.py` | TO DO |
-| E5-T6 | TEST | Test all_or_nothing: verify all-or-none semantics | `tests/test_integration/test_for_each.py` | TO DO |
+| E5-T1 | IMPL | Implement fail_fast mode (stop on first error) | `src/copilot_conductor/engine/workflow.py` | DONE |
+| E5-T2 | IMPL | Implement continue_on_error mode (fail if all fail) | `src/copilot_conductor/engine/workflow.py` | DONE |
+| E5-T3 | IMPL | Implement all_or_nothing mode (fail if any fail) | `src/copilot_conductor/engine/workflow.py` | DONE |
+| E5-T4 | TEST | Test fail_fast: verify early termination | `tests/test_integration/test_for_each.py` | DONE |
+| E5-T5 | TEST | Test continue_on_error: verify partial success | `tests/test_integration/test_for_each.py` | DONE |
+| E5-T6 | TEST | Test all_or_nothing: verify all-or-none semantics | `tests/test_integration/test_for_each.py` | DONE |
 
 **Acceptance Criteria**:
-- [ ] fail_fast stops execution on first failure
-- [ ] continue_on_error collects all errors, fails only if all items fail
-- [ ] all_or_nothing fails if any item fails
-- [ ] All tests pass
+- [x] fail_fast stops execution on first failure
+- [x] continue_on_error collects all errors, fails only if all items fail
+- [x] all_or_nothing fails if any item fails
+- [x] All tests pass
 
 ---
 

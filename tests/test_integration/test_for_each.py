@@ -613,3 +613,279 @@ class TestForEachExecution:
         # Verify batching (should have 3 batches: 2+2+1)
         # We can't easily verify exact batch execution, but we verify all items processed
         assert provider.execute.call_count == 6  # 1 finder + 5 processors
+
+    @pytest.mark.asyncio
+    async def test_for_each_continue_on_error_partial_success(self):
+        """Test continue_on_error mode with partial successes - workflow should continue."""
+        from unittest.mock import AsyncMock, MagicMock
+        from copilot_conductor.providers.base import AgentOutput
+        from copilot_conductor.exceptions import ExecutionError
+        
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="continue-on-error-test",
+                entry_point="finder",
+                runtime=RuntimeConfig(provider="copilot"),
+                context=ContextConfig(mode="accumulate"),
+                limits=LimitsConfig(max_iterations=50),
+            ),
+            agents=[
+                AgentDef(
+                    name="finder",
+                    model="gpt-4",
+                    prompt="Find items",
+                    output={"items": OutputField(type="array")},
+                    routes=[RouteDef(to="processors")],
+                ),
+            ],
+            for_each=[
+                ForEachDef.model_validate({
+                    "name": "processors",
+                    "type": "for_each",
+                    "source": "finder.output.items",
+                    "as": "item",
+                    "max_concurrent": 10,
+                    "failure_mode": "continue_on_error",
+                    "agent": {
+                        "name": "processor",
+                        "model": "gpt-4",
+                        "prompt": "Process {{ item }}",
+                        "output": {"result": {"type": "string"}},
+                    },
+                    "routes": [{"to": "$end"}],
+                }),
+            ],
+            output={"count": "{{ processors.count }}", "success_count": "{{ processors.outputs | length }}"},
+        )
+        
+        provider = MagicMock()
+        provider.execute = AsyncMock()
+        
+        # Setup: finder returns 5 items, items at index 1 and 3 fail
+        provider.execute.side_effect = [
+            AgentOutput(
+                content={"items": ["A", "B", "C", "D", "E"]},
+                raw_response={},
+                model="gpt-4",
+                tokens_used=20,
+            ),
+            AgentOutput(content={"result": "ok_A"}, raw_response={}, model="gpt-4", tokens_used=10),
+            ExecutionError("Processing failed for B"),
+            AgentOutput(content={"result": "ok_C"}, raw_response={}, model="gpt-4", tokens_used=10),
+            ExecutionError("Processing failed for D"),
+            AgentOutput(content={"result": "ok_E"}, raw_response={}, model="gpt-4", tokens_used=10),
+        ]
+        
+        engine = WorkflowEngine(config, provider)
+        
+        # Should NOT raise error (some items succeeded)
+        result = await engine.run({})
+        
+        # Verify partial success
+        assert result["count"] == 5
+        assert result["success_count"] == 3  # Only 3 successful items
+
+    @pytest.mark.asyncio
+    async def test_for_each_continue_on_error_all_fail(self):
+        """Test continue_on_error mode when all items fail - should raise error."""
+        from unittest.mock import AsyncMock, MagicMock
+        from copilot_conductor.providers.base import AgentOutput
+        from copilot_conductor.exceptions import ExecutionError
+        
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="continue-on-error-all-fail-test",
+                entry_point="finder",
+                runtime=RuntimeConfig(provider="copilot"),
+                context=ContextConfig(mode="accumulate"),
+                limits=LimitsConfig(max_iterations=50),
+            ),
+            agents=[
+                AgentDef(
+                    name="finder",
+                    model="gpt-4",
+                    prompt="Find items",
+                    output={"items": OutputField(type="array")},
+                    routes=[RouteDef(to="processors")],
+                ),
+            ],
+            for_each=[
+                ForEachDef.model_validate({
+                    "name": "processors",
+                    "type": "for_each",
+                    "source": "finder.output.items",
+                    "as": "item",
+                    "max_concurrent": 10,
+                    "failure_mode": "continue_on_error",
+                    "agent": {
+                        "name": "processor",
+                        "model": "gpt-4",
+                        "prompt": "Process {{ item }}",
+                        "output": {"result": {"type": "string"}},
+                    },
+                }),
+            ],
+            output={},
+        )
+        
+        provider = MagicMock()
+        provider.execute = AsyncMock()
+        
+        # Setup: finder returns 3 items, all processors fail
+        provider.execute.side_effect = [
+            AgentOutput(
+                content={"items": ["A", "B", "C"]},
+                raw_response={},
+                model="gpt-4",
+                tokens_used=20,
+            ),
+            ExecutionError("Processing failed for A"),
+            ExecutionError("Processing failed for B"),
+            ExecutionError("Processing failed for C"),
+        ]
+        
+        engine = WorkflowEngine(config, provider)
+        
+        # Should raise ExecutionError because ALL items failed
+        with pytest.raises(ExecutionError) as exc_info:
+            await engine.run({})
+        
+        assert "All items in for-each group 'processors' failed" in str(exc_info.value)
+        assert "continue_on_error mode" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_for_each_all_or_nothing_all_succeed(self):
+        """Test all_or_nothing mode when all items succeed - should complete successfully."""
+        from unittest.mock import AsyncMock, MagicMock
+        from copilot_conductor.providers.base import AgentOutput
+        
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="all-or-nothing-success-test",
+                entry_point="finder",
+                runtime=RuntimeConfig(provider="copilot"),
+                context=ContextConfig(mode="accumulate"),
+                limits=LimitsConfig(max_iterations=50),
+            ),
+            agents=[
+                AgentDef(
+                    name="finder",
+                    model="gpt-4",
+                    prompt="Find items",
+                    output={"items": OutputField(type="array")},
+                    routes=[RouteDef(to="processors")],
+                ),
+            ],
+            for_each=[
+                ForEachDef.model_validate({
+                    "name": "processors",
+                    "type": "for_each",
+                    "source": "finder.output.items",
+                    "as": "item",
+                    "max_concurrent": 10,
+                    "failure_mode": "all_or_nothing",
+                    "agent": {
+                        "name": "processor",
+                        "model": "gpt-4",
+                        "prompt": "Process {{ item }}",
+                        "output": {"result": {"type": "string"}},
+                    },
+                    "routes": [{"to": "$end"}],
+                }),
+            ],
+            output={"count": "{{ processors.count }}", "success_count": "{{ processors.outputs | length }}"},
+        )
+        
+        provider = MagicMock()
+        provider.execute = AsyncMock()
+        
+        # Setup: finder returns 3 items, all processors succeed
+        provider.execute.side_effect = [
+            AgentOutput(
+                content={"items": ["A", "B", "C"]},
+                raw_response={},
+                model="gpt-4",
+                tokens_used=20,
+            ),
+            AgentOutput(content={"result": "ok_A"}, raw_response={}, model="gpt-4", tokens_used=10),
+            AgentOutput(content={"result": "ok_B"}, raw_response={}, model="gpt-4", tokens_used=10),
+            AgentOutput(content={"result": "ok_C"}, raw_response={}, model="gpt-4", tokens_used=10),
+        ]
+        
+        engine = WorkflowEngine(config, provider)
+        result = await engine.run({})
+        
+        # All items should succeed
+        assert result["count"] == 3
+        assert result["success_count"] == 3
+
+    @pytest.mark.asyncio
+    async def test_for_each_all_or_nothing_any_fail(self):
+        """Test all_or_nothing mode when any item fails - should raise error."""
+        from unittest.mock import AsyncMock, MagicMock
+        from copilot_conductor.providers.base import AgentOutput
+        from copilot_conductor.exceptions import ExecutionError
+        
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="all-or-nothing-fail-test",
+                entry_point="finder",
+                runtime=RuntimeConfig(provider="copilot"),
+                context=ContextConfig(mode="accumulate"),
+                limits=LimitsConfig(max_iterations=50),
+            ),
+            agents=[
+                AgentDef(
+                    name="finder",
+                    model="gpt-4",
+                    prompt="Find items",
+                    output={"items": OutputField(type="array")},
+                    routes=[RouteDef(to="processors")],
+                ),
+            ],
+            for_each=[
+                ForEachDef.model_validate({
+                    "name": "processors",
+                    "type": "for_each",
+                    "source": "finder.output.items",
+                    "as": "item",
+                    "max_concurrent": 10,
+                    "failure_mode": "all_or_nothing",
+                    "agent": {
+                        "name": "processor",
+                        "model": "gpt-4",
+                        "prompt": "Process {{ item }}",
+                        "output": {"result": {"type": "string"}},
+                    },
+                }),
+            ],
+            output={},
+        )
+        
+        provider = MagicMock()
+        provider.execute = AsyncMock()
+        
+        # Setup: finder returns 5 items, item at index 2 fails
+        provider.execute.side_effect = [
+            AgentOutput(
+                content={"items": ["A", "B", "C", "D", "E"]},
+                raw_response={},
+                model="gpt-4",
+                tokens_used=20,
+            ),
+            AgentOutput(content={"result": "ok_A"}, raw_response={}, model="gpt-4", tokens_used=10),
+            AgentOutput(content={"result": "ok_B"}, raw_response={}, model="gpt-4", tokens_used=10),
+            ExecutionError("Processing failed for C"),
+            AgentOutput(content={"result": "ok_D"}, raw_response={}, model="gpt-4", tokens_used=10),
+            AgentOutput(content={"result": "ok_E"}, raw_response={}, model="gpt-4", tokens_used=10),
+        ]
+        
+        engine = WorkflowEngine(config, provider)
+        
+        # Should raise ExecutionError because one item failed (even though 4 succeeded)
+        with pytest.raises(ExecutionError) as exc_info:
+            await engine.run({})
+        
+        assert "For-each group 'processors' failed" in str(exc_info.value)
+        assert "4 succeeded, 1 failed" in str(exc_info.value)
+        assert "all_or_nothing mode" in str(exc_info.value)
