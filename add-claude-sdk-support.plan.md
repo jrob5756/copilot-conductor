@@ -1448,6 +1448,8 @@ async def _handle_tool_use(self, initial_response, mcp_executor, messages_histor
 
 ### EPIC-007: Configuration Schema Updates (Phase 1)
 
+**Status**: ✅ DONE
+
 **Goal**: Extend configuration schema to support Claude-specific options
 
 **Prerequisites**: None (can be done in parallel, but MUST complete before implementation begins)
@@ -1458,24 +1460,24 @@ async def _handle_tool_use(self, initial_response, mcp_executor, messages_histor
 
 | Task ID | Type | Description | Files | Status |
 |---------|------|-------------|-------|--------|
-| EPIC-007-T1 | IMPL | Add temperature field to RuntimeConfig (0.0-1.0, optional) | `src/copilot_conductor/config/schema.py` | TO DO |
-| EPIC-007-T2 | IMPL | Add max_tokens field to RuntimeConfig (1-200000, optional) | `src/copilot_conductor/config/schema.py` | TO DO |
-| EPIC-007-T3 | IMPL | Add top_p field to RuntimeConfig (0.0-1.0, optional) | `src/copilot_conductor/config/schema.py` | TO DO |
-| EPIC-007-T4 | IMPL | Add top_k field to RuntimeConfig (>=0, optional) | `src/copilot_conductor/config/schema.py` | TO DO |
-| EPIC-007-T4A | TEST | Add Pydantic serialization round-trip test: verify exclude_none=True prevents new fields in Copilot configs | `tests/test_config/test_schema.py` | TO DO |
-| EPIC-007-T5 | IMPL | Add stop_sequences field to RuntimeConfig (list of strings, optional) | `src/copilot_conductor/config/schema.py` | TO DO |
-| EPIC-007-T6 | IMPL | Add metadata field to RuntimeConfig for prompt caching (dict, optional) | `src/copilot_conductor/config/schema.py` | TO DO |
-| EPIC-007-T7 | IMPL | Update AgentDef.model documentation with Claude models and recommendations | `src/copilot_conductor/config/schema.py` | TO DO |
-| EPIC-007-T8 | TEST | Add validation tests for new config fields with boundary values | `tests/test_config/test_schema.py` | TO DO |
-| EPIC-007-T9 | TEST | Add validation tests for invalid ranges (negative, out of bounds) | `tests/test_config/test_schema.py` | TO DO |
+| EPIC-007-T1 | IMPL | Add temperature field to RuntimeConfig (0.0-1.0, optional) | `src/copilot_conductor/config/schema.py` | DONE |
+| EPIC-007-T2 | IMPL | Add max_tokens field to RuntimeConfig (1-200000, optional) | `src/copilot_conductor/config/schema.py` | DONE |
+| EPIC-007-T3 | IMPL | Add top_p field to RuntimeConfig (0.0-1.0, optional) | `src/copilot_conductor/config/schema.py` | DONE |
+| EPIC-007-T4 | IMPL | Add top_k field to RuntimeConfig (>=0, optional) | `src/copilot_conductor/config/schema.py` | DONE |
+| EPIC-007-T4A | TEST | Add Pydantic serialization round-trip test: verify exclude_none=True prevents new fields in Copilot configs | `tests/test_config/test_schema.py` | DONE |
+| EPIC-007-T5 | IMPL | Add stop_sequences field to RuntimeConfig (list of strings, optional) | `src/copilot_conductor/config/schema.py` | DONE |
+| EPIC-007-T6 | IMPL | Add metadata field to RuntimeConfig for prompt caching (dict, optional) | `src/copilot_conductor/config/schema.py` | DONE |
+| EPIC-007-T7 | IMPL | Update AgentDef.model documentation with Claude models and recommendations | `src/copilot_conductor/config/schema.py` | DONE |
+| EPIC-007-T8 | TEST | Add validation tests for new config fields with boundary values | `tests/test_config/test_schema.py` | DONE |
+| EPIC-007-T9 | TEST | Add validation tests for invalid ranges (negative, out of bounds) | `tests/test_config/test_schema.py` | DONE |
 
 **Acceptance Criteria**:
-- [ ] All Claude-specific config fields are optional with sensible defaults
-- [ ] Fields have proper type hints, validators, and documentation
-- [ ] Validation ensures valid value ranges (Pydantic Field validators)
-- [ ] Tests verify schema validation for Claude configs
-- [ ] Invalid values raise clear ValidationError messages
-- [ ] Pydantic serialization with exclude_none=True verified to exclude new fields from Copilot configs
+- [x] All Claude-specific config fields are optional with sensible defaults
+- [x] Fields have proper type hints, validators, and documentation
+- [x] Validation ensures valid value ranges (Pydantic Field validators)
+- [x] Tests verify schema validation for Claude configs
+- [x] Invalid values raise clear ValidationError messages
+- [x] Pydantic serialization with exclude_none=True verified to exclude new fields from Copilot configs
 
 ---
 

@@ -328,7 +328,20 @@ class AgentDef(BaseModel):
     """Agent type. Defaults to 'agent' if not specified."""
 
     model: str | None = None
-    """Model identifier (e.g., 'claude-sonnet-4'). Supports ${ENV:-default}."""
+    """Model identifier.
+
+    Examples:
+    - GitHub Copilot: 'claude-sonnet-4', 'gpt-4', etc.
+    - Claude (recommended default): 'claude-3-5-sonnet-latest' (stable, auto-updates)
+    - Claude 4.5 Series (newest): 'claude-sonnet-4-5-20250929'
+    - Claude 4 Series: 'claude-sonnet-4-20250514'
+    - Claude 3.7 Series: 'claude-3-7-sonnet-20250219'
+    - Claude 3.5 Series: 'claude-3-5-sonnet-20241022'
+    - Claude 3 Series (legacy): 'claude-3-opus-20240229', 'claude-3-sonnet-20240229',
+      'claude-3-haiku-20240307'
+
+    Supports environment variables: ${MODEL:-default_value}
+    """
 
     input: list[str] = Field(default_factory=list)
     """Context dependencies. Format: 'agent_name.output' or 'workflow.input.param'.
@@ -411,6 +424,54 @@ class RuntimeConfig(BaseModel):
 
     mcp_servers: dict[str, MCPServerDef] = Field(default_factory=dict)
     """MCP server configurations keyed by server name."""
+
+    # Claude-specific configuration (optional with None defaults for backward compatibility)
+    temperature: float | None = Field(
+        None,
+        ge=0.0,
+        le=1.0,
+        description="Controls randomness. Claude range: 0.0-1.0",
+    )
+    """Temperature parameter for Claude models. Controls randomness in responses."""
+
+    max_tokens: int | None = Field(
+        None,
+        ge=1,
+        le=200000,
+        description=(
+            "Maximum OUTPUT tokens per response. "
+            "Claude 4: 8192 (Opus/Sonnet) or 4096 (Haiku). "
+            "Context window: 200K tokens (separate limit)"
+        ),
+    )
+    """Maximum number of output tokens Claude can generate per response."""
+
+    top_p: float | None = Field(
+        None,
+        ge=0.0,
+        le=1.0,
+        description="Nucleus sampling threshold",
+    )
+    """Top-p (nucleus sampling) parameter for Claude models."""
+
+    top_k: int | None = Field(
+        None,
+        ge=0,
+        description="Top-k sampling parameter",
+    )
+    """Top-k sampling parameter for Claude models."""
+
+    stop_sequences: list[str] | None = Field(
+        None,
+        description="Custom stop sequences to halt generation",
+    )
+    """Custom stop sequences that will halt Claude's generation."""
+
+    metadata: dict[str, Any] | None = Field(
+        None,
+        description="User ID and other metadata for prompt caching and abuse detection",
+    )
+    """Metadata for Claude API (e.g., user_id for prompt caching and abuse detection)."""
 
 
 class WorkflowDef(BaseModel):
