@@ -73,6 +73,67 @@ class TestCreateProvider:
         assert provider is not None
         assert provider.__class__.__name__ == "ClaudeProvider"
 
+    @patch("copilot_conductor.providers.factory.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    @pytest.mark.asyncio
+    async def test_create_claude_provider_with_config(
+        self, mock_anthropic_module: Any, mock_anthropic_class: Any
+    ) -> None:
+        """Test that Claude provider accepts runtime config parameters."""
+        from unittest.mock import AsyncMock
+
+        mock_anthropic_module.__version__ = "0.77.0"
+        mock_client = MagicMock()
+        mock_client.models.list = AsyncMock(return_value=MagicMock(data=[]))
+        mock_anthropic_class.return_value = mock_client
+
+        provider = await create_provider(
+            "claude",
+            validate=False,
+            default_model="claude-3-5-sonnet-latest",
+            temperature=0.7,
+            max_tokens=4096,
+            timeout=300.0,
+        )
+        assert provider is not None
+        assert provider.__class__.__name__ == "ClaudeProvider"
+        # Verify config was passed - check provider attributes
+        assert provider._default_model == "claude-3-5-sonnet-latest"
+        assert provider._default_temperature == 0.7
+        assert provider._default_max_tokens == 4096
+        assert provider._timeout == 300.0
+
+    @patch("copilot_conductor.providers.factory.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    @pytest.mark.asyncio
+    async def test_create_claude_provider_with_validation(
+        self, mock_anthropic_module: Any, mock_anthropic_class: Any
+    ) -> None:
+        """Test that Claude provider can be created with connection validation."""
+        from unittest.mock import AsyncMock
+
+        mock_anthropic_module.__version__ = "0.77.0"
+        mock_client = MagicMock()
+        # Mock successful connection validation
+        mock_client.models.list = AsyncMock(
+            return_value=MagicMock(
+                data=[
+                    MagicMock(id="claude-3-5-sonnet-latest"),
+                    MagicMock(id="claude-3-opus-latest"),
+                ]
+            )
+        )
+        mock_anthropic_class.return_value = mock_client
+
+        provider = await create_provider("claude", validate=True)
+        assert provider is not None
+        assert provider.__class__.__name__ == "ClaudeProvider"
+        # Verify models.list was called for validation
+        # Called twice: once in __init__ and once in validate_connection
+        assert mock_client.models.list.call_count == 2
+
     @pytest.mark.asyncio
     async def test_create_unknown_provider_raises(self) -> None:
         """Test that unknown provider types raise ProviderError."""

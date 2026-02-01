@@ -617,6 +617,10 @@ async def run_workflow_async(
     provider = await create_provider(
         config.workflow.runtime.provider,
         mcp_servers=mcp_servers,
+        default_model=config.workflow.runtime.default_model,
+        temperature=getattr(config.workflow.runtime, "temperature", None),
+        max_tokens=getattr(config.workflow.runtime, "max_tokens", None),
+        timeout=getattr(config.workflow.runtime, "timeout", None),
     )
 
     try:

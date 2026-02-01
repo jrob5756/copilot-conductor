@@ -18,6 +18,10 @@ async def create_provider(
     provider_type: Literal["copilot", "openai-agents", "claude"] = "copilot",
     validate: bool = True,
     mcp_servers: dict[str, Any] | None = None,
+    default_model: str | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+    timeout: float | None = None,
 ) -> AgentProvider:
     """Factory function to create the appropriate provider.
 
@@ -26,11 +30,16 @@ async def create_provider(
     connect to its backend before returning.
 
     Args:
-        provider_type: Which SDK provider to use. Currently only "copilot"
-            is fully implemented.
+        provider_type: Which SDK provider to use. Currently supports
+            "copilot" and "claude".
         validate: Whether to validate connection on creation. If True,
             calls validate_connection() and raises ProviderError on failure.
         mcp_servers: MCP server configurations to pass to the provider.
+            Note: Phase 1 Claude provider does not support MCP servers.
+        default_model: Default model to use for agents that don't specify one.
+        temperature: Default temperature for generation (0.0-1.0 for Claude).
+        max_tokens: Maximum output tokens.
+        timeout: Request timeout in seconds.
 
     Returns:
         Configured AgentProvider instance.
@@ -45,7 +54,10 @@ async def create_provider(
     """
     match provider_type:
         case "copilot":
-            provider = CopilotProvider(mcp_servers=mcp_servers)
+            provider = CopilotProvider(
+                mcp_servers=mcp_servers,
+                model=default_model,
+            )
         case "openai-agents":
             raise ProviderError(
                 "OpenAI Agents provider not yet implemented",
@@ -57,10 +69,14 @@ async def create_provider(
                     "Claude provider requires anthropic SDK",
                     suggestion="Install with: uv add 'anthropic>=0.77.0,<1.0.0'",
                 )
-            # ClaudeProvider initialization is synchronous (safe in async context)
-            # The SDK client is created in __init__ but actual I/O happens in
-            # validate_connection() and execute() which are properly async
-            provider = ClaudeProvider()
+            # Phase 1: MCP servers not supported for Claude provider
+            # Will be added in Phase 2 (EPIC-005)
+            provider = ClaudeProvider(
+                model=default_model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                timeout=timeout if timeout is not None else 600.0,
+            )
         case _:
             raise ProviderError(
                 f"Unknown provider: {provider_type}",

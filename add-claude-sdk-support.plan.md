@@ -1419,6 +1419,8 @@ async def _handle_tool_use(self, initial_response, mcp_executor, messages_histor
 
 ### EPIC-006: Provider Factory Integration
 
+**Status**: ✅ DONE
+
 **Goal**: Integrate ClaudeProvider into the provider factory system
 
 **Prerequisites**: EPIC-001, EPIC-002, EPIC-003, EPIC-004 (Core functionality must be complete)
@@ -1427,20 +1429,20 @@ async def _handle_tool_use(self, initial_response, mcp_executor, messages_histor
 
 | Task ID | Type | Description | Files | Status |
 |---------|------|-------------|-------|--------|
-| EPIC-006-T1 | IMPL | Update factory.py to instantiate ClaudeProvider | `src/copilot_conductor/providers/factory.py` | TO DO |
-| EPIC-006-T2 | IMPL | Remove "not yet implemented" exception for Claude | `src/copilot_conductor/providers/factory.py` | TO DO |
-| EPIC-006-T3 | IMPL | Pass runtime config to ClaudeProvider (Phase 1: exclude MCP servers) | `src/copilot_conductor/providers/factory.py` | TO DO |
-| EPIC-006-T4 | IMPL | Export ClaudeProvider from providers __init__.py | `src/copilot_conductor/providers/__init__.py` | TO DO |
-| EPIC-006-T5 | TEST | Update factory tests to include Claude provider | `tests/test_providers/test_factory.py` | TO DO |
-| EPIC-006-T6 | TEST | Add test for provider creation with validation | `tests/test_providers/test_factory.py` | TO DO |
+| EPIC-006-T1 | IMPL | Update factory.py to instantiate ClaudeProvider | `src/copilot_conductor/providers/factory.py` | DONE |
+| EPIC-006-T2 | IMPL | Remove "not yet implemented" exception for Claude | `src/copilot_conductor/providers/factory.py` | DONE |
+| EPIC-006-T3 | IMPL | Pass runtime config to ClaudeProvider (Phase 1: exclude MCP servers) | `src/copilot_conductor/providers/factory.py` | DONE |
+| EPIC-006-T4 | IMPL | Export ClaudeProvider from providers __init__.py | `src/copilot_conductor/providers/__init__.py` | DONE |
+| EPIC-006-T5 | TEST | Update factory tests to include Claude provider | `tests/test_providers/test_factory.py` | DONE |
+| EPIC-006-T6 | TEST | Add test for provider creation with validation | `tests/test_providers/test_factory.py` | DONE |
 
 **Acceptance Criteria**:
-- [ ] `create_provider("claude")` returns ClaudeProvider instance
-- [ ] Connection validation runs on provider creation
-- [ ] Runtime config (temperature, max_tokens, etc.) is passed correctly
-- [ ] Phase 1: MCP servers NOT passed (deferred to Phase 2)
-- [ ] Factory tests cover Claude provider instantiation
-- [ ] Error handling works for missing API key
+- [x] `create_provider("claude")` returns ClaudeProvider instance
+- [x] Connection validation runs on provider creation
+- [x] Runtime config (temperature, max_tokens, etc.) is passed correctly
+- [x] Phase 1: MCP servers NOT passed (deferred to Phase 2)
+- [x] Factory tests cover Claude provider instantiation
+- [x] Error handling works for missing API key
 
 ---
 
