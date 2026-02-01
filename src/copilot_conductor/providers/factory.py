@@ -22,10 +22,6 @@ async def create_provider(
     temperature: float | None = None,
     max_tokens: int | None = None,
     timeout: float | None = None,
-    top_p: float | None = None,
-    top_k: int | None = None,
-    stop_sequences: list[str] | None = None,
-    metadata: dict[str, Any] | None = None,
 ) -> AgentProvider:
     """Factory function to create the appropriate provider.
 
@@ -41,13 +37,9 @@ async def create_provider(
         mcp_servers: MCP server configurations to pass to the provider.
             Note: Phase 1 Claude provider does not support MCP servers.
         default_model: Default model to use for agents that don't specify one.
-        temperature: Default temperature for generation (0.0-1.0 for Claude).
+        temperature: Default temperature for generation (0.0-1.0).
         max_tokens: Maximum output tokens.
         timeout: Request timeout in seconds.
-        top_p: Nucleus sampling parameter (Claude-specific).
-        top_k: Top-k sampling parameter (Claude-specific).
-        stop_sequences: Custom stop sequences (Claude-specific).
-        metadata: Metadata dict for API (Claude-specific).
 
     Returns:
         Configured AgentProvider instance.
@@ -65,6 +57,7 @@ async def create_provider(
             provider = CopilotProvider(
                 mcp_servers=mcp_servers,
                 model=default_model,
+                temperature=temperature,
             )
         case "openai-agents":
             raise ProviderError(
@@ -84,10 +77,6 @@ async def create_provider(
                 temperature=temperature,
                 max_tokens=max_tokens,
                 timeout=timeout if timeout is not None else 600.0,
-                top_p=top_p,
-                top_k=top_k,
-                stop_sequences=stop_sequences,
-                metadata=metadata,
             )
         case _:
             raise ProviderError(

@@ -425,30 +425,29 @@ class RuntimeConfig(BaseModel):
     mcp_servers: dict[str, MCPServerDef] = Field(default_factory=dict)
     """MCP server configurations keyed by server name."""
 
-    # Claude-specific configuration (optional with None defaults for backward compatibility)
     temperature: float | None = Field(
         None,
         ge=0.0,
         le=1.0,
-        description="Controls randomness. Claude range: 0.0-1.0",
+        description="Controls randomness. Range: 0.0-1.0",
     )
-    """Temperature parameter for Claude models. Controls randomness in responses."""
+    """Temperature parameter for models. Controls randomness in responses."""
 
     max_tokens: int | None = Field(
         None,
         ge=1,
         le=200000,
         description=(
-            "Maximum OUTPUT tokens Claude generates per response (NOT context window limit). "
+            "Maximum OUTPUT tokens generated per response (NOT context window limit). "
             "Claude 4: max 8192 (Opus/Sonnet) or 4096 (Haiku). "
             "Context window: 200K tokens input+output combined (separate from this setting)"
         ),
     )
-    """Maximum number of output tokens Claude can generate per response.
-    
+    """Maximum number of output tokens to generate per response.
+
     Note: This controls response length, NOT context window. Context trimming
     is handled separately by the workflow engine if needed.
-    
+
     Claude 4 limits: Opus/Sonnet 8192, Haiku 4096.
     """
 
@@ -462,40 +461,13 @@ class RuntimeConfig(BaseModel):
         ),
     )
     """Timeout for individual API requests (per-request, not per-workflow).
-    
+
     This timeout applies to each agent execution independently. For example,
     if timeout=60 and a workflow has 3 agents, each agent gets 60 seconds.
-    
+
     For workflow-level timeout enforcement, use `limits.timeout_seconds` instead,
     which limits the total wall-clock time for the entire workflow.
     """
-
-    top_p: float | None = Field(
-        None,
-        ge=0.0,
-        le=1.0,
-        description="Nucleus sampling threshold",
-    )
-    """Top-p (nucleus sampling) parameter for Claude models."""
-
-    top_k: int | None = Field(
-        None,
-        ge=0,
-        description="Top-k sampling parameter",
-    )
-    """Top-k sampling parameter for Claude models."""
-
-    stop_sequences: list[str] | None = Field(
-        None,
-        description="Custom stop sequences to halt generation",
-    )
-    """Custom stop sequences that will halt Claude's generation."""
-
-    metadata: dict[str, Any] | None = Field(
-        None,
-        description="User ID and other metadata for prompt caching and abuse detection",
-    )
-    """Metadata for Claude API (e.g., user_id for prompt caching and abuse detection)."""
 
 
 class WorkflowDef(BaseModel):

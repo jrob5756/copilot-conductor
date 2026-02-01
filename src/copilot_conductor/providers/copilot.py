@@ -109,6 +109,7 @@ class CopilotProvider(AgentProvider):
         model: str | None = None,
         mcp_servers: dict[str, Any] | None = None,
         idle_recovery_config: IdleRecoveryConfig | None = None,
+        temperature: float | None = None,
     ) -> None:
         """Initialize the Copilot provider.
 
@@ -120,6 +121,7 @@ class CopilotProvider(AgentProvider):
             mcp_servers: MCP server configurations to pass to the SDK.
             idle_recovery_config: Optional idle detection and recovery configuration.
                                   Uses default if not provided.
+            temperature: Default temperature for generation (0.0-1.0). Optional.
         """
         self._client: Any = None  # Will hold Copilot SDK client
         self._mock_handler = mock_handler
@@ -130,6 +132,7 @@ class CopilotProvider(AgentProvider):
         self._mcp_servers = mcp_servers or {}
         self._started = False
         self._idle_recovery_config = idle_recovery_config or IdleRecoveryConfig()
+        self._temperature = temperature
 
     async def execute(
         self,
@@ -334,6 +337,10 @@ class CopilotProvider(AgentProvider):
             session_config: dict[str, Any] = {
                 "model": model,
             }
+
+            # Add temperature if configured
+            if self._temperature is not None:
+                session_config["temperature"] = self._temperature
 
             # Add MCP servers if configured
             if self._mcp_servers:

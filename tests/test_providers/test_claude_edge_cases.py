@@ -1,61 +1,25 @@
 """Edge case tests for ClaudeProvider.
 
 Tests cover:
-- Empty stop_sequences list
-- Metadata with special characters
-- max_tokens exceeding model limits
-- Parameter validation edge cases
+- Temperature validation edge cases
 - Empty/unusual responses
+- Retry history exposure
+
+Note: Tests for stop_sequences, metadata, top_p, and top_k have been removed
+as these were Claude-specific parameters not supported by both providers.
 """
 
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from copilot_conductor.config.schema import AgentDef, OutputField
-from copilot_conductor.exceptions import ProviderError, ValidationError
+from copilot_conductor.config.schema import AgentDef
+from copilot_conductor.exceptions import ValidationError
 from copilot_conductor.providers.claude import ClaudeProvider
 
 
 class TestClaudeEdgeCases:
     """Tests for edge cases in Claude provider."""
-
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
-    def test_empty_stop_sequences(
-        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
-    ) -> None:
-        """Test that empty stop_sequences list is handled correctly."""
-        mock_anthropic_module.__version__ = "0.77.0"
-        mock_client = Mock()
-        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
-        mock_anthropic_class.return_value = mock_client
-
-        # Should not raise error
-        provider = ClaudeProvider(stop_sequences=[])
-        assert provider._stop_sequences == []
-
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
-    def test_metadata_with_special_characters(
-        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
-    ) -> None:
-        """Test metadata with special characters."""
-        mock_anthropic_module.__version__ = "0.77.0"
-        mock_client = Mock()
-        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
-        mock_anthropic_class.return_value = mock_client
-
-        metadata = {
-            "user_id": "user@example.com",
-            "trace": "request/123/test",
-            "description": 'Test with "quotes" and \'apostrophes\'',
-        }
-
-        provider = ClaudeProvider(metadata=metadata)
-        assert provider._metadata == metadata
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
     @patch("copilot_conductor.providers.claude.AsyncAnthropic")
@@ -83,60 +47,6 @@ class TestClaudeEdgeCases:
         # Invalid - above range
         with pytest.raises(ValidationError, match="Temperature must be between 0.0 and 1.0"):
             ClaudeProvider(temperature=1.1)
-
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
-    def test_top_p_validation_edge_cases(
-        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
-    ) -> None:
-        """Test top_p validation at boundaries."""
-        mock_anthropic_module.__version__ = "0.77.0"
-        mock_client = Mock()
-        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
-        mock_anthropic_class.return_value = mock_client
-
-        # Valid boundaries
-        provider = ClaudeProvider(top_p=0.0)
-        assert provider._top_p == 0.0
-
-        provider = ClaudeProvider(top_p=1.0)
-        assert provider._top_p == 1.0
-
-        # Invalid - below range
-        with pytest.raises(ValidationError, match="top_p must be between 0.0 and 1.0"):
-            ClaudeProvider(top_p=-0.1)
-
-        # Invalid - above range
-        with pytest.raises(ValidationError, match="top_p must be between 0.0 and 1.0"):
-            ClaudeProvider(top_p=1.1)
-
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
-    def test_top_k_validation_edge_cases(
-        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
-    ) -> None:
-        """Test top_k validation."""
-        mock_anthropic_module.__version__ = "0.77.0"
-        mock_client = Mock()
-        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
-        mock_anthropic_class.return_value = mock_client
-
-        # Valid
-        provider = ClaudeProvider(top_k=1)
-        assert provider._top_k == 1
-
-        provider = ClaudeProvider(top_k=100)
-        assert provider._top_k == 100
-
-        # Invalid - zero
-        with pytest.raises(ValidationError, match="top_k must be a positive integer"):
-            ClaudeProvider(top_k=0)
-
-        # Invalid - negative
-        with pytest.raises(ValidationError, match="top_k must be a positive integer"):
-            ClaudeProvider(top_k=-1)
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
     @patch("copilot_conductor.providers.claude.AsyncAnthropic")

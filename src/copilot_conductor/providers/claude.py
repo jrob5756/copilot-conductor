@@ -109,10 +109,6 @@ class ClaudeProvider(AgentProvider):
         max_tokens: int | None = None,
         timeout: float = 600.0,
         retry_config: RetryConfig | None = None,
-        top_p: float | None = None,
-        top_k: int | None = None,
-        stop_sequences: list[str] | None = None,
-        metadata: dict[str, Any] | None = None,
     ) -> None:
         """Initialize the Claude provider.
 
@@ -126,10 +122,6 @@ class ClaudeProvider(AgentProvider):
             max_tokens: Maximum output tokens. Defaults to 8192.
             timeout: Request timeout in seconds. Defaults to 600s.
             retry_config: Optional retry configuration. Uses default if not provided.
-            top_p: Nucleus sampling parameter (0.0-1.0). Optional.
-            top_k: Top-k sampling parameter. Optional.
-            stop_sequences: Custom stop sequences for generation. Optional.
-            metadata: Metadata dict (e.g., user_id for caching). Optional.
 
         Raises:
             ProviderError: If SDK is not installed.
@@ -143,29 +135,23 @@ class ClaudeProvider(AgentProvider):
         self._client: AsyncAnthropic | None = None
         self._api_key = api_key
         self._default_model = model or "claude-3-5-sonnet-latest"
-        
+
         # Validate and store temperature (enforce schema bounds at instantiation)
         if temperature is not None:
             self._validate_temperature(temperature)
         self._default_temperature = temperature
-        
+
         # Validate and store max_tokens (enforce schema bounds at instantiation)
         if max_tokens is not None:
             self._validate_max_tokens(max_tokens)
         self._default_max_tokens = max_tokens or 8192
-        
+
         self._timeout = timeout
         self._sdk_version: str | None = None
         self._retry_config = retry_config or RetryConfig()
         self._retry_history: list[dict[str, Any]] = []  # For testing/debugging retries
         self._max_parse_recovery_attempts = 2  # Max retry attempts for malformed JSON
         self._max_schema_depth = 10  # Max nesting depth for recursive schema building
-        
-        # Claude-specific parameters - validate ranges before storing
-        self._top_p = self._validate_top_p(top_p) if top_p is not None else None
-        self._top_k = self._validate_top_k(top_k) if top_k is not None else None
-        self._stop_sequences = stop_sequences
-        self._metadata = metadata
 
         # Initialize the client (sync initialization)
         self._initialize_client()
@@ -206,7 +192,7 @@ class ClaudeProvider(AgentProvider):
                         )
                 except (ValueError, AttributeError):
                     logger.debug(f"Could not parse SDK version: {self._sdk_version}")
-    
+
     def _validate_temperature(self, temperature: float) -> None:
         """Validate temperature parameter is in acceptable range.
         
@@ -224,7 +210,7 @@ class ClaudeProvider(AgentProvider):
                 f"Temperature must be between 0.0 and 1.0 (schema validation), got {temperature}",
                 suggestion="Adjust temperature to be within the valid range"
             )
-    
+
     def _validate_max_tokens(self, max_tokens: int) -> None:
         """Validate max_tokens parameter is in acceptable range.
         
@@ -242,45 +228,7 @@ class ClaudeProvider(AgentProvider):
                 f"max_tokens must be between 1 and 200000 (schema validation), got {max_tokens}",
                 suggestion="Adjust max_tokens to be within the valid range"
             )
-    
-    def _validate_top_p(self, top_p: float) -> float:
-        """Validate top_p parameter is in acceptable range.
-        
-        Args:
-            top_p: Top-p value to validate.
-            
-        Returns:
-            The validated top_p value.
-            
-        Raises:
-            ValidationError: If top_p is out of range.
-        """
-        if not (0.0 <= top_p <= 1.0):
-            raise ValidationError(
-                f"top_p must be between 0.0 and 1.0, got {top_p}",
-                suggestion="Adjust top_p to be within the valid range"
-            )
-        return top_p
-    
-    def _validate_top_k(self, top_k: int) -> int:
-        """Validate top_k parameter is positive.
-        
-        Args:
-            top_k: Top-k value to validate.
-            
-        Returns:
-            The validated top_k value.
-            
-        Raises:
-            ValidationError: If top_k is invalid.
-        """
-        if top_k < 1:
-            raise ValidationError(
-                f"top_k must be a positive integer, got {top_k}",
-                suggestion="Adjust top_k to be at least 1"
-            )
-        return top_k
-    
+
     def get_retry_history(self) -> list[dict[str, Any]]:
         """Get the retry history for debugging purposes.
         
@@ -322,7 +270,7 @@ class ClaudeProvider(AgentProvider):
 
         try:
             # Call client.models.list() to get available models (async)
-            logger.debug(f"Discovering available Claude models via client.models.list()...")
+            logger.debug("Discovering available Claude models via client.models.list()...")
             models_page = await self._client.models.list()
             available_models = [model.id for model in models_page.data]
 
@@ -613,7 +561,7 @@ class ClaudeProvider(AgentProvider):
                     "is_retryable": is_retryable,
                 }
                 self._retry_history.append(retry_entry)
-                
+
                 # Log retry information
                 logger.debug(
                     f"Execution attempt {attempt} failed: {type(e).__name__}: {e} "
@@ -624,7 +572,7 @@ class ClaudeProvider(AgentProvider):
                 if not is_retryable:
                     # Extract status code consistently
                     status_code = self._extract_status_code(e)
-                    
+
                     # Wrap as ProviderError with proper metadata
                     if status_code is not None:
                         raise ProviderError(
@@ -670,7 +618,7 @@ class ClaudeProvider(AgentProvider):
             ),
             is_retryable=False,
         )
-    
+
     def _extract_status_code(self, exception: Exception) -> int | None:
         """Extract HTTP status code from exception if available.
         
@@ -688,7 +636,7 @@ class ClaudeProvider(AgentProvider):
             # Handle mocked exceptions - check by attribute
             if hasattr(exception, "status_code"):
                 return exception.status_code
-        
+
         return None
 
     async def _execute_api_call(
@@ -736,19 +684,6 @@ class ClaudeProvider(AgentProvider):
 
         if tools:
             kwargs["tools"] = tools
-        
-        # Add Claude-specific parameters if set
-        if self._top_p is not None:
-            kwargs["top_p"] = self._top_p
-        
-        if self._top_k is not None:
-            kwargs["top_k"] = self._top_k
-        
-        if self._stop_sequences is not None:
-            kwargs["stop_sequences"] = self._stop_sequences
-        
-        if self._metadata is not None:
-            kwargs["metadata"] = self._metadata
 
         # Execute non-streaming API call (async)
         logger.debug(

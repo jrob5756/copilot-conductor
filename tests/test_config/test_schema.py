@@ -320,10 +320,7 @@ class TestRuntimeConfig:
         assert config.default_model is None
         assert config.temperature is None
         assert config.max_tokens is None
-        assert config.top_p is None
-        assert config.top_k is None
-        assert config.stop_sequences is None
-        assert config.metadata is None
+        assert config.timeout is None
 
     def test_custom_provider(self) -> None:
         """Test custom provider setting."""
@@ -398,91 +395,28 @@ class TestRuntimeConfig:
             RuntimeConfig(max_tokens=200001)
         assert "less than or equal to 200000" in str(exc_info.value)
 
-    def test_top_p_boundary_values(self) -> None:
-        """Test top_p field accepts boundary values."""
-        config = RuntimeConfig(top_p=0.0)
-        assert config.top_p == 0.0
-
-        config = RuntimeConfig(top_p=0.9)
-        assert config.top_p == 0.9
-
-        config = RuntimeConfig(top_p=1.0)
-        assert config.top_p == 1.0
-
-    def test_top_p_out_of_range_raises(self) -> None:
-        """Test top_p field rejects out-of-range values."""
-        with pytest.raises(ValidationError) as exc_info:
-            RuntimeConfig(top_p=-0.1)
-        assert "greater than or equal to 0" in str(exc_info.value)
-
-        with pytest.raises(ValidationError) as exc_info:
-            RuntimeConfig(top_p=1.1)
-        assert "less than or equal to 1" in str(exc_info.value)
-
-    def test_top_k_boundary_values(self) -> None:
-        """Test top_k field accepts valid values."""
-        config = RuntimeConfig(top_k=0)
-        assert config.top_k == 0
-
-        config = RuntimeConfig(top_k=40)
-        assert config.top_k == 40
-
-        config = RuntimeConfig(top_k=100)
-        assert config.top_k == 100
-
-    def test_top_k_negative_raises(self) -> None:
-        """Test top_k field rejects negative values."""
-        with pytest.raises(ValidationError) as exc_info:
-            RuntimeConfig(top_k=-1)
-        assert "greater than or equal to 0" in str(exc_info.value)
-
-    def test_stop_sequences(self) -> None:
-        """Test stop_sequences field accepts list of strings."""
-        config = RuntimeConfig(stop_sequences=["STOP", "END"])
-        assert config.stop_sequences == ["STOP", "END"]
-
-        # Empty list is valid
-        config = RuntimeConfig(stop_sequences=[])
-        assert config.stop_sequences == []
-
-    def test_metadata(self) -> None:
-        """Test metadata field accepts dict."""
-        metadata = {"user_id": "user123", "session_id": "session456"}
-        config = RuntimeConfig(metadata=metadata)
-        assert config.metadata == metadata
-
-        # Empty dict is valid
-        config = RuntimeConfig(metadata={})
-        assert config.metadata == {}
-
-    def test_all_claude_fields_together(self) -> None:
-        """Test RuntimeConfig with all Claude-specific fields."""
+    def test_all_common_fields_together(self) -> None:
+        """Test RuntimeConfig with all common fields."""
         config = RuntimeConfig(
             provider="claude",
             default_model="claude-3-5-sonnet-latest",
             temperature=0.7,
             max_tokens=4096,
-            top_p=0.9,
-            top_k=40,
-            stop_sequences=["STOP"],
-            metadata={"user_id": "test_user"},
+            timeout=120.0,
         )
         assert config.provider == "claude"
         assert config.default_model == "claude-3-5-sonnet-latest"
         assert config.temperature == 0.7
         assert config.max_tokens == 4096
-        assert config.top_p == 0.9
-        assert config.top_k == 40
-        assert config.stop_sequences == ["STOP"]
-        assert config.metadata == {"user_id": "test_user"}
+        assert config.timeout == 120.0
 
     def test_serialization_excludes_none_values(self) -> None:
         """Test Pydantic serialization with exclude_none=True excludes new fields.
 
         This verifies backward compatibility: existing Copilot workflows should
-        not have Claude-specific fields appear in their serialized output.
+        not have optional fields appear in their serialized output.
         """
-        # Create a minimal config (Copilot provider, no Claude fields)
+        # Create a minimal config (Copilot provider, no optional fields)
         config = RuntimeConfig(provider="copilot", default_model="gpt-4")
 
         # Serialize with exclude_none=True
@@ -494,16 +428,13 @@ class TestRuntimeConfig:
         assert serialized["provider"] == "copilot"
         assert serialized["default_model"] == "gpt-4"
 
-        # Verify new Claude fields are NOT present when None
+        # Verify optional fields are NOT present when None
         assert "temperature" not in serialized
         assert "max_tokens" not in serialized
-        assert "top_p" not in serialized
-        assert "top_k" not in serialized
-        assert "stop_sequences" not in serialized
-        assert "metadata" not in serialized
+        assert "timeout" not in serialized
 
     def test_serialization_includes_explicit_values(self) -> None:
-        """Test that explicitly set Claude fields are serialized."""
+        """Test that explicitly set fields are serialized."""
         config = RuntimeConfig(
             provider="claude",
             temperature=0.7,
@@ -519,12 +450,6 @@ class TestRuntimeConfig:
         assert serialized["temperature"] == 0.7
         assert serialized["max_tokens"] == 4096
 
-        # Fields not set should not be present
-        assert "top_p" not in serialized
-        assert "top_k" not in serialized
-        assert "stop_sequences" not in serialized
-        assert "metadata" not in serialized
-
     def test_round_trip_serialization(self) -> None:
         """Test round-trip serialization preserves values."""
         original = RuntimeConfig(
@@ -532,10 +457,7 @@ class TestRuntimeConfig:
             default_model="claude-3-5-sonnet-latest",
             temperature=0.8,
             max_tokens=8192,
-            top_p=0.95,
-            top_k=50,
-            stop_sequences=["END", "STOP"],
-            metadata={"user_id": "test"},
+            timeout=120.0,
         )
 
         # Serialize and deserialize
@@ -547,10 +469,7 @@ class TestRuntimeConfig:
         assert restored.default_model == original.default_model
         assert restored.temperature == original.temperature
         assert restored.max_tokens == original.max_tokens
-        assert restored.top_p == original.top_p
-        assert restored.top_k == original.top_k
-        assert restored.stop_sequences == original.stop_sequences
-        assert restored.metadata == original.metadata
+        assert restored.timeout == original.timeout
 
 
 class TestWorkflowDef:
