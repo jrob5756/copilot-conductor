@@ -66,13 +66,13 @@ for_each:
     source: kpi_loader.output.kpis
     as: kpi
     max_concurrent: 5                # Process 5 KPIs at a time
-    failure_mode: continue_on_error  # Continue even if some KPIs fail
+    failure_mode: fail_fast          # Stop immediately on first error
     key_by: kpi_id                   # Use kpi_id as output key (path relative to item)
     
     agent:
       name: kpi_analyzer
       model: claude-opus-4.5
-      tools: ["*"]  # Access all MCP tools
+      # tools: null means use all workflow tools (MCP tools are available via provider)
       input:
         - workflow.input.output_dir
         - kpi_loader.output.category_name
@@ -115,35 +115,26 @@ for_each:
            - Are there patterns in the failures?
            - What are the common root causes?
         
+        5. **Save Analysis to File**
+           Save the complete analysis as a markdown file at:
+           {{ workflow.input.output_dir }}/kpis/{{ kpi.kpi_id }}.md
+           
+           Include all findings, metrics, recommendations, and documentation links.
+        
         Provide structured analysis with all metrics and recommendations.
       output:
         kpi_id:
           type: string
           description: KPI ID analyzed
+        analysis_file:
+          type: string
+          description: Path to saved analysis file
         priority:
           type: string
-          description: "Critical | High | Medium | Low"
-        summary:
-          type: string
-          description: Brief summary of findings
-        compliance_status:
-          type: string
-          description: Current compliance status
-        metrics:
-          type: object
-          description: Collected metrics (volume, age, impact, etc.)
-        resolution_steps:
-          type: array
-          description: Recommended resolution steps
-        documentation_links:
-          type: array
-          description: Links to relevant documentation
+          description: "Critical | High | Medium | Low (for quick sorting)"
         trend:
           type: string
-          description: "Improving | Stable | Deteriorating"
-        confidence:
-          type: number
-          description: Confidence score 1-10
+          description: "Improving | Stable | Deteriorating (for quick stats)"
     
     routes:
       - to: report_generator
@@ -152,7 +143,7 @@ agents:
   # Agent 1: Load and filter KPIs
   - name: kpi_loader
     description: Loads KPIs from JSON and applies optional category filter
-    model: claude-sonnet-4
+    model: claude-sonnet-4.5
     input:
       - workflow.input.kpi_directory
       - workflow.input.category
@@ -203,19 +194,20 @@ agents:
   # Agent 2: Generate final report
   - name: report_generator
     description: Aggregates all KPI analyses and generates final report
-    model: claude-sonnet-4
+    model: claude-sonnet-4.5
     input:
       - workflow.input.output_dir
       - kpi_loader.output
       - kpi_analyzers.outputs
       - kpi_analyzers.errors
     prompt: |
-      Generate a comprehensive analysis report from parallel KPI processing.
+      Generate a comprehensive analysis report by combining individual KPI analysis files.
       
       **Output Directory:** {{ workflow.input.output_dir }}
       **Category:** {{ kpi_loader.output.category_name }}
+      **KPI Analysis Files Directory:** {{ workflow.input.output_dir }}/kpis/
       
-      ## RESULTS
+      ## RESULTS SUMMARY
       
       Total KPIs: {{ kpi_loader.output.total_count }}
       Successfully Analyzed: {{ kpi_analyzers.outputs | length }}
@@ -228,50 +220,64 @@ agents:
       {% endfor %}
       {% endif %}
       
-      ### Successful Analyses
+      ### Analysis Summary (from outputs)
       {% for kpi_id, analysis in kpi_analyzers.outputs.items() %}
-      
-      **{{ kpi_id }}** ({{ analysis.priority }})
-      - Status: {{ analysis.compliance_status }}
-      - Trend: {{ analysis.trend }}
-      - Summary: {{ analysis.summary }}
-      
+      - **{{ kpi_id }}**: {{ analysis.priority }} priority, {{ analysis.trend }} trend, File: {{ analysis.analysis_file }}
       {% endfor %}
       
       ## TASKS
       
-      1. **Calculate Overall Statistics**
+      1. **Read Individual Analysis Files**
+         Read each analysis file from {{ workflow.input.output_dir }}/kpis/:
+         {% for kpi_id, analysis in kpi_analyzers.outputs.items() %}
+         - {{ analysis.analysis_file }}
+         {% endfor %}
+      
+      2. **Calculate Overall Statistics**
+         From the individual analyses, compute:
          - Total KPIs analyzed
          - Priority breakdown (Critical, High, Medium, Low)
          - Compliance status breakdown
          - Trend analysis (Improving vs Deteriorating)
          - Average confidence score
       
-      2. **Identify Critical Issues**
+      3. **Identify Critical Issues**
          - List all Critical priority KPIs
          - List all Deteriorating trend KPIs
          - Highlight highest impact items
       
-      3. **Generate Executive Summary**
+      4. **Generate Executive Summary**
          - Overall health score for this category
          - Top 5 issues requiring immediate attention
          - Positive trends to highlight
          - Recommended next actions
       
-      4. **Save Report to File**
-         Create a comprehensive markdown report at:
+      5. **Create Combined Report**
+         Save a comprehensive markdown report at:
          {{ workflow.input.output_dir }}/{{ kpi_loader.output.category_name | replace(" ", "-") | lower }}-analysis.md
          
          Include:
          - Executive summary
          - Statistics and metrics
-         - Detailed KPI breakdown (sorted by priority)
+         - Detailed KPI breakdown (sorted by priority) - include full content from individual files
          - Failed analyses section
-         - Appendix with all data
+         - Appendix with raw data
+      
+      6. **Create Summary Index**
+         Save a quick-reference index at:
+         {{ workflow.input.output_dir }}/index.md
+         
+         Include:
+         - Links to all individual KPI analysis files
+         - Priority and trend at-a-glance table
+         - Link to the full combined report
     output:
       report_file:
         type: string
-        description: Path to generated report file
+        description: Path to generated combined report file
+      index_file:
+        type: string
+        description: Path to generated index file
       executive_summary:
         type: string
         description: Executive summary of findings
@@ -303,6 +309,7 @@ output:
   failed: "{{ kpi_analyzers.errors | length }}"
   success_rate: "{{ (kpi_analyzers.outputs | length) / (kpi_loader.output.total_count) * 100 }}%"
   report_file: "{{ report_generator.output.report_file }}"
+  index_file: "{{ report_generator.output.index_file }}"
   executive_summary: "{{ report_generator.output.executive_summary }}"
   health_score: "{{ report_generator.output.health_score }}"
   critical_count: "{{ report_generator.output.critical_count }}"
