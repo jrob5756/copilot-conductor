@@ -165,7 +165,6 @@ agents:
 **Claude**:
 - Use Haiku for simple tasks (3x cheaper than Sonnet)
 - Limit `max_tokens` to reduce output costs
-- Enable prompt caching with `metadata.user_id`
 - Use `context: mode: explicit` to reduce input tokens
 
 ## Feature Comparison

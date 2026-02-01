@@ -51,18 +51,12 @@ workflow:
     provider: claude
     default_model: claude-3-5-sonnet-latest
     temperature: 0.7
-    max_tokens_claude: 4096
-    top_p: 0.9
-    top_k: 50
-    stop_sequences: ["END"]
-    metadata:
-      user_id: "{{ workflow.input.user_id }}"
+    max_tokens: 4096
 ```
 
 **Features**:
 - 200K context window (all models)
 - Pay-per-token pricing
-- Advanced sampling controls
 
 **Models**: `claude-3-5-sonnet-latest`, `claude-haiku-4-20250318`, `claude-opus-4-20250514`
 
@@ -70,7 +64,7 @@ workflow:
 
 ## Common Configuration Options
 
-These options work with both providers (unless noted):
+These options work with both providers:
 
 ### Model Selection
 
@@ -119,7 +113,7 @@ Maximum OUTPUT tokens per response:
 ```yaml
 workflow:
   runtime:
-    max_tokens_claude: 4096  # Required for Claude
+    max_tokens: 4096  # Required for Claude
 ```
 
 **Limits**:
@@ -127,72 +121,6 @@ workflow:
 - Sonnet/Opus: 8192 max
 
 **Note**: This is output tokens, not context window (200K separate limit)
-
-### Top-p (Nucleus Sampling)
-
-Limits token selection to cumulative probability mass:
-
-```yaml
-workflow:
-  runtime:
-    top_p: 0.9  # Consider top 90% probability mass
-```
-
-**Guidelines**:
-- `0.9 - 1.0`: High diversity
-- `0.5 - 0.8`: Moderate diversity
-- Lower: More focused
-
-**Note**: Use `top_p` OR `temperature`, not both
-
-### Top-k Sampling
-
-Limits selection to top k most likely tokens:
-
-```yaml
-workflow:
-  runtime:
-    top_k: 50  # Consider top 50 tokens
-```
-
-**Guidelines**:
-- `40 - 100`: Balanced
-- `10 - 40`: Focused
-- Higher: More diverse
-
-### Stop Sequences
-
-Custom sequences that halt generation:
-
-```yaml
-workflow:
-  runtime:
-    stop_sequences:
-      - "END_OF_RESPONSE"
-      - "\n\n---\n\n"
-```
-
-**Use cases**:
-- Prevent overly long responses
-- Enforce output formats
-- Stop at natural boundaries
-
-### Metadata
-
-Attach user IDs for caching and abuse detection:
-
-```yaml
-workflow:
-  runtime:
-    metadata:
-      user_id: "{{ workflow.input.user_id }}"
-      session_id: "session-123"
-```
-
-**Benefits**:
-- Enables prompt caching (10-90% cost savings)
-- Abuse detection/prevention
-- Per-user rate limiting
 
 ## Copilot-Specific Configuration
 
@@ -291,14 +219,11 @@ workflow:
     provider: claude
     default_model: claude-3-5-sonnet-latest
     temperature: 0.7
-    max_tokens_claude: 4096
-    top_p: 0.9
-    metadata:
-      user_id: "user-123"
-  
+    max_tokens: 4096
+
   context:
     mode: explicit
-  
+
   limits:
     max_iterations: 15
     timeout_seconds: 600
@@ -308,7 +233,7 @@ agents:
     model: claude-haiku-4-20250318  # Fast model override
     input: [workflow.input.text]
     prompt: "Classify: {{ workflow.input.text }}"
-  
+
   - name: analyzer
     model: claude-3-5-sonnet-latest  # Use default
     input: [workflow.input.text, classifier.output]
@@ -391,10 +316,9 @@ export CONDUCTOR_LOG_LEVEL=DEBUG  # INFO, DEBUG, WARNING, ERROR
 
 ### Cost Optimization (Claude)
 
-1. **Limit `max_tokens_claude`** to minimum needed
-2. **Enable prompt caching** with `metadata.user_id`
-3. **Use Haiku** for high-volume simple tasks
-4. **Use `context: mode: explicit`** to reduce input tokens
+1. **Limit `max_tokens`** to minimum needed
+2. **Use Haiku** for high-volume simple tasks
+3. **Use `context: mode: explicit`** to reduce input tokens
 
 ### Safety
 
@@ -406,11 +330,11 @@ export CONDUCTOR_LOG_LEVEL=DEBUG  # INFO, DEBUG, WARNING, ERROR
 
 ### "max_tokens is required" (Claude)
 
-Always set `max_tokens_claude`:
+Always set `max_tokens`:
 
 ```yaml
 runtime:
-  max_tokens_claude: 8192
+  max_tokens: 8192
 ```
 
 ### "temperature must be between 0.0 and 1.0" (Claude)

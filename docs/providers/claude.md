@@ -179,10 +179,6 @@ The Claude provider supports several runtime configuration options that control 
 |-----------|------|-------|---------|-------------|
 | `temperature` | float | 0.0 - 1.0 | 1.0 | Controls randomness (0=deterministic, 1=creative) |
 | `max_tokens` | int | 1 - 8192 | 8192 | Maximum OUTPUT tokens per response |
-| `top_p` | float | 0.0 - 1.0 | - | Nucleus sampling threshold |
-| `top_k` | int | ≥ 0 | - | Top-k sampling parameter |
-| `stop_sequences` | list[str] | - | - | Custom sequences to halt generation |
-| `metadata` | dict | - | - | User ID and metadata for caching/abuse detection |
 
 ### Temperature
 
@@ -225,76 +221,6 @@ workflow:
 - Increase to 4096-8192 for comprehensive reports
 - Reduce for faster responses and lower costs
 
-### Top-p (Nucleus Sampling)
-
-Controls diversity by limiting token selection to cumulative probability mass:
-
-```yaml
-workflow:
-  runtime:
-    provider: claude
-    top_p: 0.9  # Consider tokens in top 90% probability mass
-```
-
-**Guidelines**:
-- `0.9 - 1.0`: High diversity (default behavior)
-- `0.5 - 0.8`: Moderate diversity
-- Lower values: More focused, less varied
-
-**Note**: Use `top_p` OR `temperature`, not both together.
-
-### Top-k Sampling
-
-Limits token selection to top k most likely tokens:
-
-```yaml
-workflow:
-  runtime:
-    provider: claude
-    top_k: 50  # Consider only top 50 tokens
-```
-
-**Guidelines**:
-- `40 - 100`: Balanced diversity
-- `10 - 40`: More focused responses
-- Higher values: More diverse
-
-### Stop Sequences
-
-Custom sequences that halt generation when encountered:
-
-```yaml
-workflow:
-  runtime:
-    provider: claude
-    stop_sequences:
-      - "END_OF_RESPONSE"
-      - "\n\n---\n\n"
-```
-
-**Use Cases**:
-- Prevent overly long responses
-- Enforce specific output formats
-- Stop at natural boundaries
-
-### Metadata
-
-Attach user IDs and metadata for prompt caching and abuse detection:
-
-```yaml
-workflow:
-  runtime:
-    provider: claude
-    metadata:
-      user_id: "user-12345"
-      session_id: "session-abc"
-```
-
-**Benefits**:
-- Enables Anthropic's prompt caching (can reduce costs by 10-90%)
-- Helps detect and prevent API abuse
-- Allows per-user rate limiting
-
 ### Complete Example
 
 ```yaml
@@ -305,10 +231,6 @@ workflow:
     default_model: claude-3-5-sonnet-latest
     temperature: 0.7
     max_tokens: 4096
-    top_p: 0.9
-    stop_sequences: ["END"]
-    metadata:
-      user_id: "{{ workflow.input.user_id }}"
 
 agents:
   - name: analyzer
@@ -646,25 +568,7 @@ workflow:
 
 **Potential savings**: 2-10x reduction in input tokens for multi-agent workflows
 
-### Strategy 5: Enable Prompt Caching
-
-Use the `metadata` field to enable Anthropic's prompt caching:
-
-```yaml
-workflow:
-  runtime:
-    metadata:
-      user_id: "{{ workflow.input.user_id }}"
-```
-
-**How it works**:
-- Anthropic caches common prompt prefixes
-- Subsequent requests reuse cached data
-- Cache hits are 10x cheaper (90% discount)
-
-**Potential savings**: 10-90% for workflows with repeated prompts
-
-### Strategy 6: Batch Similar Requests
+### Strategy 5: Batch Similar Requests
 
 Group similar requests into a single agent with for-each:
 
@@ -681,7 +585,7 @@ agents:
 - Lower per-request overhead
 - Better rate limit utilization
 
-### Strategy 7: Monitor Usage
+### Strategy 6: Monitor Usage
 
 Track token usage to identify optimization opportunities:
 
@@ -710,7 +614,6 @@ Look for:
 - [ ] Set `max_tokens` to minimum necessary
 - [ ] Keep prompts concise
 - [ ] Use `context: mode: explicit` for multi-agent workflows
-- [ ] Enable prompt caching with `metadata.user_id`
 - [ ] Monitor token usage with debug logging
 - [ ] Batch similar requests with for-each
 
@@ -721,6 +624,5 @@ Applying all strategies:
 - **Max tokens**: 2-8x (1024 vs 8192)
 - **Prompt optimization**: 1.5-2x (concise prompts)
 - **Context mode**: 2-10x (explicit vs accumulate)
-- **Prompt caching**: 1.1-10x (cache hit rate dependent)
 
 **Total potential savings**: 10-100x reduction in costs for optimized workflows

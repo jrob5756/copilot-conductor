@@ -103,14 +103,10 @@ workflow:
     default_model: claude-3-5-sonnet-latest
     temperature: 0.7  # Keep this (Claude also uses 0.0-1.0)
     max_tokens: 4096  # Controls output length (Claude-specific meaning)
-    # Optional Claude-specific settings:
-    top_p: 0.9
-    top_k: 50
 ```
 
 **Key changes**:
 - `max_tokens` now controls output length (different from Copilot's context trimming)
-- Add Claude-specific parameters: `top_p`, `top_k`, `stop_sequences`, `metadata`
 
 ### Step 5: Remove Copilot-Specific Features
 
@@ -514,7 +510,7 @@ runtime:
 **Solution**: Monitor token usage and optimize:
 - Use Haiku for simple tasks
 - Reduce `max_tokens` to limit response length
-- Enable prompt caching with `metadata.user_id`
+- Use `context: mode: explicit` to reduce input tokens
 
 ## Rollback Procedures
 
