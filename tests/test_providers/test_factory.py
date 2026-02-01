@@ -55,16 +55,18 @@ class TestCreateProvider:
         assert exc_info.value.suggestion is not None
 
     @patch("copilot_conductor.providers.factory.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
     @patch("copilot_conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_create_claude_provider_success(
         self, mock_anthropic_module: Any, mock_anthropic_class: Any
     ) -> None:
         """Test that Claude provider can be created successfully."""
+        from unittest.mock import AsyncMock
+
         mock_anthropic_module.__version__ = "0.77.0"
         mock_client = MagicMock()
-        mock_client.models.list.return_value = MagicMock(data=[])
+        mock_client.models.list = AsyncMock(return_value=MagicMock(data=[]))
         mock_anthropic_class.return_value = mock_client
 
         provider = await create_provider("claude", validate=False)

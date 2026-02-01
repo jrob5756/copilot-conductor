@@ -1187,6 +1187,8 @@ if structured_output is None:
 
 ### EPIC-003: Non-Streaming Message Execution (Phase 1)
 
+**Status**: DONE
+
 **Goal**: Implement non-streaming message execution with all core features
 
 **Prerequisites**: EPIC-001 (Basic execution must work), EPIC-002 (Structured output must work)
@@ -1195,22 +1197,22 @@ if structured_output is None:
 
 | Task ID | Type | Description | Files | Status |
 |---------|------|-------------|-------|--------|
-| EPIC-003-T1 | IMPL | Implement `_execute_api_call()` using non-streaming messages.create() | `src/copilot_conductor/providers/claude.py` | TO DO |
-| EPIC-003-T2 | IMPL | Add response processing for content blocks (text, tool_use) | `src/copilot_conductor/providers/claude.py` | TO DO |
-| EPIC-003-T3 | IMPL | Add token usage extraction from response.usage | `src/copilot_conductor/providers/claude.py` | TO DO |
-| EPIC-003-T4 | IMPL | Add timeout configuration (default 600s) | `src/copilot_conductor/providers/claude.py` | TO DO |
-| EPIC-003-T5 | IMPL | Update `execute()` to use non-streaming API call | `src/copilot_conductor/providers/claude.py` | TO DO |
-| EPIC-003-T6 | TEST | Add tests for non-streaming response processing | `tests/test_providers/test_claude.py` | TO DO |
-| EPIC-003-T7 | TEST | Add tests for timeout handling | `tests/test_providers/test_claude.py` | TO DO |
-| EPIC-003-T8 | TEST | Add tests for token usage tracking | `tests/test_providers/test_claude.py` | TO DO |
+| EPIC-003-T1 | IMPL | Implement `_execute_api_call()` using non-streaming messages.create() | `src/copilot_conductor/providers/claude.py` | DONE |
+| EPIC-003-T2 | IMPL | Add response processing for content blocks (text, tool_use) | `src/copilot_conductor/providers/claude.py` | DONE |
+| EPIC-003-T3 | IMPL | Add token usage extraction from response.usage | `src/copilot_conductor/providers/claude.py` | DONE |
+| EPIC-003-T4 | IMPL | Add timeout configuration (default 600s) | `src/copilot_conductor/providers/claude.py` | DONE |
+| EPIC-003-T5 | IMPL | Update `execute()` to use non-streaming API call | `src/copilot_conductor/providers/claude.py` | DONE |
+| EPIC-003-T6 | TEST | Add tests for non-streaming response processing | `tests/test_providers/test_claude.py` | DONE |
+| EPIC-003-T7 | TEST | Add tests for timeout handling | `tests/test_providers/test_claude.py` | DONE |
+| EPIC-003-T8 | TEST | Add tests for token usage tracking | `tests/test_providers/test_claude.py` | DONE |
 
 **Acceptance Criteria**:
-- [ ] Non-streaming API calls work reliably
-- [ ] Response content is correctly extracted from content blocks
-- [ ] Token usage is tracked and returned in AgentOutput
-- [ ] Timeouts prevent indefinite waits
-- [ ] Tests verify non-streaming behavior with mocked responses
-- [ ] Error messages indicate non-streaming mode (for user clarity)
+- [x] Non-streaming API calls work reliably
+- [x] Response content is correctly extracted from content blocks
+- [x] Token usage is tracked and returned in AgentOutput
+- [x] Timeouts prevent indefinite waits
+- [x] Tests verify non-streaming behavior with mocked responses
+- [x] Error messages indicate non-streaming mode (for user clarity)
 
 **Note**: Streaming support is deferred to Phase 2+ due to UI integration complexity and Phase 1 scope constraints. The provider will use non-streaming `messages.create()` (not `.stream()`) in Phase 1.
 

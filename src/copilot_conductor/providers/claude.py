@@ -20,12 +20,12 @@ if TYPE_CHECKING:
 # Try to import the Anthropic SDK
 try:
     import anthropic
-    from anthropic import Anthropic
+    from anthropic import AsyncAnthropic
 
     ANTHROPIC_SDK_AVAILABLE = True
 except ImportError:
     ANTHROPIC_SDK_AVAILABLE = False
-    Anthropic = None  # type: ignore[misc, assignment]
+    AsyncAnthropic = None  # type: ignore[misc, assignment]
     anthropic = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
@@ -77,7 +77,7 @@ class ClaudeProvider(AgentProvider):
                 suggestion="Install with: uv add 'anthropic>=0.77.0,<1.0.0'",
             )
 
-        self._client: Anthropic | None = None
+        self._client: AsyncAnthropic | None = None
         self._api_key = api_key
         self._default_model = model or "claude-3-5-sonnet-latest"
         self._default_temperature = temperature
@@ -92,10 +92,10 @@ class ClaudeProvider(AgentProvider):
 
     def _initialize_client(self) -> None:
         """Initialize the Anthropic client and verify SDK version."""
-        if not ANTHROPIC_SDK_AVAILABLE or Anthropic is None:
+        if not ANTHROPIC_SDK_AVAILABLE or AsyncAnthropic is None:
             return
 
-        self._client = Anthropic(
+        self._client = AsyncAnthropic(
             api_key=self._api_key,
             timeout=self._timeout,
         )
@@ -123,17 +123,17 @@ class ClaudeProvider(AgentProvider):
                 except (ValueError, AttributeError):
                     logger.debug(f"Could not parse SDK version: {self._sdk_version}")
 
-        # List available models
-        self._verify_available_models()
+    async def _verify_available_models(self) -> None:
+        """List and log available models, warn if default model is unavailable.
 
-    def _verify_available_models(self) -> None:
-        """List and log available models, warn if default model is unavailable."""
+        Note: This is async and should be called from async context (e.g., validate_connection).
+        """
         if self._client is None:
             return
 
         try:
-            # Call client.models.list() to get available models
-            models_page = self._client.models.list()
+            # Call client.models.list() to get available models (async)
+            models_page = await self._client.models.list()
             available_models = [model.id for model in models_page.data]
 
             logger.debug(f"Available Claude models: {', '.join(available_models)}")
@@ -158,7 +158,9 @@ class ClaudeProvider(AgentProvider):
 
         try:
             # Simple test: list models to verify API key works
-            self._client.models.list()
+            await self._client.models.list()
+            # Also verify available models on first connection
+            await self._verify_available_models()
             return True
         except Exception as e:
             logger.error(f"Connection validation failed: {e}")
@@ -167,8 +169,8 @@ class ClaudeProvider(AgentProvider):
     async def close(self) -> None:
         """Release provider resources and close connections."""
         if self._client is not None:
-            # Anthropic client doesn't require explicit cleanup
-            # but we can clear the reference
+            # AsyncAnthropic uses httpx AsyncClient internally which should be closed
+            await self._client.close()
             self._client = None
             logger.debug("Claude provider closed")
 
@@ -246,10 +248,8 @@ class ClaudeProvider(AgentProvider):
             if agent.output:
                 validate_output(content, agent.output)
 
-            # Extract token usage
-            tokens_used = None
-            if hasattr(response, "usage"):
-                tokens_used = response.usage.input_tokens + response.usage.output_tokens
+            # Extract token usage using dedicated method
+            tokens_used = self._extract_token_usage(response)
 
             return AgentOutput(
                 content=content,
@@ -286,6 +286,61 @@ class ClaudeProvider(AgentProvider):
                 is_retryable=True,
             ) from e
 
+    async def _execute_api_call(
+        self,
+        messages: list[dict[str, str]],
+        model: str,
+        temperature: float | None,
+        max_tokens: int,
+        sdk_tools: list[dict[str, Any]] | None = None,
+    ) -> Any:
+        """Execute non-streaming Claude API call using AsyncAnthropic.
+
+        This method makes an asynchronous (non-streaming) call to the Claude
+        messages.create() API endpoint. It does not handle streaming responses.
+
+        Args:
+            messages: Message history to send.
+            model: Model identifier.
+            temperature: Temperature setting (0.0-1.0, enforced by SDK).
+            max_tokens: Maximum output tokens.
+            sdk_tools: Optional tool definitions for structured output.
+
+        Returns:
+            Claude API response object with content blocks and usage metadata.
+
+        Raises:
+            ProviderError: If client not initialized or API call fails.
+
+        Note:
+            This is a non-streaming implementation. Streaming support is
+            deferred to Phase 2+ of the Claude SDK integration.
+        """
+        if self._client is None:
+            raise ProviderError("Claude client not initialized")
+
+        # Build API call kwargs
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "messages": messages,
+            "max_tokens": max_tokens,
+        }
+
+        if temperature is not None:
+            kwargs["temperature"] = temperature
+
+        if sdk_tools:
+            kwargs["tools"] = sdk_tools
+
+        # Execute non-streaming API call (async)
+        logger.debug(
+            f"Executing non-streaming Claude API call: model={model}, "
+            f"max_tokens={max_tokens}, timeout={self._timeout}s"
+        )
+        response = await self._client.messages.create(**kwargs)
+
+        return response
+
     async def _execute_with_parse_recovery(
         self,
         messages: list[dict[str, str]],
@@ -315,27 +370,17 @@ class ClaudeProvider(AgentProvider):
         Raises:
             ProviderError: If all retry attempts fail with context about attempts.
         """
-        if self._client is None:
-            raise ProviderError("Claude client not initialized")
-
-        # Build API call kwargs
-        kwargs: dict[str, Any] = {
-            "model": model,
-            "messages": messages,
-            "max_tokens": max_tokens,
-        }
-
-        if temperature is not None:
-            kwargs["temperature"] = temperature
-
-        if sdk_tools:
-            kwargs["tools"] = sdk_tools
-
         # Track recovery attempts for error reporting
         recovery_history: list[str] = []
 
-        # Initial attempt
-        response = self._client.messages.create(**kwargs)
+        # Initial attempt using non-streaming API call
+        response = await self._execute_api_call(
+            messages=messages,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            sdk_tools=sdk_tools,
+        )
 
         # If no output schema, return immediately (no recovery needed)
         if not output_schema:
@@ -381,11 +426,14 @@ class ClaudeProvider(AgentProvider):
                 }
             )
 
-            # Update messages in kwargs
-            kwargs["messages"] = recovery_messages
-
-            # Retry API call
-            response = self._client.messages.create(**kwargs)
+            # Retry API call using non-streaming method
+            response = await self._execute_api_call(
+                messages=recovery_messages,
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                sdk_tools=sdk_tools,
+            )
 
             # Check if recovery succeeded (tool_use)
             if self._extract_structured_output(response) is not None:
@@ -447,6 +495,84 @@ class ClaudeProvider(AgentProvider):
 
         # No JSON-like content found
         return "No JSON content found in response text."
+
+    def _process_response_content_blocks(
+        self, response: Any
+    ) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+        """Process content blocks from Claude response.
+
+        Extracts both text content and tool_use content from the response,
+        categorizing each block by its type.
+
+        Note:
+            This method is provided for debugging and future features (e.g.,
+            detailed response logging, tool call tracing). It is not currently
+            used in the main execution flow but is tested to ensure correctness
+            for when it's needed.
+
+        Args:
+            response: Claude API response with content blocks.
+
+        Returns:
+            Tuple of (all_blocks, tool_use_data) where:
+                - all_blocks: List of dicts describing each content block
+                - tool_use_data: Dict from emit_output tool_use, or None
+
+        Note:
+            This method processes non-streaming responses only. Each response
+            contains a list of content blocks which can be text or tool_use.
+        """
+        blocks = []
+        tool_use_data = None
+
+        for block in response.content:
+            if hasattr(block, "type"):
+                if block.type == "text":
+                    blocks.append(
+                        {
+                            "type": "text",
+                            "text": block.text,
+                        }
+                    )
+                elif block.type == "tool_use":
+                    blocks.append(
+                        {
+                            "type": "tool_use",
+                            "name": block.name,
+                            "id": getattr(block, "id", None),
+                        }
+                    )
+                    # Capture emit_output tool data
+                    if block.name == "emit_output":
+                        tool_use_data = dict(block.input)
+
+        logger.debug(f"Processed {len(blocks)} content blocks from response")
+        return blocks, tool_use_data
+
+    def _extract_token_usage(self, response: Any) -> int | None:
+        """Extract token usage from Claude response.
+
+        Args:
+            response: Claude API response with usage metadata.
+
+        Returns:
+            Total tokens used (input + output), or None if not available.
+
+        Note:
+            Claude response.usage contains input_tokens and output_tokens.
+            This method sums both to provide total usage.
+        """
+        if not hasattr(response, "usage"):
+            logger.debug("Response does not contain usage metadata")
+            return None
+
+        usage = response.usage
+        input_tokens = getattr(usage, "input_tokens", 0)
+        output_tokens = getattr(usage, "output_tokens", 0)
+        total = input_tokens + output_tokens
+
+        logger.debug(f"Token usage: {input_tokens} input + {output_tokens} output = {total} total")
+        return total
 
     def _build_messages(self, rendered_prompt: str) -> list[dict[str, str]]:
         """Build message list for Claude API.

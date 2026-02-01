@@ -9,7 +9,7 @@ Tests cover:
 - Error handling and wrapping
 """
 
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -28,7 +28,7 @@ class TestClaudeProviderInitialization:
             ClaudeProvider()
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
     @patch("copilot_conductor.providers.claude.anthropic")
     def test_init_with_default_parameters(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -36,7 +36,7 @@ class TestClaudeProviderInitialization:
         """Test initialization with default parameters."""
         mock_anthropic_module.__version__ = "0.77.0"
         mock_client = Mock()
-        mock_client.models.list.return_value = Mock(data=[])
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
         mock_anthropic_class.return_value = mock_client
 
         provider = ClaudeProvider()
@@ -48,7 +48,7 @@ class TestClaudeProviderInitialization:
         mock_anthropic_class.assert_called_once()
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
     @patch("copilot_conductor.providers.claude.anthropic")
     def test_init_with_custom_parameters(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -56,7 +56,7 @@ class TestClaudeProviderInitialization:
         """Test initialization with custom parameters."""
         mock_anthropic_module.__version__ = "0.77.0"
         mock_client = Mock()
-        mock_client.models.list.return_value = Mock(data=[])
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
         mock_anthropic_class.return_value = mock_client
 
         provider = ClaudeProvider(
@@ -74,7 +74,7 @@ class TestClaudeProviderInitialization:
         assert provider._timeout == 300.0
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
     @patch("copilot_conductor.providers.claude.anthropic")
     @patch("copilot_conductor.providers.claude.logger")
     def test_sdk_version_warning_old_version(
@@ -86,7 +86,7 @@ class TestClaudeProviderInitialization:
         """Test warning when SDK version is older than 0.77.0."""
         mock_anthropic_module.__version__ = "0.76.0"
         mock_client = Mock()
-        mock_client.models.list.return_value = Mock(data=[])
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
         mock_anthropic_class.return_value = mock_client
 
         ClaudeProvider()
@@ -97,7 +97,7 @@ class TestClaudeProviderInitialization:
         assert any("0.76.0" in call and "older than 0.77.0" in call for call in warning_calls)
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
     @patch("copilot_conductor.providers.claude.anthropic")
     @patch("copilot_conductor.providers.claude.logger")
     def test_sdk_version_warning_future_version(
@@ -109,7 +109,7 @@ class TestClaudeProviderInitialization:
         """Test warning when SDK version is >= 1.0.0."""
         mock_anthropic_module.__version__ = "1.0.0"
         mock_client = Mock()
-        mock_client.models.list.return_value = Mock(data=[])
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
         mock_anthropic_class.return_value = mock_client
 
         ClaudeProvider()
@@ -124,10 +124,11 @@ class TestModelVerification:
     """Tests for model availability verification."""
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
     @patch("copilot_conductor.providers.claude.anthropic")
     @patch("copilot_conductor.providers.claude.logger")
-    def test_model_verification_lists_available_models(
+    @pytest.mark.asyncio
+    async def test_model_verification_lists_available_models(
         self,
         mock_logger: Mock,
         mock_anthropic_module: Mock,
@@ -142,23 +143,26 @@ class TestModelVerification:
         mock_model1.id = "claude-3-5-sonnet-latest"
         mock_model2 = Mock()
         mock_model2.id = "claude-3-opus-20240229"
-        mock_client.models.list.return_value = Mock(data=[mock_model1, mock_model2])
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[mock_model1, mock_model2]))
         mock_anthropic_class.return_value = mock_client
 
-        ClaudeProvider()
+        provider = ClaudeProvider()
+        await provider.validate_connection()
 
-        # Check that models were listed
-        mock_client.models.list.assert_called_once()
+        # Check that models were listed (called twice: once in validate_connection,
+        # once in _verify_available_models)
+        assert mock_client.models.list.call_count == 2
 
         # Check that available models were logged (at DEBUG level)
         debug_calls = [call[0][0] for call in mock_logger.debug.call_args_list]
         assert any("Available Claude models" in call for call in debug_calls)
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
     @patch("copilot_conductor.providers.claude.anthropic")
     @patch("copilot_conductor.providers.claude.logger")
-    def test_model_verification_warns_unavailable_model(
+    @pytest.mark.asyncio
+    async def test_model_verification_warns_unavailable_model(
         self,
         mock_logger: Mock,
         mock_anthropic_module: Mock,
@@ -171,11 +175,12 @@ class TestModelVerification:
         # Mock models.list() with different models
         mock_model = Mock()
         mock_model.id = "claude-3-opus-20240229"
-        mock_client.models.list.return_value = Mock(data=[mock_model])
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[mock_model]))
         mock_anthropic_class.return_value = mock_client
 
         # Request a model that's not in the list
-        ClaudeProvider(model="claude-sonnet-4-20250514")
+        provider = ClaudeProvider(model="claude-sonnet-4-20250514")
+        await provider.validate_connection()
 
         # Check warning was logged
         mock_logger.warning.assert_called()
@@ -187,7 +192,7 @@ class TestConnectionValidation:
     """Tests for connection validation."""
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
     @patch("copilot_conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_validate_connection_success(
@@ -196,7 +201,8 @@ class TestConnectionValidation:
         """Test successful connection validation."""
         mock_anthropic_module.__version__ = "0.77.0"
         mock_client = Mock()
-        mock_client.models.list.return_value = Mock(data=[])
+        # Mock async methods
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
         mock_anthropic_class.return_value = mock_client
 
         provider = ClaudeProvider()
@@ -205,7 +211,7 @@ class TestConnectionValidation:
         assert result is True
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
     @patch("copilot_conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_validate_connection_failure(
@@ -214,7 +220,7 @@ class TestConnectionValidation:
         """Test connection validation failure."""
         mock_anthropic_module.__version__ = "0.77.0"
         mock_client = Mock()
-        mock_client.models.list.side_effect = Exception("API key invalid")
+        mock_client.models.list = AsyncMock(side_effect=Exception("API key invalid"))
         mock_anthropic_class.return_value = mock_client
 
         provider = ClaudeProvider()
@@ -227,7 +233,7 @@ class TestCloseMethod:
     """Tests for resource cleanup."""
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
     @patch("copilot_conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_close_clears_client(
@@ -236,7 +242,9 @@ class TestCloseMethod:
         """Test that close() clears the client reference."""
         mock_anthropic_module.__version__ = "0.77.0"
         mock_client = Mock()
-        mock_client.models.list.return_value = Mock(data=[])
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
+        # Mock async close method
+        mock_client.close = AsyncMock()
         mock_anthropic_class.return_value = mock_client
 
         provider = ClaudeProvider()
@@ -250,7 +258,7 @@ class TestBasicExecution:
     """Tests for basic message execution without structured output."""
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
     @patch("copilot_conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_execute_simple_message(
@@ -259,7 +267,7 @@ class TestBasicExecution:
         """Test executing a simple message without output schema."""
         mock_anthropic_module.__version__ = "0.77.0"
         mock_client = Mock()
-        mock_client.models.list.return_value = Mock(data=[])
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
 
         # Mock response
         mock_text_block = Mock()
@@ -270,7 +278,7 @@ class TestBasicExecution:
         mock_response.content = [mock_text_block]
         mock_response.usage = Mock(input_tokens=10, output_tokens=5)
 
-        mock_client.messages.create.return_value = mock_response
+        mock_client.messages.create = AsyncMock(return_value=mock_response)
         mock_anthropic_class.return_value = mock_client
 
         provider = ClaudeProvider()
@@ -287,7 +295,7 @@ class TestBasicExecution:
         assert result.model == "claude-3-5-sonnet-latest"
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
     @patch("copilot_conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_execute_with_agent_model(
@@ -296,7 +304,7 @@ class TestBasicExecution:
         """Test that agent model overrides default."""
         mock_anthropic_module.__version__ = "0.77.0"
         mock_client = Mock()
-        mock_client.models.list.return_value = Mock(data=[])
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
 
         mock_text_block = Mock()
         mock_text_block.type = "text"
@@ -306,7 +314,7 @@ class TestBasicExecution:
         mock_response.content = [mock_text_block]
         mock_response.usage = Mock(input_tokens=10, output_tokens=5)
 
-        mock_client.messages.create.return_value = mock_response
+        mock_client.messages.create = AsyncMock(return_value=mock_response)
         mock_anthropic_class.return_value = mock_client
 
         provider = ClaudeProvider()
@@ -329,7 +337,7 @@ class TestBasicExecution:
         assert call_kwargs["model"] == "claude-3-opus-20240229"
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
     @patch("copilot_conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_execute_with_temperature(
@@ -338,7 +346,7 @@ class TestBasicExecution:
         """Test that temperature is passed to API."""
         mock_anthropic_module.__version__ = "0.77.0"
         mock_client = Mock()
-        mock_client.models.list.return_value = Mock(data=[])
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
 
         mock_text_block = Mock()
         mock_text_block.type = "text"
@@ -348,7 +356,7 @@ class TestBasicExecution:
         mock_response.content = [mock_text_block]
         mock_response.usage = Mock(input_tokens=10, output_tokens=5)
 
-        mock_client.messages.create.return_value = mock_response
+        mock_client.messages.create = AsyncMock(return_value=mock_response)
         mock_anthropic_class.return_value = mock_client
 
         provider = ClaudeProvider(temperature=0.7)
@@ -374,7 +382,7 @@ class TestStructuredOutput:
     """
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
     @patch("copilot_conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_execute_with_structured_output_via_tool(
@@ -383,7 +391,7 @@ class TestStructuredOutput:
         """Test structured output extraction from tool_use blocks."""
         mock_anthropic_module.__version__ = "0.77.0"
         mock_client = Mock()
-        mock_client.models.list.return_value = Mock(data=[])
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
 
         # Mock tool_use response
         mock_tool_block = Mock()
@@ -395,7 +403,8 @@ class TestStructuredOutput:
         mock_response.content = [mock_tool_block]
         mock_response.usage = Mock(input_tokens=20, output_tokens=10)
 
-        mock_client.messages.create.return_value = mock_response
+        # Mock async messages.create
+        mock_client.messages.create = AsyncMock(return_value=mock_response)
         mock_anthropic_class.return_value = mock_client
 
         provider = ClaudeProvider()
@@ -423,7 +432,7 @@ class TestStructuredOutput:
         assert call_kwargs["tools"][0]["name"] == "emit_output"
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
     @patch("copilot_conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_execute_with_json_fallback(
@@ -432,7 +441,7 @@ class TestStructuredOutput:
         """Test fallback JSON extraction when model returns text instead of tool_use."""
         mock_anthropic_module.__version__ = "0.77.0"
         mock_client = Mock()
-        mock_client.models.list.return_value = Mock(data=[])
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
 
         # Mock text response with JSON
         mock_text_block = Mock()
@@ -443,7 +452,8 @@ class TestStructuredOutput:
         mock_response.content = [mock_text_block]
         mock_response.usage = Mock(input_tokens=20, output_tokens=15)
 
-        mock_client.messages.create.return_value = mock_response
+        # Mock async messages.create
+        mock_client.messages.create = AsyncMock(return_value=mock_response)
         mock_anthropic_class.return_value = mock_client
 
         provider = ClaudeProvider()
@@ -478,7 +488,7 @@ class TestTemperatureValidation:
     """
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
     @patch("copilot_conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_temperature_above_1_0_raises_validation_error(
@@ -500,8 +510,8 @@ class TestTemperatureValidation:
         mock_anthropic_module.BadRequestError = mock_bad_request_error.__class__
 
         mock_client = Mock()
-        mock_client.models.list.return_value = Mock(data=[])
-        mock_client.messages.create.side_effect = mock_bad_request_error
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
+        mock_client.messages.create = AsyncMock(side_effect=mock_bad_request_error)
         mock_anthropic_class.return_value = mock_client
 
         provider = ClaudeProvider(temperature=1.5)  # Invalid: > 1.0
@@ -525,7 +535,7 @@ class TestErrorHandling:
     """Tests for error handling and wrapping."""
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
     @patch("copilot_conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_api_error_wrapped_as_provider_error(
@@ -534,8 +544,8 @@ class TestErrorHandling:
         """Test that API errors are wrapped as ProviderError."""
         mock_anthropic_module.__version__ = "0.77.0"
         mock_client = Mock()
-        mock_client.models.list.return_value = Mock(data=[])
-        mock_client.messages.create.side_effect = Exception("API error")
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
+        mock_client.messages.create = AsyncMock(side_effect=Exception("API error"))
         mock_anthropic_class.return_value = mock_client
 
         provider = ClaudeProvider()
@@ -552,7 +562,7 @@ class TestErrorHandling:
         assert exc_info.value.is_retryable is True
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
     @patch("copilot_conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_execute_with_no_client_raises_error(
@@ -561,7 +571,7 @@ class TestErrorHandling:
         """Test that execute raises error if client not initialized."""
         mock_anthropic_module.__version__ = "0.77.0"
         mock_client = Mock()
-        mock_client.models.list.return_value = Mock(data=[])
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
         mock_anthropic_class.return_value = mock_client
 
         provider = ClaudeProvider()
@@ -577,7 +587,7 @@ class TestErrorHandling:
             )
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
     @patch("copilot_conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_validation_error_for_missing_output_fields(
@@ -586,7 +596,7 @@ class TestErrorHandling:
         """Test that missing output fields raise ValidationError."""
         mock_anthropic_module.__version__ = "0.77.0"
         mock_client = Mock()
-        mock_client.models.list.return_value = Mock(data=[])
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
 
         # Mock tool_use with incomplete output
         mock_tool_block = Mock()
@@ -598,7 +608,7 @@ class TestErrorHandling:
         mock_response.content = [mock_tool_block]
         mock_response.usage = Mock(input_tokens=10, output_tokens=5)
 
-        mock_client.messages.create.return_value = mock_response
+        mock_client.messages.create = AsyncMock(return_value=mock_response)
         mock_anthropic_class.return_value = mock_client
 
         provider = ClaudeProvider()
@@ -625,7 +635,7 @@ class TestToolSchemaGeneration:
     """Tests for tool schema generation from output schemas."""
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
     @patch("copilot_conductor.providers.claude.anthropic")
     def test_build_tools_for_simple_schema(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -633,7 +643,7 @@ class TestToolSchemaGeneration:
         """Test tool generation from simple output schema."""
         mock_anthropic_module.__version__ = "0.77.0"
         mock_client = Mock()
-        mock_client.models.list.return_value = Mock(data=[])
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
         mock_anthropic_class.return_value = mock_client
 
         provider = ClaudeProvider()
@@ -660,7 +670,7 @@ class TestConcurrentExecution:
     """Tests for concurrent execution scenarios."""
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
     @patch("copilot_conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_concurrent_execute_calls(
@@ -671,7 +681,7 @@ class TestConcurrentExecution:
 
         mock_anthropic_module.__version__ = "0.77.0"
         mock_client = Mock()
-        mock_client.models.list.return_value = Mock(data=[])
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
 
         # Mock responses for different calls
         call_count = 0
@@ -687,7 +697,7 @@ class TestConcurrentExecution:
             mock_response.usage = Mock(input_tokens=10, output_tokens=5)
             return mock_response
 
-        mock_client.messages.create.side_effect = lambda **kwargs: create_response()
+        mock_client.messages.create = AsyncMock(side_effect=lambda **kwargs: create_response())
         mock_anthropic_class.return_value = mock_client
 
         provider = ClaudeProvider()
@@ -715,7 +725,7 @@ class TestTextContentExtraction:
     """Tests for text content extraction with multiple blocks."""
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
     @patch("copilot_conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_extract_text_content_multiple_blocks(
@@ -724,7 +734,7 @@ class TestTextContentExtraction:
         """Test extraction with multiple text blocks in response."""
         mock_anthropic_module.__version__ = "0.77.0"
         mock_client = Mock()
-        mock_client.models.list.return_value = Mock(data=[])
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
 
         # Mock response with multiple text blocks
         mock_text_block1 = Mock()
@@ -739,7 +749,7 @@ class TestTextContentExtraction:
         mock_response.content = [mock_text_block1, mock_text_block2]
         mock_response.usage = Mock(input_tokens=10, output_tokens=5)
 
-        mock_client.messages.create.return_value = mock_response
+        mock_client.messages.create = AsyncMock(return_value=mock_response)
         mock_anthropic_class.return_value = mock_client
 
         provider = ClaudeProvider()
@@ -759,7 +769,7 @@ class TestParseRecovery:
     """Tests for parse recovery mechanism when JSON is malformed."""
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
     @patch("copilot_conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_parse_recovery_success_on_first_retry(
@@ -768,7 +778,7 @@ class TestParseRecovery:
         """Test parse recovery succeeds on first retry attempt."""
         mock_anthropic_module.__version__ = "0.77.0"
         mock_client = Mock()
-        mock_client.models.list.return_value = Mock(data=[])
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
 
         # First response: malformed JSON
         mock_text_block1 = Mock()
@@ -790,7 +800,7 @@ class TestParseRecovery:
         mock_response2.usage = Mock(input_tokens=25, output_tokens=12)
 
         # Set up mock to return different responses
-        mock_client.messages.create.side_effect = [mock_response1, mock_response2]
+        mock_client.messages.create = AsyncMock(side_effect=[mock_response1, mock_response2])
         mock_anthropic_class.return_value = mock_client
 
         provider = ClaudeProvider()
@@ -810,7 +820,7 @@ class TestParseRecovery:
         assert mock_client.messages.create.call_count == 2
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
     @patch("copilot_conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_parse_recovery_success_with_json_fallback(
@@ -819,7 +829,7 @@ class TestParseRecovery:
         """Test parse recovery succeeds with JSON fallback after retry."""
         mock_anthropic_module.__version__ = "0.77.0"
         mock_client = Mock()
-        mock_client.models.list.return_value = Mock(data=[])
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
 
         # First response: malformed JSON
         mock_text_block1 = Mock()
@@ -839,7 +849,7 @@ class TestParseRecovery:
         mock_response2.content = [mock_text_block2]
         mock_response2.usage = Mock(input_tokens=25, output_tokens=12)
 
-        mock_client.messages.create.side_effect = [mock_response1, mock_response2]
+        mock_client.messages.create = AsyncMock(side_effect=[mock_response1, mock_response2])
         mock_anthropic_class.return_value = mock_client
 
         provider = ClaudeProvider()
@@ -859,7 +869,7 @@ class TestParseRecovery:
         assert mock_client.messages.create.call_count == 2
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
     @patch("copilot_conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_parse_recovery_exhausted_raises_error(
@@ -868,7 +878,7 @@ class TestParseRecovery:
         """Test parse recovery raises error with detailed history after max attempts."""
         mock_anthropic_module.__version__ = "0.77.0"
         mock_client = Mock()
-        mock_client.models.list.return_value = Mock(data=[])
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
 
         # All responses: malformed JSON
         mock_text_block = Mock()
@@ -880,7 +890,7 @@ class TestParseRecovery:
         mock_response.usage = Mock(input_tokens=20, output_tokens=10)
 
         # Return same malformed response for all attempts (1 initial + 2 retries)
-        mock_client.messages.create.return_value = mock_response
+        mock_client.messages.create = AsyncMock(return_value=mock_response)
         mock_anthropic_class.return_value = mock_client
 
         provider = ClaudeProvider()
@@ -907,7 +917,7 @@ class TestParseRecovery:
         assert mock_client.messages.create.call_count == 3
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
     @patch("copilot_conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_no_parse_recovery_when_no_output_schema(
@@ -916,7 +926,7 @@ class TestParseRecovery:
         """Test parse recovery is skipped when no output schema is defined."""
         mock_anthropic_module.__version__ = "0.77.0"
         mock_client = Mock()
-        mock_client.models.list.return_value = Mock(data=[])
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
 
         # Response with plain text (no schema, so this is valid)
         mock_text_block = Mock()
@@ -927,7 +937,7 @@ class TestParseRecovery:
         mock_response.content = [mock_text_block]
         mock_response.usage = Mock(input_tokens=20, output_tokens=10)
 
-        mock_client.messages.create.return_value = mock_response
+        mock_client.messages.create = AsyncMock(return_value=mock_response)
         mock_anthropic_class.return_value = mock_client
 
         provider = ClaudeProvider()
@@ -948,7 +958,7 @@ class TestNestedSchemas:
     """Tests for nested object and array schemas."""
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
     @patch("copilot_conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_nested_object_schema(
@@ -957,7 +967,7 @@ class TestNestedSchemas:
         """Test structured output with nested object schema."""
         mock_anthropic_module.__version__ = "0.77.0"
         mock_client = Mock()
-        mock_client.models.list.return_value = Mock(data=[])
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
 
         # Mock tool_use response with nested object
         mock_tool_block = Mock()
@@ -974,7 +984,7 @@ class TestNestedSchemas:
         mock_response.content = [mock_tool_block]
         mock_response.usage = Mock(input_tokens=20, output_tokens=15)
 
-        mock_client.messages.create.return_value = mock_response
+        mock_client.messages.create = AsyncMock(return_value=mock_response)
         mock_anthropic_class.return_value = mock_client
 
         provider = ClaudeProvider()
@@ -1014,7 +1024,7 @@ class TestNestedSchemas:
         assert "age" in person_schema["properties"]
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
     @patch("copilot_conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_array_schema_with_items(
@@ -1023,7 +1033,7 @@ class TestNestedSchemas:
         """Test structured output with array schema and item definitions."""
         mock_anthropic_module.__version__ = "0.77.0"
         mock_client = Mock()
-        mock_client.models.list.return_value = Mock(data=[])
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
 
         # Mock tool_use response with array
         mock_tool_block = Mock()
@@ -1035,7 +1045,7 @@ class TestNestedSchemas:
         mock_response.content = [mock_tool_block]
         mock_response.usage = Mock(input_tokens=20, output_tokens=15)
 
-        mock_client.messages.create.return_value = mock_response
+        mock_client.messages.create = AsyncMock(return_value=mock_response)
         mock_anthropic_class.return_value = mock_client
 
         provider = ClaudeProvider()
@@ -1070,7 +1080,7 @@ class TestNestedSchemas:
         assert tags_schema["items"]["type"] == "string"
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
     @patch("copilot_conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_array_of_objects_schema(
@@ -1079,7 +1089,7 @@ class TestNestedSchemas:
         """Test structured output with array of objects."""
         mock_anthropic_module.__version__ = "0.77.0"
         mock_client = Mock()
-        mock_client.models.list.return_value = Mock(data=[])
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
 
         # Mock tool_use response with array of objects
         mock_tool_block = Mock()
@@ -1096,7 +1106,7 @@ class TestNestedSchemas:
         mock_response.content = [mock_tool_block]
         mock_response.usage = Mock(input_tokens=20, output_tokens=20)
 
-        mock_client.messages.create.return_value = mock_response
+        mock_client.messages.create = AsyncMock(return_value=mock_response)
         mock_anthropic_class.return_value = mock_client
 
         provider = ClaudeProvider()
@@ -1144,7 +1154,7 @@ class TestNestedSchemas:
         assert "score" in users_schema["items"]["properties"]
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
     @patch("copilot_conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_deeply_nested_schema(
@@ -1153,7 +1163,7 @@ class TestNestedSchemas:
         """Test structured output with deeply nested schema."""
         mock_anthropic_module.__version__ = "0.77.0"
         mock_client = Mock()
-        mock_client.models.list.return_value = Mock(data=[])
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
 
         # Mock tool_use response with deeply nested structure
         mock_tool_block = Mock()
@@ -1177,7 +1187,7 @@ class TestNestedSchemas:
         mock_response.content = [mock_tool_block]
         mock_response.usage = Mock(input_tokens=30, output_tokens=40)
 
-        mock_client.messages.create.return_value = mock_response
+        mock_client.messages.create = AsyncMock(return_value=mock_response)
         mock_anthropic_class.return_value = mock_client
 
         provider = ClaudeProvider()
@@ -1234,7 +1244,7 @@ class TestNestedSchemas:
         }
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
     @patch("copilot_conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_schema_depth_limit_exceeded(
@@ -1243,7 +1253,7 @@ class TestNestedSchemas:
         """Test that schema nesting beyond max depth raises ValidationError."""
         mock_anthropic_module.__version__ = "0.77.0"
         mock_client = Mock()
-        mock_client.models.list.return_value = Mock(data=[])
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
         mock_anthropic_class.return_value = mock_client
 
         provider = ClaudeProvider()
@@ -1274,7 +1284,7 @@ class TestNestedSchemas:
             )
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
     @patch("copilot_conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_nested_array_with_object_items(
@@ -1288,7 +1298,7 @@ class TestNestedSchemas:
         """
         mock_anthropic_module.__version__ = "0.77.0"
         mock_client = Mock()
-        mock_client.models.list.return_value = Mock(data=[])
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
 
         # Mock tool_use response with nested array of objects
         mock_tool_block = Mock()
@@ -1305,7 +1315,7 @@ class TestNestedSchemas:
         mock_response.content = [mock_tool_block]
         mock_response.usage = Mock(input_tokens=10, output_tokens=15)
 
-        mock_client.messages.create.return_value = mock_response
+        mock_client.messages.create = AsyncMock(return_value=mock_response)
         mock_anthropic_class.return_value = mock_client
 
         provider = ClaudeProvider()
@@ -1349,7 +1359,7 @@ class TestNestedSchemas:
         assert items_schema["required"] == ["name", "value"]
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
     @patch("copilot_conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_tool_use_success_without_fallback(
@@ -1358,7 +1368,7 @@ class TestNestedSchemas:
         """Test primary success path where Claude uses tool on first attempt without fallback."""
         mock_anthropic_module.__version__ = "0.77.0"
         mock_client = Mock()
-        mock_client.models.list.return_value = Mock(data=[])
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
 
         # Mock successful tool_use response on first attempt
         mock_tool_block = Mock()
@@ -1370,7 +1380,7 @@ class TestNestedSchemas:
         mock_response.content = [mock_tool_block]
         mock_response.usage = Mock(input_tokens=15, output_tokens=8)
 
-        mock_client.messages.create.return_value = mock_response
+        mock_client.messages.create = AsyncMock(return_value=mock_response)
         mock_anthropic_class.return_value = mock_client
 
         provider = ClaudeProvider()
@@ -1396,3 +1406,345 @@ class TestNestedSchemas:
         call_kwargs = mock_client.messages.create.call_args[1]
         assert "tools" in call_kwargs
         assert call_kwargs["tools"][0]["name"] == "emit_output"
+
+
+class TestNonStreamingExecution:
+    """Tests for EPIC-003: Non-streaming message execution."""
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    @pytest.mark.asyncio
+    async def test_execute_api_call_basic(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test _execute_api_call() makes non-streaming API call."""
+        mock_anthropic_module.__version__ = "0.77.0"
+        mock_client = Mock()
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
+
+        # Mock successful response
+        mock_response = Mock()
+        mock_response.content = [Mock(type="text", text="Hello")]
+        mock_response.usage = Mock(input_tokens=10, output_tokens=20)
+        mock_client.messages.create = AsyncMock(return_value=mock_response)
+
+        mock_anthropic_class.return_value = mock_client
+
+        provider = ClaudeProvider()
+
+        # Call _execute_api_call directly
+        messages = [{"role": "user", "content": "test"}]
+        response = await provider._execute_api_call(
+            messages=messages,
+            model="claude-3-5-sonnet-latest",
+            temperature=0.7,
+            max_tokens=100,
+            sdk_tools=None,
+        )
+
+        assert response == mock_response
+        # Verify messages.create was called (non-streaming)
+        mock_client.messages.create.assert_called_once()
+        call_kwargs = mock_client.messages.create.call_args[1]
+        assert call_kwargs["model"] == "claude-3-5-sonnet-latest"
+        assert call_kwargs["messages"] == messages
+        assert call_kwargs["temperature"] == 0.7
+        assert call_kwargs["max_tokens"] == 100
+        assert "tools" not in call_kwargs
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    @pytest.mark.asyncio
+    async def test_execute_api_call_with_tools(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test _execute_api_call() includes tools when provided."""
+        mock_anthropic_module.__version__ = "0.77.0"
+        mock_client = Mock()
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
+
+        mock_response = Mock()
+        mock_response.content = []
+        mock_client.messages.create = AsyncMock(return_value=mock_response)
+
+        mock_anthropic_class.return_value = mock_client
+
+        provider = ClaudeProvider()
+
+        tools = [{"name": "test_tool", "description": "A test tool"}]
+        await provider._execute_api_call(
+            messages=[{"role": "user", "content": "test"}],
+            model="claude-3-5-sonnet-latest",
+            temperature=None,
+            max_tokens=100,
+            sdk_tools=tools,
+        )
+
+        call_kwargs = mock_client.messages.create.call_args[1]
+        assert call_kwargs["tools"] == tools
+        # Temperature should not be in kwargs when None
+        assert "temperature" not in call_kwargs
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    def test_process_response_content_blocks_text_only(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test _process_response_content_blocks() with text blocks."""
+        mock_anthropic_module.__version__ = "0.77.0"
+        mock_client = Mock()
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
+        mock_anthropic_class.return_value = mock_client
+
+        provider = ClaudeProvider()
+
+        # Mock response with text blocks
+        mock_response = Mock()
+        block1 = Mock(type="text", text="First part")
+        block2 = Mock(type="text", text="Second part")
+        mock_response.content = [block1, block2]
+
+        blocks, tool_data = provider._process_response_content_blocks(mock_response)
+
+        assert len(blocks) == 2
+        assert blocks[0] == {"type": "text", "text": "First part"}
+        assert blocks[1] == {"type": "text", "text": "Second part"}
+        assert tool_data is None
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    def test_process_response_content_blocks_with_tool_use(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test _process_response_content_blocks() with tool_use blocks."""
+        mock_anthropic_module.__version__ = "0.77.0"
+        mock_client = Mock()
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
+        mock_anthropic_class.return_value = mock_client
+
+        provider = ClaudeProvider()
+
+        # Mock response with tool_use block
+        mock_response = Mock()
+        tool_block = Mock()
+        tool_block.type = "tool_use"
+        tool_block.name = "emit_output"
+        tool_block.id = "tool_123"
+        tool_block.input = {"answer": "42", "confidence": 0.95}
+        mock_response.content = [tool_block]
+
+        blocks, tool_data = provider._process_response_content_blocks(mock_response)
+
+        assert len(blocks) == 1
+        assert blocks[0] == {"type": "tool_use", "name": "emit_output", "id": "tool_123"}
+        assert tool_data == {"answer": "42", "confidence": 0.95}
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    def test_process_response_content_blocks_mixed(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test _process_response_content_blocks() with mixed block types."""
+        mock_anthropic_module.__version__ = "0.77.0"
+        mock_client = Mock()
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
+        mock_anthropic_class.return_value = mock_client
+
+        provider = ClaudeProvider()
+
+        # Mock response with mixed blocks
+        mock_response = Mock()
+        text_block = Mock()
+        text_block.type = "text"
+        text_block.text = "Let me help"
+        tool_block = Mock()
+        tool_block.type = "tool_use"
+        tool_block.name = "emit_output"
+        tool_block.id = "tool_456"
+        tool_block.input = {"result": "success"}
+        mock_response.content = [text_block, tool_block]
+
+        blocks, tool_data = provider._process_response_content_blocks(mock_response)
+
+        assert len(blocks) == 2
+        assert blocks[0]["type"] == "text"
+        assert blocks[1]["type"] == "tool_use"
+        assert tool_data == {"result": "success"}
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    def test_extract_token_usage_with_usage_data(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test _extract_token_usage() extracts and sums tokens correctly."""
+        mock_anthropic_module.__version__ = "0.77.0"
+        mock_client = Mock()
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
+        mock_anthropic_class.return_value = mock_client
+
+        provider = ClaudeProvider()
+
+        # Mock response with usage
+        mock_response = Mock()
+        mock_response.usage = Mock(input_tokens=150, output_tokens=350)
+
+        tokens = provider._extract_token_usage(mock_response)
+
+        assert tokens == 500  # 150 + 350
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    def test_extract_token_usage_without_usage_data(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test _extract_token_usage() returns None when usage not available."""
+        mock_anthropic_module.__version__ = "0.77.0"
+        mock_client = Mock()
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
+        mock_anthropic_class.return_value = mock_client
+
+        provider = ClaudeProvider()
+
+        # Mock response without usage attribute
+        mock_response = Mock(spec=["content"])
+
+        tokens = provider._extract_token_usage(mock_response)
+
+        assert tokens is None
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    def test_timeout_configuration_passed_to_client(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test timeout is passed to Anthropic client initialization."""
+        mock_anthropic_module.__version__ = "0.77.0"
+        mock_client = Mock()
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
+        mock_anthropic_class.return_value = mock_client
+
+        # Create provider with custom timeout
+        provider = ClaudeProvider(timeout=300.0)
+
+        assert provider._timeout == 300.0
+        # Verify timeout was passed to client
+        mock_anthropic_class.assert_called_once()
+        call_kwargs = mock_anthropic_class.call_args[1]
+        assert call_kwargs["timeout"] == 300.0
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    def test_timeout_default_value(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test default timeout is 600 seconds."""
+        mock_anthropic_module.__version__ = "0.77.0"
+        mock_client = Mock()
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
+        mock_anthropic_class.return_value = mock_client
+
+        provider = ClaudeProvider()
+
+        assert provider._timeout == 600.0
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    async def test_execute_returns_token_usage(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test execute() returns token usage in AgentOutput."""
+        mock_anthropic_module.__version__ = "0.77.0"
+        mock_client = Mock()
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
+
+        # Mock response with usage
+        mock_response = Mock()
+        mock_response.content = [Mock(type="text", text="Response text")]
+        mock_response.usage = Mock(input_tokens=100, output_tokens=200)
+        mock_client.messages.create = AsyncMock(return_value=mock_response)
+
+        mock_anthropic_class.return_value = mock_client
+
+        provider = ClaudeProvider()
+
+        agent = AgentDef(
+            name="test-agent",
+            model="claude-3-5-sonnet-latest",
+            prompt="Test prompt",
+        )
+
+        result = await provider.execute(
+            agent=agent,
+            context={},
+            rendered_prompt="Test prompt",
+        )
+
+        assert result.tokens_used == 300  # 100 + 200
+        assert result.model == "claude-3-5-sonnet-latest"
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    @pytest.mark.asyncio
+    async def test_execute_api_call_raises_when_client_not_initialized(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test _execute_api_call() raises ProviderError when client is None."""
+        mock_anthropic_module.__version__ = "0.77.0"
+        mock_client = Mock()
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
+        mock_anthropic_class.return_value = mock_client
+
+        provider = ClaudeProvider()
+        provider._client = None  # Simulate uninitialized client
+
+        with pytest.raises(ProviderError, match="Claude client not initialized"):
+            await provider._execute_api_call(
+                messages=[{"role": "user", "content": "test"}],
+                model="claude-3-5-sonnet-latest",
+                temperature=None,
+                max_tokens=100,
+            )
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("copilot_conductor.providers.claude.logger")
+    @pytest.mark.asyncio
+    async def test_execute_api_call_logs_non_streaming_mode(
+        self, mock_logger: Mock, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test _execute_api_call() logs that it's using non-streaming mode."""
+        mock_anthropic_module.__version__ = "0.77.0"
+        mock_client = Mock()
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
+
+        mock_response = Mock()
+        mock_response.content = []
+        mock_client.messages.create = AsyncMock(return_value=mock_response)
+
+        mock_anthropic_class.return_value = mock_client
+
+        provider = ClaudeProvider()
+
+        await provider._execute_api_call(
+            messages=[{"role": "user", "content": "test"}],
+            model="claude-3-5-sonnet-latest",
+            temperature=0.5,
+            max_tokens=1000,
+        )
+
+        # Verify debug log mentions non-streaming
+        mock_logger.debug.assert_called()
+        debug_calls = [call[0][0] for call in mock_logger.debug.call_args_list]
+        assert any("non-streaming" in call.lower() for call in debug_calls)
