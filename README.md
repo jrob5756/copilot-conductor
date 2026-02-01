@@ -1,6 +1,6 @@
 # Copilot Conductor
 
-A CLI tool for defining and running multi-agent workflows with the GitHub Copilot SDK.
+A CLI tool for defining and running multi-agent workflows with the GitHub Copilot SDK and Anthropic Claude.
 
 [![CI](https://github.com/your-org/copilot-conductor/actions/workflows/ci.yml/badge.svg)](https://github.com/your-org/copilot-conductor/actions/workflows/ci.yml)
 [![PyPI version](https://badge.fury.io/py/copilot-conductor.svg)](https://badge.fury.io/py/copilot-conductor)
@@ -9,6 +9,7 @@ A CLI tool for defining and running multi-agent workflows with the GitHub Copilo
 ## Features
 
 - **YAML-based workflow definitions** - Define multi-agent workflows in simple, readable YAML
+- **Multiple AI providers** - GitHub Copilot or Anthropic Claude with seamless switching
 - **Static parallel execution** - Run independent agents concurrently for faster workflows
 - **Dynamic parallel (for-each)** - Process variable-length arrays with parallel agent instances
 - **Conditional routing** - Route between agents based on output conditions
@@ -16,7 +17,7 @@ A CLI tool for defining and running multi-agent workflows with the GitHub Copilo
 - **Human-in-the-loop gates** - Pause workflows for human decisions with Rich terminal UI
 - **Context accumulation** - Three modes for managing context between agents
 - **Safety limits** - Max iterations and timeout enforcement
-- **Tool support** - Configure tools at workflow and agent levels
+- **Tool support** - Configure tools at workflow and agent levels (Copilot provider)
 - **Validation** - Validate workflows before execution
 - **Dry-run mode** - Preview execution plans without running
 
@@ -82,6 +83,82 @@ conductor run my-workflow.yaml --input question="What is Python?"
   "answer": "Python is a high-level, interpreted programming language..."
 }
 ```
+
+## Using Claude Provider
+
+Copilot Conductor supports Anthropic Claude models via the official Anthropic SDK.
+
+### 1. Install the Claude SDK
+
+```bash
+uv add 'anthropic>=0.77.0,<1.0.0'
+# or
+pip install 'anthropic>=0.77.0,<1.0.0'
+```
+
+### 2. Set your API key
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+```
+
+Get your API key at [console.anthropic.com](https://console.anthropic.com)
+
+### 3. Update your workflow
+
+```yaml
+# my-claude-workflow.yaml
+workflow:
+  name: simple-qa
+  description: A simple question-answering workflow with Claude
+  entry_point: answerer
+  runtime:
+    provider: claude  # Change from 'copilot' to 'claude'
+    default_model: claude-3-5-sonnet-latest
+    max_tokens_claude: 4096
+
+agents:
+  - name: answerer
+    model: claude-3-5-sonnet-latest
+    prompt: |
+      Answer the following question:
+      {{ workflow.input.question }}
+    output:
+      answer:
+        type: string
+    routes:
+      - to: $end
+
+output:
+  answer: "{{ answerer.output.answer }}"
+```
+
+### 4. Run with Claude
+
+```bash
+conductor run my-claude-workflow.yaml --input question="What is Python?"
+```
+
+### Available Claude Models
+
+| Model | Best For | Cost |
+|-------|----------|------|
+| `claude-3-5-sonnet-latest` | General purpose (recommended) | $3/$15 per MTok |
+| `claude-haiku-4-20250318` | Fast, simple tasks | $1/$5 per MTok |
+| `claude-opus-4-20250514` | Complex reasoning | $5/$25 per MTok |
+
+**Pricing**: Input/Output per 1M tokens. [Verify latest pricing](https://www.anthropic.com/pricing)
+
+### Claude vs Copilot
+
+| Feature | Copilot | Claude |
+|---------|---------|--------|
+| Pricing | Subscription ($10-39/mo) | Pay-per-token |
+| Context | 8K-128K tokens | 200K tokens |
+| Tools (MCP) | ✅ Yes | ⏳ Phase 2+ |
+| Streaming | ✅ Yes | ⏳ Phase 2+ |
+
+**See also**: [Provider Comparison](docs/providers/comparison.md) | [Migration Guide](docs/providers/migration.md) | [Claude Documentation](docs/providers/claude.md)
 
 ## CLI Reference
 
