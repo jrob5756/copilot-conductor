@@ -754,3 +754,645 @@ class TestTextContentExtraction:
         # Verify both text blocks are combined with newline separator
         assert result.content == {"text": "First part. \nSecond part."}
 
+
+class TestParseRecovery:
+    """Tests for parse recovery mechanism when JSON is malformed."""
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    @pytest.mark.asyncio
+    async def test_parse_recovery_success_on_first_retry(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test parse recovery succeeds on first retry attempt."""
+        mock_anthropic_module.__version__ = "0.77.0"
+        mock_client = Mock()
+        mock_client.models.list.return_value = Mock(data=[])
+
+        # First response: malformed JSON
+        mock_text_block1 = Mock()
+        mock_text_block1.type = "text"
+        mock_text_block1.text = '{"answer": "incomplete'
+
+        mock_response1 = Mock()
+        mock_response1.content = [mock_text_block1]
+        mock_response1.usage = Mock(input_tokens=20, output_tokens=10)
+
+        # Second response: valid tool_use
+        mock_tool_block = Mock()
+        mock_tool_block.type = "tool_use"
+        mock_tool_block.name = "emit_output"
+        mock_tool_block.input = {"answer": "42"}
+
+        mock_response2 = Mock()
+        mock_response2.content = [mock_tool_block]
+        mock_response2.usage = Mock(input_tokens=25, output_tokens=12)
+
+        # Set up mock to return different responses
+        mock_client.messages.create.side_effect = [mock_response1, mock_response2]
+        mock_anthropic_class.return_value = mock_client
+
+        provider = ClaudeProvider()
+        agent = AgentDef(
+            name="test",
+            prompt="Answer",
+            output={"answer": OutputField(type="string")},
+        )
+
+        result = await provider.execute(
+            agent=agent,
+            context={},
+            rendered_prompt="What is the answer?",
+        )
+
+        assert result.content == {"answer": "42"}
+        assert mock_client.messages.create.call_count == 2
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    @pytest.mark.asyncio
+    async def test_parse_recovery_success_with_json_fallback(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test parse recovery succeeds with JSON fallback after retry."""
+        mock_anthropic_module.__version__ = "0.77.0"
+        mock_client = Mock()
+        mock_client.models.list.return_value = Mock(data=[])
+
+        # First response: malformed JSON
+        mock_text_block1 = Mock()
+        mock_text_block1.type = "text"
+        mock_text_block1.text = "answer: 42"  # Not valid JSON
+
+        mock_response1 = Mock()
+        mock_response1.content = [mock_text_block1]
+        mock_response1.usage = Mock(input_tokens=20, output_tokens=10)
+
+        # Second response: valid JSON in text
+        mock_text_block2 = Mock()
+        mock_text_block2.type = "text"
+        mock_text_block2.text = '{"answer": "42"}'
+
+        mock_response2 = Mock()
+        mock_response2.content = [mock_text_block2]
+        mock_response2.usage = Mock(input_tokens=25, output_tokens=12)
+
+        mock_client.messages.create.side_effect = [mock_response1, mock_response2]
+        mock_anthropic_class.return_value = mock_client
+
+        provider = ClaudeProvider()
+        agent = AgentDef(
+            name="test",
+            prompt="Answer",
+            output={"answer": OutputField(type="string")},
+        )
+
+        result = await provider.execute(
+            agent=agent,
+            context={},
+            rendered_prompt="What is the answer?",
+        )
+
+        assert result.content == {"answer": "42"}
+        assert mock_client.messages.create.call_count == 2
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    @pytest.mark.asyncio
+    async def test_parse_recovery_exhausted_raises_error(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test parse recovery raises error with detailed history after max attempts."""
+        mock_anthropic_module.__version__ = "0.77.0"
+        mock_client = Mock()
+        mock_client.models.list.return_value = Mock(data=[])
+
+        # All responses: malformed JSON
+        mock_text_block = Mock()
+        mock_text_block.type = "text"
+        mock_text_block.text = "invalid json"
+
+        mock_response = Mock()
+        mock_response.content = [mock_text_block]
+        mock_response.usage = Mock(input_tokens=20, output_tokens=10)
+
+        # Return same malformed response for all attempts (1 initial + 2 retries)
+        mock_client.messages.create.return_value = mock_response
+        mock_anthropic_class.return_value = mock_client
+
+        provider = ClaudeProvider()
+        agent = AgentDef(
+            name="test",
+            prompt="Answer",
+            output={"answer": OutputField(type="string")},
+        )
+
+        with pytest.raises(
+            ProviderError, match="Failed to extract valid JSON after 2 recovery attempts"
+        ) as exc_info:
+            await provider.execute(
+                agent=agent,
+                context={},
+                rendered_prompt="What is the answer?",
+            )
+
+        # Verify error includes recovery history
+        assert "Recovery history" in str(exc_info.value)
+        assert "Attempt 0" in str(exc_info.value)
+
+        # Should have made 3 attempts total (initial + 2 retries)
+        assert mock_client.messages.create.call_count == 3
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    @pytest.mark.asyncio
+    async def test_no_parse_recovery_when_no_output_schema(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test parse recovery is skipped when no output schema is defined."""
+        mock_anthropic_module.__version__ = "0.77.0"
+        mock_client = Mock()
+        mock_client.models.list.return_value = Mock(data=[])
+
+        # Response with plain text (no schema, so this is valid)
+        mock_text_block = Mock()
+        mock_text_block.type = "text"
+        mock_text_block.text = "This is just plain text"
+
+        mock_response = Mock()
+        mock_response.content = [mock_text_block]
+        mock_response.usage = Mock(input_tokens=20, output_tokens=10)
+
+        mock_client.messages.create.return_value = mock_response
+        mock_anthropic_class.return_value = mock_client
+
+        provider = ClaudeProvider()
+        agent = AgentDef(name="test", prompt="Say hello")
+
+        result = await provider.execute(
+            agent=agent,
+            context={},
+            rendered_prompt="Say hello",
+        )
+
+        # Should succeed without retries
+        assert result.content == {"text": "This is just plain text"}
+        assert mock_client.messages.create.call_count == 1
+
+
+class TestNestedSchemas:
+    """Tests for nested object and array schemas."""
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    @pytest.mark.asyncio
+    async def test_nested_object_schema(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test structured output with nested object schema."""
+        mock_anthropic_module.__version__ = "0.77.0"
+        mock_client = Mock()
+        mock_client.models.list.return_value = Mock(data=[])
+
+        # Mock tool_use response with nested object
+        mock_tool_block = Mock()
+        mock_tool_block.type = "tool_use"
+        mock_tool_block.name = "emit_output"
+        mock_tool_block.input = {
+            "person": {
+                "name": "Alice",
+                "age": 30,
+            }
+        }
+
+        mock_response = Mock()
+        mock_response.content = [mock_tool_block]
+        mock_response.usage = Mock(input_tokens=20, output_tokens=15)
+
+        mock_client.messages.create.return_value = mock_response
+        mock_anthropic_class.return_value = mock_client
+
+        provider = ClaudeProvider()
+        agent = AgentDef(
+            name="test",
+            prompt="Get person info",
+            output={
+                "person": OutputField(
+                    type="object",
+                    description="Person information",
+                    properties={
+                        "name": OutputField(type="string", description="Name"),
+                        "age": OutputField(type="number", description="Age"),
+                    },
+                ),
+            },
+        )
+
+        result = await provider.execute(
+            agent=agent,
+            context={},
+            rendered_prompt="Get person info",
+        )
+
+        assert result.content == {"person": {"name": "Alice", "age": 30}}
+
+        # Verify tool schema was correctly built with nested properties
+        call_kwargs = mock_client.messages.create.call_args[1]
+        assert "tools" in call_kwargs
+        tool_schema = call_kwargs["tools"][0]["input_schema"]
+        assert "properties" in tool_schema
+        assert "person" in tool_schema["properties"]
+        person_schema = tool_schema["properties"]["person"]
+        assert person_schema["type"] == "object"
+        assert "properties" in person_schema
+        assert "name" in person_schema["properties"]
+        assert "age" in person_schema["properties"]
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    @pytest.mark.asyncio
+    async def test_array_schema_with_items(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test structured output with array schema and item definitions."""
+        mock_anthropic_module.__version__ = "0.77.0"
+        mock_client = Mock()
+        mock_client.models.list.return_value = Mock(data=[])
+
+        # Mock tool_use response with array
+        mock_tool_block = Mock()
+        mock_tool_block.type = "tool_use"
+        mock_tool_block.name = "emit_output"
+        mock_tool_block.input = {"tags": ["python", "testing", "async"]}
+
+        mock_response = Mock()
+        mock_response.content = [mock_tool_block]
+        mock_response.usage = Mock(input_tokens=20, output_tokens=15)
+
+        mock_client.messages.create.return_value = mock_response
+        mock_anthropic_class.return_value = mock_client
+
+        provider = ClaudeProvider()
+        agent = AgentDef(
+            name="test",
+            prompt="Get tags",
+            output={
+                "tags": OutputField(
+                    type="array",
+                    description="List of tags",
+                    items=OutputField(type="string", description="A tag"),
+                ),
+            },
+        )
+
+        result = await provider.execute(
+            agent=agent,
+            context={},
+            rendered_prompt="Get tags",
+        )
+
+        assert result.content == {"tags": ["python", "testing", "async"]}
+
+        # Verify tool schema was correctly built with items
+        call_kwargs = mock_client.messages.create.call_args[1]
+        tool_schema = call_kwargs["tools"][0]["input_schema"]
+        assert "properties" in tool_schema
+        assert "tags" in tool_schema["properties"]
+        tags_schema = tool_schema["properties"]["tags"]
+        assert tags_schema["type"] == "array"
+        assert "items" in tags_schema
+        assert tags_schema["items"]["type"] == "string"
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    @pytest.mark.asyncio
+    async def test_array_of_objects_schema(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test structured output with array of objects."""
+        mock_anthropic_module.__version__ = "0.77.0"
+        mock_client = Mock()
+        mock_client.models.list.return_value = Mock(data=[])
+
+        # Mock tool_use response with array of objects
+        mock_tool_block = Mock()
+        mock_tool_block.type = "tool_use"
+        mock_tool_block.name = "emit_output"
+        mock_tool_block.input = {
+            "users": [
+                {"name": "Alice", "score": 95},
+                {"name": "Bob", "score": 87},
+            ]
+        }
+
+        mock_response = Mock()
+        mock_response.content = [mock_tool_block]
+        mock_response.usage = Mock(input_tokens=20, output_tokens=20)
+
+        mock_client.messages.create.return_value = mock_response
+        mock_anthropic_class.return_value = mock_client
+
+        provider = ClaudeProvider()
+        agent = AgentDef(
+            name="test",
+            prompt="Get users",
+            output={
+                "users": OutputField(
+                    type="array",
+                    description="List of users",
+                    items=OutputField(
+                        type="object",
+                        description="User info",
+                        properties={
+                            "name": OutputField(type="string"),
+                            "score": OutputField(type="number"),
+                        },
+                    ),
+                ),
+            },
+        )
+
+        result = await provider.execute(
+            agent=agent,
+            context={},
+            rendered_prompt="Get users",
+        )
+
+        assert result.content == {
+            "users": [
+                {"name": "Alice", "score": 95},
+                {"name": "Bob", "score": 87},
+            ]
+        }
+
+        # Verify tool schema was correctly built
+        call_kwargs = mock_client.messages.create.call_args[1]
+        tool_schema = call_kwargs["tools"][0]["input_schema"]
+        users_schema = tool_schema["properties"]["users"]
+        assert users_schema["type"] == "array"
+        assert "items" in users_schema
+        assert users_schema["items"]["type"] == "object"
+        assert "properties" in users_schema["items"]
+        assert "name" in users_schema["items"]["properties"]
+        assert "score" in users_schema["items"]["properties"]
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    @pytest.mark.asyncio
+    async def test_deeply_nested_schema(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test structured output with deeply nested schema."""
+        mock_anthropic_module.__version__ = "0.77.0"
+        mock_client = Mock()
+        mock_client.models.list.return_value = Mock(data=[])
+
+        # Mock tool_use response with deeply nested structure
+        mock_tool_block = Mock()
+        mock_tool_block.type = "tool_use"
+        mock_tool_block.name = "emit_output"
+        mock_tool_block.input = {
+            "company": {
+                "name": "TechCorp",
+                "departments": [
+                    {
+                        "name": "Engineering",
+                        "employees": [
+                            {"name": "Alice", "role": "Developer"},
+                        ],
+                    },
+                ],
+            }
+        }
+
+        mock_response = Mock()
+        mock_response.content = [mock_tool_block]
+        mock_response.usage = Mock(input_tokens=30, output_tokens=40)
+
+        mock_client.messages.create.return_value = mock_response
+        mock_anthropic_class.return_value = mock_client
+
+        provider = ClaudeProvider()
+        agent = AgentDef(
+            name="test",
+            prompt="Get company",
+            output={
+                "company": OutputField(
+                    type="object",
+                    properties={
+                        "name": OutputField(type="string"),
+                        "departments": OutputField(
+                            type="array",
+                            items=OutputField(
+                                type="object",
+                                properties={
+                                    "name": OutputField(type="string"),
+                                    "employees": OutputField(
+                                        type="array",
+                                        items=OutputField(
+                                            type="object",
+                                            properties={
+                                                "name": OutputField(type="string"),
+                                                "role": OutputField(type="string"),
+                                            },
+                                        ),
+                                    ),
+                                },
+                            ),
+                        ),
+                    },
+                ),
+            },
+        )
+
+        result = await provider.execute(
+            agent=agent,
+            context={},
+            rendered_prompt="Get company",
+        )
+
+        assert result.content == {
+            "company": {
+                "name": "TechCorp",
+                "departments": [
+                    {
+                        "name": "Engineering",
+                        "employees": [
+                            {"name": "Alice", "role": "Developer"},
+                        ],
+                    },
+                ],
+            }
+        }
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    @pytest.mark.asyncio
+    async def test_schema_depth_limit_exceeded(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test that schema nesting beyond max depth raises ValidationError."""
+        mock_anthropic_module.__version__ = "0.77.0"
+        mock_client = Mock()
+        mock_client.models.list.return_value = Mock(data=[])
+        mock_anthropic_class.return_value = mock_client
+
+        provider = ClaudeProvider()
+
+        # Create a schema that exceeds max depth (11 levels, max is 10)
+        # Build nested structure programmatically
+        def create_nested_field(depth: int) -> OutputField:
+            if depth == 0:
+                return OutputField(type="string")
+            return OutputField(
+                type="object",
+                properties={"nested": create_nested_field(depth - 1)},
+            )
+
+        agent = AgentDef(
+            name="test",
+            prompt="Deep nesting",
+            output={"root": create_nested_field(11)},  # 11 levels deep
+        )
+
+        with pytest.raises(
+            ValidationError, match="Schema nesting depth exceeds maximum of 10 levels"
+        ):
+            await provider.execute(
+                agent=agent,
+                context={},
+                rendered_prompt="Test",
+            )
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    @pytest.mark.asyncio
+    async def test_nested_array_with_object_items(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test successful structured output with nested array of objects.
+
+        Note: This test verifies the schema is built correctly and extraction works.
+        Deep validation of nested object properties within arrays is handled by
+        the executor.output module's validate_output function.
+        """
+        mock_anthropic_module.__version__ = "0.77.0"
+        mock_client = Mock()
+        mock_client.models.list.return_value = Mock(data=[])
+
+        # Mock tool_use response with nested array of objects
+        mock_tool_block = Mock()
+        mock_tool_block.type = "tool_use"
+        mock_tool_block.name = "emit_output"
+        mock_tool_block.input = {
+            "items": [
+                {"name": "Item1", "value": 100},
+                {"name": "Item2", "value": 200},
+            ]
+        }
+
+        mock_response = Mock()
+        mock_response.content = [mock_tool_block]
+        mock_response.usage = Mock(input_tokens=10, output_tokens=15)
+
+        mock_client.messages.create.return_value = mock_response
+        mock_anthropic_class.return_value = mock_client
+
+        provider = ClaudeProvider()
+        agent = AgentDef(
+            name="test",
+            prompt="Get items",
+            output={
+                "items": OutputField(
+                    type="array",
+                    items=OutputField(
+                        type="object",
+                        properties={
+                            "name": OutputField(type="string"),
+                            "value": OutputField(type="number"),
+                        },
+                    ),
+                )
+            },
+        )
+
+        result = await provider.execute(
+            agent=agent,
+            context={},
+            rendered_prompt="Get items",
+        )
+
+        assert result.content == {
+            "items": [
+                {"name": "Item1", "value": 100},
+                {"name": "Item2", "value": 200},
+            ]
+        }
+
+        # Verify the schema was built with nested object properties
+        call_kwargs = mock_client.messages.create.call_args[1]
+        tool_schema = call_kwargs["tools"][0]["input_schema"]
+        items_schema = tool_schema["properties"]["items"]["items"]
+        assert "properties" in items_schema
+        assert "name" in items_schema["properties"]
+        assert "value" in items_schema["properties"]
+        assert items_schema["required"] == ["name", "value"]
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    @pytest.mark.asyncio
+    async def test_tool_use_success_without_fallback(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test primary success path where Claude uses tool on first attempt without fallback."""
+        mock_anthropic_module.__version__ = "0.77.0"
+        mock_client = Mock()
+        mock_client.models.list.return_value = Mock(data=[])
+
+        # Mock successful tool_use response on first attempt
+        mock_tool_block = Mock()
+        mock_tool_block.type = "tool_use"
+        mock_tool_block.name = "emit_output"
+        mock_tool_block.input = {"result": "success", "count": 5}
+
+        mock_response = Mock()
+        mock_response.content = [mock_tool_block]
+        mock_response.usage = Mock(input_tokens=15, output_tokens=8)
+
+        mock_client.messages.create.return_value = mock_response
+        mock_anthropic_class.return_value = mock_client
+
+        provider = ClaudeProvider()
+        agent = AgentDef(
+            name="test",
+            prompt="Process request",
+            output={
+                "result": OutputField(type="string"),
+                "count": OutputField(type="number"),
+            },
+        )
+
+        result = await provider.execute(
+            agent=agent,
+            context={},
+            rendered_prompt="Process this",
+        )
+
+        assert result.content == {"result": "success", "count": 5}
+        # Should only make 1 API call (no retries)
+        assert mock_client.messages.create.call_count == 1
+        # Verify tool was provided in the request
+        call_kwargs = mock_client.messages.create.call_args[1]
+        assert "tools" in call_kwargs
+        assert call_kwargs["tools"][0]["name"] == "emit_output"

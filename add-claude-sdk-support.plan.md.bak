@@ -1153,8 +1153,6 @@ if structured_output is None:
 
 ### EPIC-002: Structured Output & Parse Recovery (Phase 1)
 
-**Status**: DONE
-
 **Goal**: Implement tool-based structured output extraction with fallback parse recovery
 
 **Prerequisites**: EPIC-001 (Core provider must be functional)
@@ -1175,13 +1173,13 @@ if structured_output is None:
 | EPIC-002-T10 | TEST | Add tests for nested object and array schemas | `tests/test_providers/test_claude.py` | DONE |
 
 **Acceptance Criteria**:
-- [x] Tool-based approach successfully extracts structured output from tool_use blocks
-- [x] Fallback JSON extraction works when Claude returns text instead of tool_use
-- [x] Parse recovery sends follow-up message when JSON is invalid (fallback case only)
-- [x] Output schema is converted to tool definition with proper input_schema
-- [x] Tests verify both tool-based and fallback approaches
-- [x] Error messages provide helpful debugging context
-- [x] Works with complex nested schemas (objects, arrays, combinations)
+- [ ] Tool-based approach successfully extracts structured output from tool_use blocks
+- [ ] Fallback JSON extraction works when Claude returns text instead of tool_use
+- [ ] Parse recovery sends follow-up message when JSON is invalid (fallback case only)
+- [ ] Output schema is converted to tool definition with proper input_schema
+- [ ] Tests verify both tool-based and fallback approaches
+- [ ] Error messages provide helpful debugging context
+- [ ] Works with complex nested schemas (objects, arrays, combinations)
 
 ---
 

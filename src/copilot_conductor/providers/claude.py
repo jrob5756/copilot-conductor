@@ -84,6 +84,8 @@ class ClaudeProvider(AgentProvider):
         self._default_max_tokens = max_tokens or 8192
         self._timeout = timeout
         self._sdk_version: str | None = None
+        self._max_parse_recovery_attempts = 2  # Max retry attempts for malformed JSON
+        self._max_schema_depth = 10  # Max nesting depth for recursive schema building
 
         # Initialize the client
         self._initialize_client()
@@ -227,20 +229,15 @@ class ClaudeProvider(AgentProvider):
             )
 
         try:
-            # Execute non-streaming API call
-            kwargs: dict[str, Any] = {
-                "model": model,
-                "messages": messages,
-                "max_tokens": max_tokens,
-            }
-
-            if temperature is not None:
-                kwargs["temperature"] = temperature
-
-            if sdk_tools:
-                kwargs["tools"] = sdk_tools
-
-            response = self._client.messages.create(**kwargs)
+            # Execute non-streaming API call with parse recovery
+            response = await self._execute_with_parse_recovery(
+                messages=messages,
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                sdk_tools=sdk_tools,
+                output_schema=agent.output,
+            )
 
             # Extract structured output
             content = self._extract_output(response, agent.output)
@@ -275,8 +272,7 @@ class ClaudeProvider(AgentProvider):
                         raise ValidationError(
                             f"Temperature validation failed: {e}",
                             suggestion=(
-                                "Temperature must be between 0.0 and 1.0 "
-                                "(enforced by Claude SDK)"
+                                "Temperature must be between 0.0 and 1.0 (enforced by Claude SDK)"
                             ),
                         ) from e
                 except TypeError:
@@ -289,6 +285,168 @@ class ClaudeProvider(AgentProvider):
                 suggestion="Check API key, model name, and request parameters",
                 is_retryable=True,
             ) from e
+
+    async def _execute_with_parse_recovery(
+        self,
+        messages: list[dict[str, str]],
+        model: str,
+        temperature: float | None,
+        max_tokens: int,
+        sdk_tools: list[dict[str, Any]] | None,
+        output_schema: dict[str, OutputField] | None,
+    ) -> Any:
+        """Execute API call with parse recovery for malformed JSON responses.
+
+        This method handles the fallback case where Claude returns text instead
+        of using the tool, and the text contains malformed JSON. It will retry
+        up to max_parse_recovery_attempts times with clarifying prompts.
+
+        Args:
+            messages: Message history to send.
+            model: Model identifier.
+            temperature: Temperature setting.
+            max_tokens: Maximum output tokens.
+            sdk_tools: Tool definitions for structured output.
+            output_schema: Expected output schema (None if no schema).
+
+        Returns:
+            Claude API response.
+
+        Raises:
+            ProviderError: If all retry attempts fail with context about attempts.
+        """
+        if self._client is None:
+            raise ProviderError("Claude client not initialized")
+
+        # Build API call kwargs
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "messages": messages,
+            "max_tokens": max_tokens,
+        }
+
+        if temperature is not None:
+            kwargs["temperature"] = temperature
+
+        if sdk_tools:
+            kwargs["tools"] = sdk_tools
+
+        # Track recovery attempts for error reporting
+        recovery_history: list[str] = []
+
+        # Initial attempt
+        response = self._client.messages.create(**kwargs)
+
+        # If no output schema, return immediately (no recovery needed)
+        if not output_schema:
+            return response
+
+        # Check if we got tool_use (success path)
+        if self._extract_structured_output(response) is not None:
+            logger.debug("Extracted structured output from tool_use block")
+            return response
+
+        # Check if we can extract JSON from text (fallback success path)
+        json_content = self._extract_json_fallback(response)
+        if json_content is not None:
+            logger.info("Claude returned text instead of tool_use, but JSON extraction succeeded")
+            return response
+
+        # Parse recovery: JSON extraction failed
+        initial_text = self._extract_text_from_response(response)
+        failure_reason = self._diagnose_json_failure(initial_text)
+        recovery_history.append(f"Attempt 0 (initial): {failure_reason}")
+        logger.info(f"Initial extraction failed: {failure_reason}, starting parse recovery")
+
+        for attempt in range(1, self._max_parse_recovery_attempts + 1):
+            logger.info(f"Parse recovery attempt {attempt}/{self._max_parse_recovery_attempts}")
+
+            # Append recovery message with specific error context
+            recovery_messages = messages.copy()
+            recovery_messages.append(
+                {
+                    "role": "assistant",
+                    "content": initial_text,
+                }
+            )
+            recovery_messages.append(
+                {
+                    "role": "user",
+                    "content": (
+                        f"Your previous response did not contain valid JSON. {failure_reason} "
+                        "Please provide your response in valid JSON format.\n\n"
+                        "IMPORTANT: Use the 'emit_output' tool to return your response "
+                        "in the required structured format."
+                    ),
+                }
+            )
+
+            # Update messages in kwargs
+            kwargs["messages"] = recovery_messages
+
+            # Retry API call
+            response = self._client.messages.create(**kwargs)
+
+            # Check if recovery succeeded (tool_use)
+            if self._extract_structured_output(response) is not None:
+                logger.info(f"Parse recovery succeeded on attempt {attempt} (tool_use)")
+                return response
+
+            # Check if recovery succeeded (JSON fallback)
+            json_content = self._extract_json_fallback(response)
+            if json_content is not None:
+                logger.info(f"Parse recovery succeeded on attempt {attempt} (JSON)")
+                return response
+
+            # Record failure for this attempt
+            attempt_text = self._extract_text_from_response(response)
+            attempt_failure = self._diagnose_json_failure(attempt_text)
+            recovery_history.append(f"Attempt {attempt}: {attempt_failure}")
+            # Update for next iteration
+            initial_text = attempt_text
+            failure_reason = attempt_failure
+
+        # All recovery attempts exhausted - raise detailed error
+        logger.error(f"Parse recovery exhausted after {self._max_parse_recovery_attempts} attempts")
+        raise ProviderError(
+            f"Failed to extract valid JSON after {self._max_parse_recovery_attempts} "
+            "recovery attempts",
+            suggestion=(
+                "Claude did not use the emit_output tool and returned invalid JSON. "
+                f"Recovery history: {'; '.join(recovery_history)}"
+            ),
+        )
+
+    def _diagnose_json_failure(self, text: str) -> str:
+        """Diagnose why JSON extraction failed from text response.
+
+        Args:
+            text: The text content that failed to parse.
+
+        Returns:
+            Human-readable diagnosis of the failure.
+        """
+        if not text.strip():
+            return "Response was empty."
+
+        # Check for incomplete JSON patterns
+        if "{" in text and "}" not in text:
+            return "Found incomplete JSON (opening brace without closing)."
+        if "[" in text and "]" not in text:
+            return "Found incomplete JSON (opening bracket without closing)."
+
+        # Check if it looks like JSON but has syntax errors
+        if text.strip().startswith(("{", "[")):
+            return "Found malformed JSON (syntax error in structure)."
+
+        # Try to find JSON code block
+        if "```" in text:
+            if "```json" not in text:
+                return "Found code block but not marked as JSON."
+            return "Found JSON code block but it contains syntax errors."
+
+        # No JSON-like content found
+        return "No JSON content found in response text."
 
     def _build_messages(self, rendered_prompt: str) -> list[dict[str, str]]:
         """Build message list for Claude API.
@@ -318,18 +476,8 @@ class ClaudeProvider(AgentProvider):
             List containing single tool definition for structured output.
         """
         # Build JSON schema from OutputField definitions
-        properties: dict[str, Any] = {}
-        required: list[str] = []
-
-        for field_name, field_def in output_schema.items():
-            properties[field_name] = {
-                "type": self._map_type_to_json_schema(field_def.type),
-            }
-            if field_def.description:
-                properties[field_name]["description"] = field_def.description
-
-            # All fields are required by default in our schema
-            required.append(field_name)
+        properties = self._build_json_schema_properties(output_schema)
+        required = list(output_schema.keys())
 
         return [
             {
@@ -342,6 +490,97 @@ class ClaudeProvider(AgentProvider):
                 },
             }
         ]
+
+    def _build_json_schema_properties(
+        self, schema: dict[str, OutputField], depth: int = 0
+    ) -> dict[str, Any]:
+        """Build JSON Schema properties from OutputField definitions.
+
+        Recursively handles nested objects and arrays with depth limiting.
+
+        Args:
+            schema: Dictionary mapping field names to OutputField definitions.
+            depth: Current nesting depth (for recursion safety).
+
+        Returns:
+            Dictionary of JSON Schema property definitions.
+
+        Raises:
+            ValidationError: If schema nesting exceeds max depth.
+        """
+        if depth > self._max_schema_depth:
+            raise ValidationError(
+                f"Schema nesting depth exceeds maximum of {self._max_schema_depth} levels",
+                suggestion="Simplify your output schema to reduce nesting depth",
+            )
+
+        properties: dict[str, Any] = {}
+
+        for field_name, field_def in schema.items():
+            prop: dict[str, Any] = {
+                "type": self._map_type_to_json_schema(field_def.type),
+            }
+
+            if field_def.description:
+                prop["description"] = field_def.description
+
+            # Handle nested object schemas
+            if field_def.type == "object" and field_def.properties:
+                prop["properties"] = self._build_json_schema_properties(
+                    field_def.properties, depth=depth + 1
+                )
+                # All properties in OutputField schemas are required
+                # (OutputField has no 'required' attribute, all fields are mandatory)
+                prop["required"] = list(field_def.properties.keys())
+
+            # Handle array schemas with item definitions
+            if field_def.type == "array" and field_def.items:
+                items_schema = self._build_single_field_schema(field_def.items, depth=depth + 1)
+                prop["items"] = items_schema
+
+            properties[field_name] = prop
+
+        return properties
+
+    def _build_single_field_schema(self, field: OutputField, depth: int = 0) -> dict[str, Any]:
+        """Build JSON Schema for a single field (used for array items).
+
+        Args:
+            field: The OutputField definition.
+            depth: Current nesting depth (for recursion safety).
+
+        Returns:
+            JSON Schema definition for the field.
+
+        Raises:
+            ValidationError: If schema nesting exceeds max depth.
+        """
+        if depth > self._max_schema_depth:
+            raise ValidationError(
+                f"Schema nesting depth exceeds maximum of {self._max_schema_depth} levels",
+                suggestion="Simplify your output schema to reduce nesting depth",
+            )
+
+        schema: dict[str, Any] = {
+            "type": self._map_type_to_json_schema(field.type),
+        }
+
+        if field.description:
+            schema["description"] = field.description
+
+        # Handle nested objects in array items
+        if field.type == "object" and field.properties:
+            schema["properties"] = self._build_json_schema_properties(
+                field.properties, depth=depth + 1
+            )
+            # All properties are required
+            schema["required"] = list(field.properties.keys())
+
+        # Handle nested arrays (array of arrays)
+        if field.type == "array" and field.items:
+            schema["items"] = self._build_single_field_schema(field.items, depth=depth + 1)
+
+        return schema
 
     def _map_type_to_json_schema(self, field_type: str) -> str:
         """Map OutputField type to JSON Schema type.
@@ -458,3 +697,21 @@ class ClaudeProvider(AgentProvider):
             return json.loads(text)
         except (json.JSONDecodeError, ValueError):
             return None
+
+    def _extract_text_from_response(self, response: Any) -> str:
+        """Extract raw text content from Claude response.
+
+        Used for building message history during parse recovery.
+
+        Args:
+            response: Claude API response.
+
+        Returns:
+            Combined text content from all text blocks.
+        """
+        text_parts = []
+        for block in response.content:
+            if hasattr(block, "type") and block.type == "text":
+                text_parts.append(block.text)
+
+        return "\n".join(text_parts)
