@@ -53,8 +53,8 @@ workflow:
   context:
     mode: explicit
 
-  # limits:
-  #   max_iterations: 50
+  limits:
+    max_iterations: 500
   #   timeout_seconds: 3600  # 1 hour max
 
 # For-each group for parallel KPI analysis
@@ -91,6 +91,13 @@ for_each:
         
         ## TASKS
         
+        0. **If KPI file available, load it and skip analysis**
+           Check if analysis file already exists at:
+           {{ workflow.input.output_dir }}/kpis/{{ kpi.kpi_id }}.md
+           
+           If it exists, load the file and return its path as analysis_file output.
+           Skip further analysis.
+
         1. **Query S360 for KPI Details**
            Use the KPI ID ({{ kpi.kpi_id }}) to:
            - Get the full KPI definition and requirements

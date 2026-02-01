@@ -480,4 +480,3 @@ parallel:
 """
         config = load_config_string(yaml_content)
         assert config.agents[0].routes[0].to == "pg"
-

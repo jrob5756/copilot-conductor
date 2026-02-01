@@ -153,18 +153,18 @@ class CopilotProvider(AgentProvider):
             ProviderError: If execution fails after all retry attempts.
         """
         # Record the call for testing purposes
-        self._call_history.append({
-            "agent_name": agent.name,
-            "prompt": rendered_prompt,
-            "context": context,
-            "tools": tools,
-            "model": agent.model,
-        })
+        self._call_history.append(
+            {
+                "agent_name": agent.name,
+                "prompt": rendered_prompt,
+                "context": context,
+                "tools": tools,
+                "model": agent.model,
+            }
+        )
 
         # Use retry logic for both mock and real SDK calls
-        return await self._execute_with_retry(
-            agent, context, rendered_prompt, tools
-        )
+        return await self._execute_with_retry(agent, context, rendered_prompt, tools)
 
     async def _execute_with_retry(
         self,
@@ -192,9 +192,7 @@ class CopilotProvider(AgentProvider):
 
         for attempt in range(1, config.max_attempts + 1):
             try:
-                content = await self._execute_sdk_call(
-                    agent, rendered_prompt, context, tools
-                )
+                content = await self._execute_sdk_call(agent, rendered_prompt, context, tools)
                 return AgentOutput(
                     content=content,
                     raw_response=json.dumps(content),
@@ -203,12 +201,14 @@ class CopilotProvider(AgentProvider):
                 )
             except ProviderError as e:
                 last_error = e
-                self._retry_history.append({
-                    "attempt": attempt,
-                    "agent_name": agent.name,
-                    "error": str(e),
-                    "is_retryable": e.is_retryable,
-                })
+                self._retry_history.append(
+                    {
+                        "attempt": attempt,
+                        "agent_name": agent.name,
+                        "error": str(e),
+                        "is_retryable": e.is_retryable,
+                    }
+                )
 
                 # Don't retry non-retryable errors
                 if not e.is_retryable:
@@ -229,12 +229,14 @@ class CopilotProvider(AgentProvider):
             except Exception as e:
                 # Wrap unexpected errors as retryable
                 last_error = e
-                self._retry_history.append({
-                    "attempt": attempt,
-                    "agent_name": agent.name,
-                    "error": str(e),
-                    "is_retryable": True,
-                })
+                self._retry_history.append(
+                    {
+                        "attempt": attempt,
+                        "agent_name": agent.name,
+                        "error": str(e),
+                        "is_retryable": True,
+                    }
+                )
 
                 if attempt >= config.max_attempts:
                     break
@@ -326,6 +328,7 @@ class CopilotProvider(AgentProvider):
 
             # Capture verbose state before callback (contextvars don't propagate to sync callbacks)
             from copilot_conductor.cli.app import is_full, is_verbose
+
             verbose_enabled = is_verbose()
             full_enabled = is_full()
 
@@ -443,9 +446,8 @@ class CopilotProvider(AgentProvider):
                 done.set()
             elif event_type == "tool.execution_start":
                 # Track which tool is executing for better recovery context
-                tool_name = (
-                    getattr(event.data, "tool_name", None)
-                    or getattr(event.data, "name", "unknown")
+                tool_name = getattr(event.data, "tool_name", None) or getattr(
+                    event.data, "name", "unknown"
                 )
                 last_activity_ref[1] = tool_name
 
@@ -598,9 +600,8 @@ class CopilotProvider(AgentProvider):
 
         # Log interesting events with Rich styling
         if event_type == "tool.execution_start":
-            tool_name = (
-                getattr(event.data, "tool_name", None)
-                or getattr(event.data, "name", "unknown")
+            tool_name = getattr(event.data, "tool_name", None) or getattr(
+                event.data, "name", "unknown"
             )
 
             text = Text()
@@ -633,10 +634,7 @@ class CopilotProvider(AgentProvider):
 
             # In full mode, try to show result preview
             if full_mode:
-                result = (
-                    getattr(event.data, "result", None)
-                    or getattr(event.data, "output", None)
-                )
+                result = getattr(event.data, "result", None) or getattr(event.data, "output", None)
                 if result:
                     result_str = str(result)
                     if len(result_str) > 200:
@@ -813,7 +811,7 @@ class CopilotProvider(AgentProvider):
                 )
                 return  # Completed successfully
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # No activity for idle_timeout_seconds - attempt recovery
                 recovery_attempts += 1
 
@@ -838,14 +836,10 @@ class CopilotProvider(AgentProvider):
 
                 # Log recovery attempt
                 if verbose_enabled:
-                    self._log_recovery_attempt(
-                        recovery_attempts, last_event_type, last_tool_call
-                    )
+                    self._log_recovery_attempt(recovery_attempts, last_event_type, last_tool_call)
 
                 # Send recovery message
-                recovery_prompt = self._build_recovery_prompt(
-                    last_event_type, last_tool_call
-                )
+                recovery_prompt = self._build_recovery_prompt(last_event_type, last_tool_call)
                 await session.send({"prompt": recovery_prompt})
 
                 # Reset the done event to wait again

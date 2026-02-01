@@ -1220,26 +1220,28 @@ if structured_output is None:
 
 ### EPIC-004: Retry Logic & Error Handling (Phase 1)
 
+**Status**: ✅ DONE
+
 **Goal**: Add robust retry logic with exponential backoff and comprehensive error handling
 
-**Prerequisites**: EPIC-001 (Basic execution must work)
+**Prerequisites**: EPIC-001 (Basic execution must work) ✅ DONE
 
 **Tasks**:
 
 | Task ID | Type | Description | Files | Status |
 |---------|------|-------------|-------|--------|
-| EPIC-004-T1 | IMPL | Create RetryConfig dataclass for Claude provider | `src/copilot_conductor/providers/claude.py` | TO DO |
-| EPIC-004-T2 | IMPL | Implement `_is_retryable_error()` using exception classification table | `src/copilot_conductor/providers/claude.py` | TO DO |
-| EPIC-004-T3 | IMPL | Implement `_execute_with_retry()` wrapper method | `src/copilot_conductor/providers/claude.py` | TO DO |
-| EPIC-004-T4 | IMPL | Implement `_calculate_delay()` for exponential backoff with jitter | `src/copilot_conductor/providers/claude.py` | TO DO |
-| EPIC-004-T5 | IMPL | Add rate limit handling with retry-after header respect | `src/copilot_conductor/providers/claude.py` | TO DO |
-| EPIC-004-T6 | IMPL | Add timeout handling for APITimeoutError | `src/copilot_conductor/providers/claude.py` | TO DO |
-| EPIC-004-T7 | IMPL | Map all Anthropic exceptions to ProviderError with is_retryable flag | `src/copilot_conductor/providers/claude.py` | TO DO |
-| EPIC-004-T8 | IMPL | Add retry history tracking for debugging | `src/copilot_conductor/providers/claude.py` | TO DO |
-| EPIC-004-T9 | TEST | Add tests for retry behavior with transient errors (rate limit, timeout) | `tests/test_providers/test_claude.py` | TO DO |
-| EPIC-004-T10 | TEST | Add tests for non-retryable error handling (auth, bad request) | `tests/test_providers/test_claude.py` | TO DO |
-| EPIC-004-T11 | TEST | Add tests for exponential backoff calculation with jitter | `tests/test_providers/test_claude.py` | TO DO |
-| EPIC-004-T12 | TEST | Add tests for retry-after header handling | `tests/test_providers/test_claude.py` | TO DO |
+| EPIC-004-T1 | IMPL | Create RetryConfig dataclass for Claude provider | `src/copilot_conductor/providers/claude.py` | DONE |
+| EPIC-004-T2 | IMPL | Implement `_is_retryable_error()` using exception classification table | `src/copilot_conductor/providers/claude.py` | DONE |
+| EPIC-004-T3 | IMPL | Implement `_execute_with_retry()` wrapper method | `src/copilot_conductor/providers/claude.py` | DONE |
+| EPIC-004-T4 | IMPL | Implement `_calculate_delay()` for exponential backoff with jitter | `src/copilot_conductor/providers/claude.py` | DONE |
+| EPIC-004-T5 | IMPL | Add rate limit handling with retry-after header respect | `src/copilot_conductor/providers/claude.py` | DONE |
+| EPIC-004-T6 | IMPL | Add timeout handling for APITimeoutError | `src/copilot_conductor/providers/claude.py` | DONE |
+| EPIC-004-T7 | IMPL | Map all Anthropic exceptions to ProviderError with is_retryable flag | `src/copilot_conductor/providers/claude.py` | DONE |
+| EPIC-004-T8 | IMPL | Add retry history tracking for debugging | `src/copilot_conductor/providers/claude.py` | DONE |
+| EPIC-004-T9 | TEST | Add tests for retry behavior with transient errors (rate limit, timeout) | `tests/test_providers/test_claude.py` | DONE |
+| EPIC-004-T10 | TEST | Add tests for non-retryable error handling (auth, bad request) | `tests/test_providers/test_claude.py` | DONE |
+| EPIC-004-T11 | TEST | Add tests for exponential backoff calculation with jitter | `tests/test_providers/test_claude.py` | DONE |
+| EPIC-004-T12 | TEST | Add tests for retry-after header handling | `tests/test_providers/test_claude.py` | DONE |
 
 **Error Classification Implementation:**
 ```python
@@ -1288,15 +1290,15 @@ def _get_retry_after(self, exception: Exception) -> float | None:
 ```
 
 **Acceptance Criteria**:
-- [ ] Transient errors (rate limits, timeouts, 5xx) trigger retries
-- [ ] Exponential backoff increases delay between retries (base * 2^attempt)
-- [ ] Jitter is added to prevent thundering herd (0-25% of delay)
-- [ ] Non-retryable errors (4xx except 429) fail immediately
-- [ ] Rate limit retry-after header is respected (overrides calculated delay)
-- [ ] Retry history is tracked for debugging (attempt, error, delay)
-- [ ] Tests verify retry logic with various error scenarios
-- [ ] Maximum retry attempts are respected (default: 3)
-- [ ] All Anthropic SDK exceptions are properly mapped to ProviderError
+- [x] Transient errors (rate limits, timeouts, 5xx) trigger retries
+- [x] Exponential backoff increases delay between retries (base * 2^attempt)
+- [x] Jitter is added to prevent thundering herd (0-25% of delay)
+- [x] Non-retryable errors (4xx except 429) fail immediately
+- [x] Rate limit retry-after header is respected (overrides calculated delay)
+- [x] Retry history is tracked for debugging (attempt, error, delay)
+- [x] Tests verify retry logic with various error scenarios (18 tests passing)
+- [x] Maximum retry attempts are respected (default: 3)
+- [x] All Anthropic SDK exceptions are properly mapped to ProviderError
 
 ---
 

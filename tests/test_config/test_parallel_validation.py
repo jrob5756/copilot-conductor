@@ -25,9 +25,7 @@ class TestParallelGroupBasicValidation:
                 AgentDef(name="agent1", model="gpt-4", prompt="Task 1"),
                 AgentDef(name="agent2", model="gpt-4", prompt="Task 2"),
             ],
-            parallel=[
-                ParallelGroup(name="parallel1", agents=["agent1", "agent2"])
-            ],
+            parallel=[ParallelGroup(name="parallel1", agents=["agent1", "agent2"])],
         )
         # Should not raise
         warnings = validate_workflow_config(config)
@@ -60,16 +58,14 @@ class TestParallelAgentReferences:
     def test_unknown_agent_in_parallel_group(self) -> None:
         """Test that referencing unknown agents in parallel group is rejected."""
         from pydantic import ValidationError
-        
+
         with pytest.raises(ValidationError) as exc:
             config = WorkflowConfig(
                 workflow=WorkflowDef(name="test", entry_point="parallel1"),
                 agents=[
                     AgentDef(name="agent1", model="gpt-4", prompt="Task 1"),
                 ],
-                parallel=[
-                    ParallelGroup(name="parallel1", agents=["agent1", "unknown_agent"])
-                ],
+                parallel=[ParallelGroup(name="parallel1", agents=["agent1", "unknown_agent"])],
             )
         assert "unknown_agent" in str(exc.value)
         assert "parallel1" in str(exc.value)
@@ -77,7 +73,7 @@ class TestParallelAgentReferences:
     def test_multiple_unknown_agents(self) -> None:
         """Test that multiple unknown agents are reported."""
         from pydantic import ValidationError
-        
+
         with pytest.raises(ValidationError) as exc:
             config = WorkflowConfig(
                 workflow=WorkflowDef(name="test", entry_point="parallel1"),
@@ -114,9 +110,7 @@ class TestParallelAgentRoutes:
                 ),
                 AgentDef(name="agent2", model="gpt-4", prompt="Task 2"),
             ],
-            parallel=[
-                ParallelGroup(name="parallel1", agents=["agent1", "agent2"])
-            ],
+            parallel=[ParallelGroup(name="parallel1", agents=["agent1", "agent2"])],
         )
         with pytest.raises(ConfigurationError) as exc:
             validate_workflow_config(config)
@@ -143,9 +137,7 @@ class TestParallelAgentRoutes:
                     routes=[RouteDef(to="$end")],
                 ),
             ],
-            parallel=[
-                ParallelGroup(name="parallel1", agents=["agent1", "agent2"])
-            ],
+            parallel=[ParallelGroup(name="parallel1", agents=["agent1", "agent2"])],
         )
         with pytest.raises(ConfigurationError) as exc:
             validate_workflow_config(config)
@@ -170,9 +162,7 @@ class TestCrossAgentDependencies:
                 ),
                 AgentDef(name="agent2", model="gpt-4", prompt="Task 2"),
             ],
-            parallel=[
-                ParallelGroup(name="parallel1", agents=["agent1", "agent2"])
-            ],
+            parallel=[ParallelGroup(name="parallel1", agents=["agent1", "agent2"])],
         )
         with pytest.raises(ConfigurationError) as exc:
             validate_workflow_config(config)
@@ -206,9 +196,7 @@ class TestCrossAgentDependencies:
                     input=["agent0.output"],
                 ),
             ],
-            parallel=[
-                ParallelGroup(name="parallel1", agents=["agent1", "agent2"])
-            ],
+            parallel=[ParallelGroup(name="parallel1", agents=["agent1", "agent2"])],
         )
         # Should not raise
         warnings = validate_workflow_config(config)
@@ -232,15 +220,13 @@ class TestCrossAgentDependencies:
                     input=["agent1.output"],
                 ),
             ],
-            parallel=[
-                ParallelGroup(name="parallel1", agents=["agent1", "agent2"])
-            ],
+            parallel=[ParallelGroup(name="parallel1", agents=["agent1", "agent2"])],
         )
         with pytest.raises(ConfigurationError) as exc:
             validate_workflow_config(config)
         error_msg = str(exc.value)
         # Both directions should be reported
-        assert ("agent1" in error_msg and "agent2" in error_msg)
+        assert "agent1" in error_msg and "agent2" in error_msg
 
 
 class TestUniqueNames:
@@ -254,9 +240,7 @@ class TestUniqueNames:
                 AgentDef(name="duplicate", model="gpt-4", prompt="Task 1"),
                 AgentDef(name="agent2", model="gpt-4", prompt="Task 2"),
             ],
-            parallel=[
-                ParallelGroup(name="duplicate", agents=["duplicate", "agent2"])
-            ],
+            parallel=[ParallelGroup(name="duplicate", agents=["duplicate", "agent2"])],
         )
         with pytest.raises(ConfigurationError) as exc:
             validate_workflow_config(config)
@@ -294,7 +278,7 @@ class TestNestedParallelGroups:
         # we need to check that the error is clear about the nesting issue.
         # However, the Pydantic validation will catch the unknown agent reference first.
         from pydantic import ValidationError
-        
+
         with pytest.raises(ValidationError) as exc:
             config = WorkflowConfig(
                 workflow=WorkflowDef(name="test", entry_point="outer"),
@@ -333,9 +317,7 @@ class TestHumanGatesInParallel:
                 ),
                 AgentDef(name="agent2", model="gpt-4", prompt="Task 2"),
             ],
-            parallel=[
-                ParallelGroup(name="parallel1", agents=["gate1", "agent2"])
-            ],
+            parallel=[ParallelGroup(name="parallel1", agents=["gate1", "agent2"])],
         )
         with pytest.raises(ConfigurationError) as exc:
             validate_workflow_config(config)
@@ -362,9 +344,7 @@ class TestRoutingWithParallelGroups:
                 AgentDef(name="agent1", model="gpt-4", prompt="Task 1"),
                 AgentDef(name="agent2", model="gpt-4", prompt="Task 2"),
             ],
-            parallel=[
-                ParallelGroup(name="parallel1", agents=["agent1", "agent2"])
-            ],
+            parallel=[ParallelGroup(name="parallel1", agents=["agent1", "agent2"])],
         )
         # Should not raise
         warnings = validate_workflow_config(config)
@@ -378,9 +358,7 @@ class TestRoutingWithParallelGroups:
                 AgentDef(name="agent1", model="gpt-4", prompt="Task 1"),
                 AgentDef(name="agent2", model="gpt-4", prompt="Task 2"),
             ],
-            parallel=[
-                ParallelGroup(name="parallel1", agents=["agent1", "agent2"])
-            ],
+            parallel=[ParallelGroup(name="parallel1", agents=["agent1", "agent2"])],
         )
         # Should not raise
         warnings = validate_workflow_config(config)
@@ -388,7 +366,7 @@ class TestRoutingWithParallelGroups:
 
     def test_human_gate_route_to_parallel_group(self) -> None:
         """Test that human gates can route to parallel groups."""
-        from copilot_conductor.config.schema import GateOption, RouteDef
+        from copilot_conductor.config.schema import GateOption
 
         config = WorkflowConfig(
             workflow=WorkflowDef(name="test", entry_point="gate1"),
@@ -406,9 +384,7 @@ class TestRoutingWithParallelGroups:
                 AgentDef(name="agent1", model="gpt-4", prompt="Task 1"),
                 AgentDef(name="agent2", model="gpt-4", prompt="Task 2"),
             ],
-            parallel=[
-                ParallelGroup(name="parallel1", agents=["agent1", "agent2"])
-            ],
+            parallel=[ParallelGroup(name="parallel1", agents=["agent1", "agent2"])],
         )
         # Should not raise
         warnings = validate_workflow_config(config)
@@ -492,18 +468,16 @@ class TestErrorMessages:
                     prompt="Task 2",
                 ),
             ],
-            parallel=[
-                ParallelGroup(name="parallel1", agents=["agent1", "agent2"])
-            ],
+            parallel=[ParallelGroup(name="parallel1", agents=["agent1", "agent2"])],
         )
         with pytest.raises(ConfigurationError) as exc:
             validate_workflow_config(config)
         error_msg = str(exc.value)
-        
+
         # Should contain helpful context
         assert "parallel1" in error_msg
         assert "agent1" in error_msg
-        
+
         # Should explain the issues
         assert "routes" in error_msg or "routing" in error_msg
         assert "same parallel group" in error_msg or "cross" in error_msg
@@ -511,18 +485,16 @@ class TestErrorMessages:
     def test_suggestions_included_in_errors(self) -> None:
         """Test that error messages include suggestions when applicable."""
         from pydantic import ValidationError
-        
+
         with pytest.raises(ValidationError) as exc:
             config = WorkflowConfig(
                 workflow=WorkflowDef(name="test", entry_point="parallel1"),
                 agents=[
                     AgentDef(name="agent1", model="gpt-4", prompt="Task 1"),
                 ],
-                parallel=[
-                    ParallelGroup(name="parallel1", agents=["agent1", "typo_agent"])
-                ],
+                parallel=[ParallelGroup(name="parallel1", agents=["agent1", "typo_agent"])],
             )
         error_msg = str(exc.value)
-        
+
         # Should mention the unknown agent
         assert "typo_agent" in error_msg or "unknown" in error_msg

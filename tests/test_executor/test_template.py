@@ -462,7 +462,7 @@ class TestTemplateRendererParallelOutputs:
                     "researcher2": {"summary": "Finding 2"},
                 },
                 "errors": {},
-            }
+            },
         }
         template = """Topic: {{ workflow.input.topic }}
 Plan: {{ planner.output.steps | json }}
@@ -513,12 +513,14 @@ Research findings:
                 "errors": {},
             }
         }
-        
-        template = """{% if tasks.errors %}Failures detected{% else %}All tasks succeeded{% endif %}"""
-        
+
+        template = (
+            """{% if tasks.errors %}Failures detected{% else %}All tasks succeeded{% endif %}"""
+        )
+
         result_with_errors = renderer.render(template, context_with_errors)
         assert "Failures detected" in result_with_errors
-        
+
         result_no_errors = renderer.render(template, context_no_errors)
         assert "All tasks succeeded" in result_no_errors
 

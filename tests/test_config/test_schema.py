@@ -474,7 +474,7 @@ class TestParallelGroup:
         group = ParallelGroup(
             name="research_group",
             agents=["agent1", "agent2"],
-            description="Parallel research agents"
+            description="Parallel research agents",
         )
         assert group.name == "research_group"
         assert len(group.agents) == 2
@@ -542,9 +542,7 @@ class TestWorkflowConfigWithParallel:
                 AgentDef(name="agent1", model="gpt-4", prompt="Task 1"),
                 AgentDef(name="agent2", model="gpt-4", prompt="Task 2"),
             ],
-            parallel=[
-                ParallelGroup(name="parallel_group", agents=["agent1", "agent2"])
-            ],
+            parallel=[ParallelGroup(name="parallel_group", agents=["agent1", "agent2"])],
         )
         assert len(config.parallel) == 1
         assert config.parallel[0].name == "parallel_group"
@@ -559,9 +557,7 @@ class TestWorkflowConfigWithParallel:
                 agents=[
                     AgentDef(name="agent1", model="gpt-4", prompt="Task 1"),
                 ],
-                parallel=[
-                    ParallelGroup(name="pg", agents=["agent1", "nonexistent"])
-                ],
+                parallel=[ParallelGroup(name="pg", agents=["agent1", "nonexistent"])],
             )
         assert "unknown agent 'nonexistent'" in str(exc_info.value).lower()
 
@@ -572,14 +568,11 @@ class TestWorkflowConfigWithParallel:
         config = WorkflowConfig(
             workflow=WorkflowDef(name="test", entry_point="starter"),
             agents=[
-                AgentDef(name="starter", model="gpt-4", prompt="Start",
-                        routes=[RouteDef(to="pg")]),
+                AgentDef(name="starter", model="gpt-4", prompt="Start", routes=[RouteDef(to="pg")]),
                 AgentDef(name="agent1", model="gpt-4", prompt="Task 1"),
                 AgentDef(name="agent2", model="gpt-4", prompt="Task 2"),
             ],
-            parallel=[
-                ParallelGroup(name="pg", agents=["agent1", "agent2"])
-            ],
+            parallel=[ParallelGroup(name="pg", agents=["agent1", "agent2"])],
         )
         assert config.agents[0].routes[0].to == "pg"
 
@@ -593,9 +586,7 @@ class TestWorkflowConfigWithParallel:
                 AgentDef(name="agent1", model="gpt-4", prompt="Task 1"),
                 AgentDef(name="agent2", model="gpt-4", prompt="Task 2"),
             ],
-            parallel=[
-                ParallelGroup(name="pg", agents=["agent1", "agent2"])
-            ],
+            parallel=[ParallelGroup(name="pg", agents=["agent1", "agent2"])],
         )
         assert config.workflow.entry_point == "pg"
 
@@ -774,8 +765,10 @@ class TestForEachDef:
                     **{"as": "item"},
                     agent=AgentDef(name="a", model="gpt-4", prompt="test"),
                 )
-            assert "invalid source format" in str(exc_info.value).lower() or \
-                   "not a valid identifier" in str(exc_info.value).lower()
+            assert (
+                "invalid source format" in str(exc_info.value).lower()
+                or "not a valid identifier" in str(exc_info.value).lower()
+            )
 
     def test_max_concurrent_validation(self) -> None:
         """Test max_concurrent bounds validation."""
@@ -855,8 +848,12 @@ class TestWorkflowConfigWithForEach:
         config = WorkflowConfig(
             workflow=WorkflowDef(name="test", entry_point="finder"),
             agents=[
-                AgentDef(name="finder", model="gpt-4", prompt="Find items",
-                        routes=[RouteDef(to="processors")]),
+                AgentDef(
+                    name="finder",
+                    model="gpt-4",
+                    prompt="Find items",
+                    routes=[RouteDef(to="processors")],
+                ),
                 AgentDef(name="processor", model="gpt-4", prompt="Process {{ item }}"),
             ],
             for_each=[
@@ -899,8 +896,9 @@ class TestWorkflowConfigWithForEach:
         config = WorkflowConfig(
             workflow=WorkflowDef(name="test", entry_point="finder"),
             agents=[
-                AgentDef(name="finder", model="gpt-4", prompt="Find",
-                        routes=[RouteDef(to="processors")]),
+                AgentDef(
+                    name="finder", model="gpt-4", prompt="Find", routes=[RouteDef(to="processors")]
+                ),
                 AgentDef(name="processor", model="gpt-4", prompt="Process"),
             ],
             for_each=[
@@ -989,5 +987,3 @@ class TestWorkflowConfigWithForEach:
                 ],
             )
         assert "nested for-each groups are not allowed" in str(exc_info.value).lower()
-
-

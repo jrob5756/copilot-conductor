@@ -35,6 +35,7 @@ class TestSimpleWorkflowIntegration:
         engine = WorkflowEngine(config, provider)
 
         import asyncio
+
         result = asyncio.run(engine.run({"name": "Test User"}))
 
         assert "message" in result
@@ -53,6 +54,7 @@ class TestSimpleWorkflowIntegration:
         engine = WorkflowEngine(config, provider)
 
         import asyncio
+
         # Provide the required name input
         result = asyncio.run(engine.run({"name": "World"}))
 
@@ -107,6 +109,7 @@ class TestFullWorkflowIntegration:
         engine = WorkflowEngine(config, provider, skip_gates=True)
 
         import asyncio
+
         asyncio.run(engine.run({"goal": "Test goal", "max_steps": 3}))
 
         # Verify execution flow
@@ -138,6 +141,7 @@ class TestFullWorkflowIntegration:
         engine = WorkflowEngine(config, provider, skip_gates=True)
 
         import asyncio
+
         asyncio.run(engine.run({"goal": "Test", "max_steps": 5}))
 
         # Should have gone through refiner
@@ -203,6 +207,7 @@ class TestLoopBackIntegration:
         engine = WorkflowEngine(config, provider)
 
         import asyncio
+
         result = asyncio.run(engine.run({}))
 
         # Should have looped 3 times (0.5, 0.7, 0.9)
@@ -272,6 +277,7 @@ class TestLoopBackIntegration:
         engine = WorkflowEngine(config, provider)
 
         import asyncio
+
         result = asyncio.run(engine.run({}))
 
         # Should have looped once (creator -> critic -> creator -> critic -> $end)
@@ -340,6 +346,7 @@ class TestHumanGateIntegration:
         engine = WorkflowEngine(config, provider, skip_gates=True)
 
         import asyncio
+
         result = asyncio.run(engine.run({}))
 
         # First option (Approve) should be auto-selected
@@ -386,6 +393,7 @@ class TestHumanGateIntegration:
         engine = WorkflowEngine(config, provider, skip_gates=True)
 
         import asyncio
+
         result = asyncio.run(engine.run({}))
 
         # First option (Cancel) routes to $end
@@ -432,6 +440,7 @@ class TestToolWorkflowIntegration:
         engine = WorkflowEngine(config, provider)
 
         import asyncio
+
         result = asyncio.run(engine.run({}))
 
         assert result["result"] == "Research results"
@@ -498,6 +507,7 @@ class TestContextModeIntegration:
         engine = WorkflowEngine(config, provider)
 
         import asyncio
+
         asyncio.run(engine.run({}))
 
         # Agent3 should see both agent1 and agent2 outputs
@@ -558,6 +568,7 @@ class TestContextModeIntegration:
         engine = WorkflowEngine(config, provider)
 
         import asyncio
+
         asyncio.run(engine.run({}))
 
         # Agent3 should only see agent2's output
@@ -698,7 +709,9 @@ class TestBackwardCompatibility:
         config = load_config(workflow_file)
 
         # Verify no parallel groups in config
-        assert not hasattr(config, 'parallel') or config.parallel is None or len(config.parallel) == 0
+        assert (
+            not hasattr(config, "parallel") or config.parallel is None or len(config.parallel) == 0
+        )
 
         def mock_handler(agent, prompt, context):
             if agent.name == "greeter":
@@ -709,6 +722,7 @@ class TestBackwardCompatibility:
         engine = WorkflowEngine(config, provider)
 
         import asyncio
+
         result = asyncio.run(engine.run({"name": "Tester"}))
 
         # Should work exactly as before
@@ -720,7 +734,9 @@ class TestBackwardCompatibility:
         config = load_config(workflow_file)
 
         # Verify no parallel groups
-        assert not hasattr(config, 'parallel') or config.parallel is None or len(config.parallel) == 0
+        assert (
+            not hasattr(config, "parallel") or config.parallel is None or len(config.parallel) == 0
+        )
 
         agent_calls: list[str] = []
 
@@ -737,6 +753,7 @@ class TestBackwardCompatibility:
         engine = WorkflowEngine(config, provider, skip_gates=True)
 
         import asyncio
+
         asyncio.run(engine.run({"goal": "Test", "max_steps": 1}))
 
         # Should execute as before
@@ -784,6 +801,7 @@ class TestBackwardCompatibility:
         engine = WorkflowEngine(config, provider)
 
         import asyncio
+
         result = asyncio.run(engine.run({}))
 
         # Should still loop correctly
@@ -839,7 +857,9 @@ class TestBackwardCompatibility:
                     routes=[RouteDef(to="$end")],
                 ),
             ],
-            output={"result": "{{ handler_a.output.result if handler_a is defined else (handler_b.output.result if handler_b is defined else handler_default.output.result) }}"},
+            output={
+                "result": "{{ handler_a.output.result if handler_a is defined else (handler_b.output.result if handler_b is defined else handler_default.output.result) }}"
+            },
         )
 
         def mock_handler(agent, prompt, context):
@@ -853,6 +873,7 @@ class TestBackwardCompatibility:
         engine = WorkflowEngine(config, provider)
 
         import asyncio
+
         result = asyncio.run(engine.run({}))
 
         # Should route correctly

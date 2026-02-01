@@ -114,9 +114,7 @@ class TestGateResult:
         assert result.route == "next_agent"
         assert result.additional_input == {"feedback": "Looks good!"}
 
-    def test_gate_result_default_additional_input(
-        self, sample_options: list[GateOption]
-    ) -> None:
+    def test_gate_result_default_additional_input(self, sample_options: list[GateOption]) -> None:
         """Test GateResult with default additional_input."""
         result = GateResult(
             selected_option=sample_options[0],

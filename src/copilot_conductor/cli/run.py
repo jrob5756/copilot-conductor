@@ -235,9 +235,7 @@ def verbose_log_parallel_agent_failed(
         text.append(agent_name, style="red")
         text.append(f"  ({elapsed:.2f}s)", style="dim")
         _verbose_console.print(text)
-        _verbose_console.print(
-            f"      {exception_type}: {message}", style="red dim"
-        )
+        _verbose_console.print(f"      {exception_type}: {message}", style="red dim")
 
 
 def verbose_log_parallel_summary(
@@ -266,8 +264,7 @@ def verbose_log_parallel_summary(
             text.append("✓ ", style="green")
             text.append(group_name, style="green")
             text.append(
-                f"  ({success_count}/{success_count} succeeded, "
-                f"{total_elapsed:.2f}s)",
+                f"  ({success_count}/{success_count} succeeded, {total_elapsed:.2f}s)",
                 style="dim",
             )
         else:
@@ -308,8 +305,7 @@ def verbose_log_for_each_start(
         text.append("For-Each: ", style="blue")
         text.append(group_name, style="blue bold")
         text.append(
-            f" ({item_count} items, max_concurrent={max_concurrent}, {failure_mode})",
-            style="dim"
+            f" ({item_count} items, max_concurrent={max_concurrent}, {failure_mode})", style="dim"
         )
         _verbose_console.print()
         _verbose_console.print(text)
@@ -368,9 +364,7 @@ def verbose_log_for_each_item_failed(
         text.append(f"[{item_key}]", style="red")
         text.append(f"  ({elapsed:.2f}s)", style="dim")
         _verbose_console.print(text)
-        _verbose_console.print(
-            f"      {exception_type}: {message}", style="red dim"
-        )
+        _verbose_console.print(f"      {exception_type}: {message}", style="red dim")
 
 
 def verbose_log_for_each_summary(
@@ -399,8 +393,7 @@ def verbose_log_for_each_summary(
             text.append("✓ ", style="green")
             text.append(group_name, style="green")
             text.append(
-                f"  ({success_count}/{success_count} succeeded, {total_elapsed:.2f}s)",
-                style="dim"
+                f"  ({success_count}/{success_count} succeeded, {total_elapsed:.2f}s)", style="dim"
             )
         else:
             status_parts = []
@@ -410,10 +403,7 @@ def verbose_log_for_each_summary(
             style = "yellow" if success_count > 0 else "red"
             text.append("◆ ", style=style)
             text.append(group_name, style=style)
-            text.append(
-                f"  ({', '.join(status_parts)}, {total_elapsed:.2f}s)",
-                style="dim"
-            )
+            text.append(f"  ({', '.join(status_parts)}, {total_elapsed:.2f}s)", style="dim")
 
         _verbose_console.print(text)
 
@@ -441,9 +431,7 @@ def parse_input_flags(raw_inputs: list[str]) -> dict[str, Any]:
     for raw in raw_inputs:
         # Split on first = only
         if "=" not in raw:
-            raise typer.BadParameter(
-                f"Invalid input format: '{raw}'. Expected format: name=value"
-            )
+            raise typer.BadParameter(f"Invalid input format: '{raw}'. Expected format: name=value")
 
         name, value = raw.split("=", 1)
         name = name.strip()
@@ -722,7 +710,9 @@ def display_execution_plan(plan: ExecutionPlan, console: Console | None = None) 
 
             # Add a detail row showing which agents execute in parallel
             if step.parallel_agents:
-                agents_display = ", ".join(f"[cyan]{agent}[/cyan]" for agent in step.parallel_agents)
+                agents_display = ", ".join(
+                    f"[cyan]{agent}[/cyan]" for agent in step.parallel_agents
+                )
                 table.add_row(
                     "",
                     f"[dim]  ⚡ {agents_display}[/dim]",
@@ -745,9 +735,7 @@ def display_execution_plan(plan: ExecutionPlan, console: Console | None = None) 
     output_console.print()
     parallel_group_count = sum(1 for s in plan.steps if s.agent_type == "parallel_group")
     total_parallel_agents = sum(
-        len(s.parallel_agents or [])
-        for s in plan.steps
-        if s.agent_type == "parallel_group"
+        len(s.parallel_agents or []) for s in plan.steps if s.agent_type == "parallel_group"
     )
 
     summary_parts = [

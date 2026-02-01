@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from copilot_conductor.config.schema import WorkflowConfig
 
 
-# Pattern for input references: 
+# Pattern for input references:
 # - agent.output(.field)?
 # - parallel_group.outputs.agent(.field)?
 # - workflow.input.param
@@ -92,9 +92,7 @@ def validate_workflow_config(config: WorkflowConfig) -> list[str]:
 
         # Validate tool references
         if agent.tools is not None and agent.tools:
-            tool_errors = _validate_tool_references(
-                agent.name, agent.tools, set(config.tools)
-            )
+            tool_errors = _validate_tool_references(agent.name, agent.tools, set(config.tools))
             errors.extend(tool_errors)
 
     # Validate parallel groups
@@ -184,8 +182,7 @@ def _validate_input_references(
             is_optional = match.group("optional") == "?"
             if is_optional:
                 warnings.append(
-                    f"Agent '{agent_name}' has optional reference to "
-                    f"unknown agent '{ref_agent}'"
+                    f"Agent '{agent_name}' has optional reference to unknown agent '{ref_agent}'"
                 )
             else:
                 errors.append(
@@ -284,16 +281,14 @@ def _validate_output_references(
         matches = agent_ref_pattern.findall(template)
         for ref in matches:
             if ref not in agent_names and ref not in ("workflow", "context"):
-                errors.append(
-                    f"Workflow output '{field}' references unknown agent '{ref}'"
-                )
+                errors.append(f"Workflow output '{field}' references unknown agent '{ref}'")
 
     return errors
 
 
 def _validate_parallel_groups(config: WorkflowConfig) -> list[str]:
     """Validate parallel group configurations.
-    
+
     This function validates:
     - Parallel agent references exist
     - Parallel agents have no routes
@@ -301,20 +296,20 @@ def _validate_parallel_groups(config: WorkflowConfig) -> list[str]:
     - Unique names between parallel groups and agents
     - No nested parallel groups
     - No human gates in parallel groups
-    
+
     Args:
         config: The WorkflowConfig to validate.
-        
+
     Returns:
         List of error messages.
     """
     errors: list[str] = []
-    
+
     # Build indices
     agent_names = {agent.name for agent in config.agents}
     parallel_names = {pg.name for pg in config.parallel}
     agents_by_name = {agent.name: agent for agent in config.agents}
-    
+
     # PE-2.5: Validate unique names (parallel groups vs agents)
     name_conflicts = agent_names & parallel_names
     if name_conflicts:
@@ -322,7 +317,7 @@ def _validate_parallel_groups(config: WorkflowConfig) -> list[str]:
             f"Duplicate names found between agents and parallel groups: {', '.join(sorted(name_conflicts))}. "
             "Parallel group names must be unique from agent names."
         )
-    
+
     # Validate each parallel group
     for pg in config.parallel:
         # PE-2.2: Validate parallel agent references exist
@@ -333,35 +328,35 @@ def _validate_parallel_groups(config: WorkflowConfig) -> list[str]:
                     f"Available agents: {', '.join(sorted(agent_names))}"
                 )
                 continue  # Skip further validation for this agent
-            
+
             agent = agents_by_name[agent_name]
-            
+
             # PE-2.3: Validate parallel agents have no routes
             if agent.routes:
                 errors.append(
                     f"Agent '{agent_name}' in parallel group '{pg.name}' cannot have routes. "
                     "Agents within parallel groups must not define their own routing logic."
                 )
-            
+
             # PE-2.7: Validate no human gates in parallel groups
             if agent.type == "human_gate":
                 errors.append(
                     f"Agent '{agent_name}' in parallel group '{pg.name}' is a human gate. "
                     "Human gates cannot be used in parallel groups."
                 )
-        
+
         # PE-6.2: Validate parallel group route targets
         all_names = agent_names | parallel_names
         route_errors = _validate_agent_routes(pg.name, pg.routes, all_names)
         errors.extend(route_errors)
-        
+
         # PE-2.4: Validate no cross-agent dependencies within parallel group
         # Check if any agent in the parallel group references another agent in the same group
         pg_agents_set = set(pg.agents)
         for agent_name in pg.agents:
             if agent_name not in agents_by_name:
                 continue  # Already reported as unknown
-            
+
             agent = agents_by_name[agent_name]
             for input_ref in agent.input:
                 # Parse input reference to extract agent name
@@ -374,7 +369,7 @@ def _validate_parallel_groups(config: WorkflowConfig) -> list[str]:
                             f"another agent '{ref_agent}' in the same parallel group. "
                             "Agents within the same parallel group cannot have dependencies on each other."
                         )
-        
+
         # PE-2.6: Validate no nested parallel groups
         # This means checking if any agent name in pg.agents is actually a parallel group name
         nested_groups = pg_agents_set & parallel_names
@@ -383,5 +378,5 @@ def _validate_parallel_groups(config: WorkflowConfig) -> list[str]:
                 f"Parallel group '{pg.name}' contains nested parallel groups: {', '.join(sorted(nested_groups))}. "
                 "Nested parallel groups are not supported."
             )
-    
+
     return errors

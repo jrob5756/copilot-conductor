@@ -559,7 +559,8 @@ class TestErrorHandling:
             )
 
         assert "Claude API call failed" in str(exc_info.value)
-        assert exc_info.value.is_retryable is True
+        # Generic exceptions are not retryable (only specific transient errors are)
+        assert exc_info.value.is_retryable is False
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
     @patch("copilot_conductor.providers.claude.AsyncAnthropic")
@@ -1748,3 +1749,581 @@ class TestNonStreamingExecution:
         mock_logger.debug.assert_called()
         debug_calls = [call[0][0] for call in mock_logger.debug.call_args_list]
         assert any("non-streaming" in call.lower() for call in debug_calls)
+
+
+class TestClaudeProviderRetryLogic:
+    """Tests for retry logic and error handling."""
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    @pytest.mark.asyncio
+    async def test_is_retryable_error_rate_limit(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test that RateLimitError is classified as retryable."""
+        mock_anthropic_module.__version__ = "0.77.0"
+        mock_anthropic_module.RateLimitError = type("RateLimitError", (Exception,), {})
+        mock_client = Mock()
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
+        mock_anthropic_class.return_value = mock_client
+
+        provider = ClaudeProvider()
+
+        error = mock_anthropic_module.RateLimitError("Rate limit exceeded")
+        assert provider._is_retryable_error(error) is True
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    @pytest.mark.asyncio
+    async def test_is_retryable_error_timeout(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test that APITimeoutError is classified as retryable."""
+        mock_anthropic_module.__version__ = "0.77.0"
+        mock_anthropic_module.APITimeoutError = type("APITimeoutError", (Exception,), {})
+        mock_client = Mock()
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
+        mock_anthropic_class.return_value = mock_client
+
+        provider = ClaudeProvider()
+
+        error = mock_anthropic_module.APITimeoutError("Request timed out")
+        assert provider._is_retryable_error(error) is True
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    @pytest.mark.asyncio
+    async def test_is_retryable_error_connection(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test that APIConnectionError is classified as retryable."""
+        mock_anthropic_module.__version__ = "0.77.0"
+        mock_anthropic_module.APIConnectionError = type("APIConnectionError", (Exception,), {})
+        mock_client = Mock()
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
+        mock_anthropic_class.return_value = mock_client
+
+        provider = ClaudeProvider()
+
+        error = mock_anthropic_module.APIConnectionError("Connection failed")
+        assert provider._is_retryable_error(error) is True
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    @pytest.mark.asyncio
+    async def test_is_retryable_error_5xx_status(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test that 5xx status codes are classified as retryable."""
+        mock_anthropic_module.__version__ = "0.77.0"
+
+        class MockAPIStatusError(Exception):
+            def __init__(self, status_code: int) -> None:
+                self.status_code = status_code
+                super().__init__(f"Status {status_code}")
+
+        mock_anthropic_module.APIStatusError = MockAPIStatusError
+        mock_client = Mock()
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
+        mock_anthropic_class.return_value = mock_client
+
+        provider = ClaudeProvider()
+
+        # Test 500 Internal Server Error
+        error_500 = MockAPIStatusError(500)
+        assert provider._is_retryable_error(error_500) is True
+
+        # Test 503 Service Unavailable
+        error_503 = MockAPIStatusError(503)
+        assert provider._is_retryable_error(error_503) is True
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    @pytest.mark.asyncio
+    async def test_is_retryable_error_4xx_non_retryable(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test that 4xx status codes (except 429) are non-retryable."""
+        mock_anthropic_module.__version__ = "0.77.0"
+
+        class MockAPIStatusError(Exception):
+            def __init__(self, status_code: int) -> None:
+                self.status_code = status_code
+                super().__init__(f"Status {status_code}")
+
+        mock_anthropic_module.APIStatusError = MockAPIStatusError
+        mock_client = Mock()
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
+        mock_anthropic_class.return_value = mock_client
+
+        provider = ClaudeProvider()
+
+        # Test 401 Unauthorized
+        error_401 = MockAPIStatusError(401)
+        assert provider._is_retryable_error(error_401) is False
+
+        # Test 400 Bad Request
+        error_400 = MockAPIStatusError(400)
+        assert provider._is_retryable_error(error_400) is False
+
+        # Test 404 Not Found
+        error_404 = MockAPIStatusError(404)
+        assert provider._is_retryable_error(error_404) is False
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    @pytest.mark.asyncio
+    async def test_is_retryable_error_429_retryable(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test that 429 status code is retryable."""
+        mock_anthropic_module.__version__ = "0.77.0"
+
+        class MockAPIStatusError(Exception):
+            def __init__(self, status_code: int) -> None:
+                self.status_code = status_code
+                super().__init__(f"Status {status_code}")
+
+        mock_anthropic_module.APIStatusError = MockAPIStatusError
+        mock_client = Mock()
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
+        mock_anthropic_class.return_value = mock_client
+
+        provider = ClaudeProvider()
+
+        error_429 = MockAPIStatusError(429)
+        assert provider._is_retryable_error(error_429) is True
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    @pytest.mark.asyncio
+    async def test_calculate_delay_exponential_backoff(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test exponential backoff calculation."""
+        mock_anthropic_module.__version__ = "0.77.0"
+        mock_client = Mock()
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
+        mock_anthropic_class.return_value = mock_client
+
+        from copilot_conductor.providers.claude import RetryConfig
+
+        provider = ClaudeProvider()
+        config = RetryConfig(base_delay=1.0, max_delay=30.0, jitter=0.0)  # No jitter for testing
+
+        # Attempt 1: base * 2^0 = 1.0
+        delay_1 = provider._calculate_delay(1, config)
+        assert delay_1 == 1.0
+
+        # Attempt 2: base * 2^1 = 2.0
+        delay_2 = provider._calculate_delay(2, config)
+        assert delay_2 == 2.0
+
+        # Attempt 3: base * 2^2 = 4.0
+        delay_3 = provider._calculate_delay(3, config)
+        assert delay_3 == 4.0
+
+        # Attempt 5: base * 2^4 = 16.0
+        delay_5 = provider._calculate_delay(5, config)
+        assert delay_5 == 16.0
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    @pytest.mark.asyncio
+    async def test_calculate_delay_max_cap(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test that delay is capped at max_delay."""
+        mock_anthropic_module.__version__ = "0.77.0"
+        mock_client = Mock()
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
+        mock_anthropic_class.return_value = mock_client
+
+        from copilot_conductor.providers.claude import RetryConfig
+
+        provider = ClaudeProvider()
+        config = RetryConfig(base_delay=1.0, max_delay=10.0, jitter=0.0)
+
+        # Attempt 10: base * 2^9 = 512.0, but capped at 10.0
+        delay = provider._calculate_delay(10, config)
+        assert delay == 10.0
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    @pytest.mark.asyncio
+    async def test_calculate_delay_with_jitter(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test that jitter adds randomness to delay."""
+        mock_anthropic_module.__version__ = "0.77.0"
+        mock_client = Mock()
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
+        mock_anthropic_class.return_value = mock_client
+
+        from copilot_conductor.providers.claude import RetryConfig
+
+        provider = ClaudeProvider()
+        config = RetryConfig(base_delay=1.0, max_delay=30.0, jitter=0.25)
+
+        # With jitter=0.25, delay should be base_delay * (1 + 0 to 0.25)
+        delay = provider._calculate_delay(1, config)
+        # Base delay is 1.0, jitter can add up to 0.25
+        assert 1.0 <= delay <= 1.25
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    @pytest.mark.asyncio
+    async def test_get_retry_after_header(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test extraction of retry-after header from rate limit error."""
+        mock_anthropic_module.__version__ = "0.77.0"
+
+        class MockRateLimitError(Exception):
+            def __init__(self) -> None:
+                self.response = Mock()
+                self.response.headers = {"retry-after": "5"}
+                super().__init__("Rate limit exceeded")
+
+        mock_anthropic_module.RateLimitError = MockRateLimitError
+        mock_client = Mock()
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
+        mock_anthropic_class.return_value = mock_client
+
+        provider = ClaudeProvider()
+
+        error = MockRateLimitError()
+        retry_after = provider._get_retry_after(error)
+        assert retry_after == 5.0
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    @pytest.mark.asyncio
+    async def test_get_retry_after_capitalized_header(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test retry-after header with different capitalization."""
+        mock_anthropic_module.__version__ = "0.77.0"
+
+        class MockRateLimitError(Exception):
+            def __init__(self) -> None:
+                self.response = Mock()
+                self.response.headers = {"Retry-After": "10"}
+                super().__init__("Rate limit exceeded")
+
+        mock_anthropic_module.RateLimitError = MockRateLimitError
+        mock_client = Mock()
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
+        mock_anthropic_class.return_value = mock_client
+
+        provider = ClaudeProvider()
+
+        error = MockRateLimitError()
+        retry_after = provider._get_retry_after(error)
+        assert retry_after == 10.0
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    @pytest.mark.asyncio
+    async def test_get_retry_after_no_header(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test retry-after extraction when header is missing."""
+        mock_anthropic_module.__version__ = "0.77.0"
+
+        class MockRateLimitError(Exception):
+            def __init__(self) -> None:
+                self.response = Mock()
+                self.response.headers = {}
+                super().__init__("Rate limit exceeded")
+
+        mock_anthropic_module.RateLimitError = MockRateLimitError
+        mock_client = Mock()
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
+        mock_anthropic_class.return_value = mock_client
+
+        provider = ClaudeProvider()
+
+        error = MockRateLimitError()
+        retry_after = provider._get_retry_after(error)
+        assert retry_after is None
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    @pytest.mark.asyncio
+    async def test_retry_on_rate_limit_error(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test that rate limit errors trigger retry."""
+        mock_anthropic_module.__version__ = "0.77.0"
+
+        class MockRateLimitError(Exception):
+            def __init__(self) -> None:
+                self.response = Mock()
+                self.response.headers = {}
+                super().__init__("Rate limit exceeded")
+
+        mock_anthropic_module.RateLimitError = MockRateLimitError
+        mock_anthropic_module.BadRequestError = type("BadRequestError", (Exception,), {})
+
+        mock_client = Mock()
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
+
+        # First call raises RateLimitError, second succeeds
+        mock_response = Mock()
+        mock_response.content = [Mock(type="text", text="Success")]
+        mock_response.usage = Mock(input_tokens=10, output_tokens=20)
+        mock_response.model = "claude-3-5-sonnet-latest"
+
+        mock_client.messages.create = AsyncMock(
+            side_effect=[MockRateLimitError(), mock_response]
+        )
+
+        mock_anthropic_class.return_value = mock_client
+
+        from copilot_conductor.providers.claude import RetryConfig
+
+        provider = ClaudeProvider(retry_config=RetryConfig(base_delay=0.01, max_delay=0.1))
+
+        agent = AgentDef(name="test_agent", prompt="Test prompt")
+
+        result = await provider.execute(agent, {}, "Test prompt")
+
+        # Verify we got a successful response
+        assert result.content["text"] == "Success"
+        # Verify retry was attempted
+        assert len(provider._retry_history) == 1
+        assert provider._retry_history[0]["is_retryable"] is True
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    @pytest.mark.asyncio
+    async def test_retry_on_timeout_error(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test that timeout errors trigger retry."""
+        mock_anthropic_module.__version__ = "0.77.0"
+
+        class MockAPITimeoutError(Exception):
+            pass
+
+        mock_anthropic_module.APITimeoutError = MockAPITimeoutError
+        mock_anthropic_module.BadRequestError = type("BadRequestError", (Exception,), {})
+
+        mock_client = Mock()
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
+
+        # First call times out, second succeeds
+        mock_response = Mock()
+        mock_response.content = [Mock(type="text", text="Success")]
+        mock_response.usage = Mock(input_tokens=10, output_tokens=20)
+        mock_response.model = "claude-3-5-sonnet-latest"
+
+        mock_client.messages.create = AsyncMock(
+            side_effect=[MockAPITimeoutError("Timeout"), mock_response]
+        )
+
+        mock_anthropic_class.return_value = mock_client
+
+        from copilot_conductor.providers.claude import RetryConfig
+
+        provider = ClaudeProvider(retry_config=RetryConfig(base_delay=0.01, max_delay=0.1))
+
+        agent = AgentDef(name="test_agent", prompt="Test prompt")
+
+        result = await provider.execute(agent, {}, "Test prompt")
+
+        assert result.content["text"] == "Success"
+        assert len(provider._retry_history) == 1
+        assert provider._retry_history[0]["is_retryable"] is True
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    @pytest.mark.asyncio
+    async def test_no_retry_on_auth_error(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test that authentication errors do NOT trigger retry."""
+        mock_anthropic_module.__version__ = "0.77.0"
+
+        class MockAPIStatusError(Exception):
+            def __init__(self, status_code: int) -> None:
+                self.status_code = status_code
+                super().__init__(f"Status {status_code}")
+
+        mock_anthropic_module.APIStatusError = MockAPIStatusError
+        mock_anthropic_module.BadRequestError = type("BadRequestError", (Exception,), {})
+
+        mock_client = Mock()
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
+        mock_client.messages.create = AsyncMock(side_effect=MockAPIStatusError(401))
+
+        mock_anthropic_class.return_value = mock_client
+
+        provider = ClaudeProvider()
+
+        agent = AgentDef(name="test_agent", prompt="Test prompt")
+
+        with pytest.raises(ProviderError) as exc_info:
+            await provider.execute(agent, {}, "Test prompt")
+
+        # Verify no retries occurred (only 1 attempt)
+        assert len(provider._retry_history) == 1
+        assert provider._retry_history[0]["is_retryable"] is False
+        assert exc_info.value.status_code == 401
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    @pytest.mark.asyncio
+    async def test_retry_exhaustion(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test that retries are exhausted after max_attempts."""
+        mock_anthropic_module.__version__ = "0.77.0"
+
+        class MockRateLimitError(Exception):
+            def __init__(self) -> None:
+                self.response = Mock()
+                self.response.headers = {}
+                super().__init__("Rate limit exceeded")
+
+        mock_anthropic_module.RateLimitError = MockRateLimitError
+        mock_anthropic_module.BadRequestError = type("BadRequestError", (Exception,), {})
+
+        mock_client = Mock()
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
+        # Always fail
+        mock_client.messages.create = AsyncMock(side_effect=MockRateLimitError())
+
+        mock_anthropic_class.return_value = mock_client
+
+        from copilot_conductor.providers.claude import RetryConfig
+
+        provider = ClaudeProvider(
+            retry_config=RetryConfig(max_attempts=3, base_delay=0.01, max_delay=0.1)
+        )
+
+        agent = AgentDef(name="test_agent", prompt="Test prompt")
+
+        with pytest.raises(ProviderError, match="failed after 3 attempts"):
+            await provider.execute(agent, {}, "Test prompt")
+
+        # Verify all 3 attempts were made
+        assert len(provider._retry_history) == 3
+        assert all(h["is_retryable"] for h in provider._retry_history)
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    @pytest.mark.asyncio
+    async def test_retry_history_tracking(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test that retry history is properly tracked."""
+        mock_anthropic_module.__version__ = "0.77.0"
+
+        class MockRateLimitError(Exception):
+            def __init__(self) -> None:
+                self.response = Mock()
+                self.response.headers = {}
+                super().__init__("Rate limit exceeded")
+
+        mock_anthropic_module.RateLimitError = MockRateLimitError
+        mock_anthropic_module.BadRequestError = type("BadRequestError", (Exception,), {})
+
+        mock_client = Mock()
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
+
+        mock_response = Mock()
+        mock_response.content = [Mock(type="text", text="Success")]
+        mock_response.usage = Mock(input_tokens=10, output_tokens=20)
+        mock_response.model = "claude-3-5-sonnet-latest"
+
+        # Fail twice, then succeed
+        mock_client.messages.create = AsyncMock(
+            side_effect=[MockRateLimitError(), MockRateLimitError(), mock_response]
+        )
+
+        mock_anthropic_class.return_value = mock_client
+
+        from copilot_conductor.providers.claude import RetryConfig
+
+        provider = ClaudeProvider(retry_config=RetryConfig(base_delay=0.01, max_delay=0.1))
+
+        agent = AgentDef(name="test_agent", prompt="Test prompt")
+
+        await provider.execute(agent, {}, "Test prompt")
+
+        # Verify retry history
+        assert len(provider._retry_history) == 2
+        assert provider._retry_history[0]["attempt"] == 1
+        assert provider._retry_history[0]["agent_name"] == "test_agent"
+        assert provider._retry_history[0]["is_retryable"] is True
+        assert "delay" in provider._retry_history[0]
+
+        assert provider._retry_history[1]["attempt"] == 2
+        assert provider._retry_history[1]["is_retryable"] is True
+
+    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    @pytest.mark.asyncio
+    async def test_retry_respects_retry_after_header(
+        self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
+    ) -> None:
+        """Test that retry-after header overrides calculated delay."""
+        mock_anthropic_module.__version__ = "0.77.0"
+
+        class MockRateLimitError(Exception):
+            def __init__(self) -> None:
+                self.response = Mock()
+                self.response.headers = {"retry-after": "5"}
+                super().__init__("Rate limit exceeded")
+
+        mock_anthropic_module.RateLimitError = MockRateLimitError
+        mock_anthropic_module.BadRequestError = type("BadRequestError", (Exception,), {})
+
+        mock_client = Mock()
+        mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
+
+        mock_response = Mock()
+        mock_response.content = [Mock(type="text", text="Success")]
+        mock_response.usage = Mock(input_tokens=10, output_tokens=20)
+        mock_response.model = "claude-3-5-sonnet-latest"
+
+        mock_client.messages.create = AsyncMock(
+            side_effect=[MockRateLimitError(), mock_response]
+        )
+
+        mock_anthropic_class.return_value = mock_client
+
+        from copilot_conductor.providers.claude import RetryConfig
+
+        provider = ClaudeProvider(
+            retry_config=RetryConfig(base_delay=1.0, max_delay=10.0, jitter=0.0)
+        )
+
+        agent = AgentDef(name="test_agent", prompt="Test prompt")
+
+        await provider.execute(agent, {}, "Test prompt")
+
+        # Verify retry-after header was used (delay should be 5.0)
+        assert len(provider._retry_history) == 1
+        assert provider._retry_history[0]["delay"] == 5.0
+

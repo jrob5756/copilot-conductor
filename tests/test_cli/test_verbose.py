@@ -177,7 +177,7 @@ class TestVerboseLogging:
                 output_text = output.getvalue()
                 assert "Test operation" in output_text
                 # Strip ANSI codes and check for timing
-                clean_text = re.sub(r'\x1b\[[0-9;]*m', '', output_text)
+                clean_text = re.sub(r"\x1b\[[0-9;]*m", "", output_text)
                 assert "1.23" in clean_text
         finally:
             verbose_mode.reset(token)
@@ -335,9 +335,7 @@ class TestVerboseLogging:
                 "copilot_conductor.cli.run._verbose_console",
                 Console(file=output, force_terminal=True, no_color=True),
             ):
-                verbose_log_parallel_agent_complete(
-                    "test_agent", 1.234, model="gpt-4", tokens=100
-                )
+                verbose_log_parallel_agent_complete("test_agent", 1.234, model="gpt-4", tokens=100)
                 output_text = output.getvalue()
                 assert "test_agent" in output_text
                 assert "1.23" in output_text
@@ -446,4 +444,3 @@ class TestVerboseLogging:
                 assert "1.50" in output_text
         finally:
             verbose_mode.reset(token)
-

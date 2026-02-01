@@ -723,9 +723,7 @@ class TestParallelGroupLimits:
             await asyncio.sleep(0.01)
             return "done"
 
-        result = await enforcer.wait_for_with_timeout(
-            quick_task(), operation_name="quick_task"
-        )
+        result = await enforcer.wait_for_with_timeout(quick_task(), operation_name="quick_task")
         assert result == "done"
 
     @pytest.mark.asyncio
@@ -739,9 +737,7 @@ class TestParallelGroupLimits:
             return "done"
 
         with pytest.raises(ConductorTimeoutError) as exc_info:
-            await enforcer.wait_for_with_timeout(
-                slow_task(), operation_name="slow_task"
-            )
+            await enforcer.wait_for_with_timeout(slow_task(), operation_name="slow_task")
 
         error = exc_info.value
         assert "slow_task" in str(error)
@@ -758,9 +754,7 @@ class TestParallelGroupLimits:
             return "done"
 
         # Should complete without timeout enforcement
-        result = await enforcer.wait_for_with_timeout(
-            task(), operation_name="task"
-        )
+        result = await enforcer.wait_for_with_timeout(task(), operation_name="task")
         assert result == "done"
 
     @pytest.mark.asyncio
@@ -806,6 +800,7 @@ class TestParallelGroupLimits:
             call_count += 1
             # Simulate slow agent execution
             import time
+
             time.sleep(2.0)  # Longer than timeout
             return {"result": agent.name}
 
@@ -819,4 +814,3 @@ class TestParallelGroupLimits:
         # Timeout should be enforced during workflow execution
         assert error.timeout_seconds == 1
         assert "timeout" in str(error).lower()
-

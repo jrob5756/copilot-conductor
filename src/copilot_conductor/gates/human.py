@@ -158,9 +158,7 @@ class HumanGateHandler:
                 index = int(choice) - 1
                 if 0 <= index < len(options):
                     selected = options[index]
-                    self.console.print(
-                        f"\n[green]Selected:[/green] {selected.label}"
-                    )
+                    self.console.print(f"\n[green]Selected:[/green] {selected.label}")
                     return selected
             except ValueError:
                 pass
@@ -179,9 +177,7 @@ class HumanGateHandler:
             Dictionary with the field name and collected value.
         """
         self.console.print()
-        self.console.print(
-            f"[bold]Please provide {field_name}:[/bold]"
-        )
+        self.console.print(f"[bold]Please provide {field_name}:[/bold]")
         value = Prompt.ask(f"  {field_name}")
         return {field_name: value}
 
@@ -197,9 +193,7 @@ class HumanGateHandler:
         Returns:
             GateResult with the auto-selected option.
         """
-        self.console.print(
-            f"\n[dim]Auto-selecting: {option.label} (--skip-gates)[/dim]"
-        )
+        self.console.print(f"\n[dim]Auto-selecting: {option.label} (--skip-gates)[/dim]")
         return GateResult(
             selected_option=option,
             route=option.route,

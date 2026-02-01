@@ -212,14 +212,11 @@ class ForEachDef(BaseModel):
         reserved = {"workflow", "context", "output", "_index", "_key"}
         if v in reserved:
             raise ValueError(
-                f"Loop variable '{v}' conflicts with reserved name. "
-                f"Reserved names: {reserved}"
+                f"Loop variable '{v}' conflicts with reserved name. Reserved names: {reserved}"
             )
         # Also validate it's a valid Python identifier
         if not v.isidentifier():
-            raise ValueError(
-                f"Loop variable '{v}' must be a valid Python identifier"
-            )
+            raise ValueError(f"Loop variable '{v}' must be a valid Python identifier")
         return v
 
     @field_validator("source")

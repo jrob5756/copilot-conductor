@@ -109,9 +109,7 @@ def display_validation_success(
     human_gate_count = sum(1 for a in config.agents if a.type == "human_gate")
 
     # Count conditional routes
-    conditional_route_count = sum(
-        1 for a in config.agents for r in a.routes if r.when
-    )
+    conditional_route_count = sum(1 for a in config.agents for r in a.routes if r.when)
 
     # Determine workflow patterns
     patterns = []

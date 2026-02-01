@@ -29,14 +29,10 @@ console = Console(stderr=True)
 output_console = Console()
 
 # Context variable for verbose mode (default True - show progress output)
-verbose_mode: contextvars.ContextVar[bool] = contextvars.ContextVar(
-    "verbose_mode", default=True
-)
+verbose_mode: contextvars.ContextVar[bool] = contextvars.ContextVar("verbose_mode", default=True)
 
 # Context variable for full verbose mode (--verbose flag - show full details)
-full_mode: contextvars.ContextVar[bool] = contextvars.ContextVar(
-    "full_mode", default=False
-)
+full_mode: contextvars.ContextVar[bool] = contextvars.ContextVar("full_mode", default=False)
 
 
 def is_verbose() -> bool:
@@ -46,7 +42,7 @@ def is_verbose() -> bool:
 
 def is_full() -> bool:
     """Check if full verbose mode is enabled (--verbose flag).
-    
+
     When full mode is enabled, prompts are shown untruncated and
     additional details like tool arguments and reasoning are displayed.
     """

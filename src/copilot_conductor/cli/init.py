@@ -165,11 +165,7 @@ def create_workflow_file(
     content = render_template(template_name, workflow_name)
     output_path.write_text(content, encoding="utf-8")
 
-    output_console.print(
-        f"[green]Created workflow file:[/green] {output_path}"
-    )
-    output_console.print(
-        f"[dim]Template used:[/dim] {template_name}"
-    )
+    output_console.print(f"[green]Created workflow file:[/green] {output_path}")
+    output_console.print(f"[dim]Template used:[/dim] {template_name}")
 
     return output_path

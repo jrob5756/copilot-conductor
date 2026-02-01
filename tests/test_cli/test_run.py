@@ -60,7 +60,7 @@ class TestCoerceValue:
 
     def test_coerce_json_array(self) -> None:
         """Test coercing JSON array strings."""
-        result = coerce_value('[1, 2, 3]')
+        result = coerce_value("[1, 2, 3]")
         assert result == [1, 2, 3]
 
     def test_coerce_json_object(self) -> None:
@@ -70,8 +70,8 @@ class TestCoerceValue:
 
     def test_coerce_invalid_json_returns_string(self) -> None:
         """Test that invalid JSON returns the original string."""
-        result = coerce_value('[not valid json')
-        assert result == '[not valid json'
+        result = coerce_value("[not valid json")
+        assert result == "[not valid json"
 
     def test_coerce_string(self) -> None:
         """Test that regular strings are returned unchanged."""
@@ -111,12 +111,14 @@ class TestParseInputFlags:
     def test_parse_missing_equals_raises(self) -> None:
         """Test that missing equals raises BadParameter."""
         import typer
+
         with pytest.raises(typer.BadParameter, match="Invalid input format"):
             parse_input_flags(["invalid"])
 
     def test_parse_empty_name_raises(self) -> None:
         """Test that empty name raises BadParameter."""
         import typer
+
         with pytest.raises(typer.BadParameter, match="Empty input name"):
             parse_input_flags(["=value"])
 
@@ -133,7 +135,8 @@ class TestInputCollector:
     def test_extract_multiple_inputs(self) -> None:
         """Test extracting multiple inputs."""
         args = [
-            "run", "workflow.yaml",
+            "run",
+            "workflow.yaml",
             "--input.name=Alice",
             "--input.age=30",
             "--input.active=true",
@@ -160,8 +163,10 @@ class TestInputCollector:
     def test_extract_ignores_other_flags(self) -> None:
         """Test that non-input flags are ignored."""
         args = [
-            "run", "workflow.yaml",
-            "--provider", "copilot",
+            "run",
+            "workflow.yaml",
+            "--provider",
+            "copilot",
             "--input.name=Alice",
             "--verbose",
         ]
@@ -216,10 +221,15 @@ output:
         with patch("copilot_conductor.cli.run.run_workflow_async") as mock_run:
             mock_run.return_value = {"message": "Hello, World!"}
 
-            runner.invoke(app, [
-                "run", str(workflow_file),
-                "-i", "name=World",
-            ])
+            runner.invoke(
+                app,
+                [
+                    "run",
+                    str(workflow_file),
+                    "-i",
+                    "name=World",
+                ],
+            )
 
             # Check the mock was called
             assert mock_run.called
@@ -250,10 +260,15 @@ output:
         with patch("copilot_conductor.cli.run.run_workflow_async") as mock_run:
             mock_run.return_value = {"result": "done"}
 
-            runner.invoke(app, [
-                "run", str(workflow_file),
-                "--provider", "copilot",
-            ])
+            runner.invoke(
+                app,
+                [
+                    "run",
+                    str(workflow_file),
+                    "--provider",
+                    "copilot",
+                ],
+            )
 
             # Verify provider was passed
             assert mock_run.called

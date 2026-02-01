@@ -17,13 +17,16 @@ from copilot_conductor.providers.base import AgentOutput
 def _verbose_log(message: str, style: str = "dim") -> None:
     """Lazy import wrapper for verbose_log to avoid circular imports."""
     from copilot_conductor.cli.run import verbose_log
+
     verbose_log(message, style)
 
 
 def _verbose_log_section(title: str, content: str) -> None:
     """Lazy import wrapper for verbose_log_section to avoid circular imports."""
     from copilot_conductor.cli.run import verbose_log_section
+
     verbose_log_section(title, content)
+
 
 if TYPE_CHECKING:
     from copilot_conductor.config.schema import AgentDef

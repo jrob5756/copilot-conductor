@@ -102,9 +102,7 @@ class LimitEnforcer:
                 agent_history=self.execution_history.copy(),
             )
 
-    def check_parallel_group_iteration(
-        self, group_name: str, agent_count: int
-    ) -> None:
+    def check_parallel_group_iteration(self, group_name: str, agent_count: int) -> None:
         """Check iteration limit before parallel group execution.
 
         This checks if all agents in the parallel group can execute without
@@ -161,7 +159,7 @@ class LimitEnforcer:
         """
         if self.start_time is None:
             return
-        
+
         # No timeout if not set
         if self.timeout_seconds is None:
             return
@@ -171,8 +169,7 @@ class LimitEnforcer:
             raise ConductorTimeoutError(
                 f"Workflow exceeded timeout ({self.timeout_seconds}s)",
                 suggestion=(
-                    "Increase timeout_seconds in workflow.limits or optimize "
-                    "agent execution time"
+                    "Increase timeout_seconds in workflow.limits or optimize agent execution time"
                 ),
                 elapsed_seconds=elapsed,
                 timeout_seconds=float(self.timeout_seconds),
@@ -210,7 +207,7 @@ class LimitEnforcer:
         Uses asyncio.timeout() to enforce the timeout limit. If the
         timeout is exceeded, converts the asyncio.TimeoutError to a
         ConductorTimeoutError with context information.
-        
+
         If timeout_seconds is None, no timeout is enforced.
 
         Usage:
@@ -239,17 +236,14 @@ class LimitEnforcer:
             raise ConductorTimeoutError(
                 f"Workflow exceeded timeout ({self.timeout_seconds}s)",
                 suggestion=(
-                    "Increase timeout_seconds in workflow.limits or optimize "
-                    "agent execution time"
+                    "Increase timeout_seconds in workflow.limits or optimize agent execution time"
                 ),
                 elapsed_seconds=elapsed,
                 timeout_seconds=float(self.timeout_seconds),
                 current_agent=self.current_agent,
             ) from None
 
-    async def wait_for_with_timeout(
-        self, coro: Any, operation_name: str = "operation"
-    ) -> Any:
+    async def wait_for_with_timeout(self, coro: Any, operation_name: str = "operation") -> Any:
         """Execute a coroutine with timeout enforcement.
 
         Uses asyncio.wait_for with the remaining timeout. This is useful
@@ -267,14 +261,14 @@ class LimitEnforcer:
             ConductorTimeoutError: If timeout exceeded.
         """
         remaining = self.get_remaining_timeout()
-        
+
         # No timeout if not set
         if remaining is None:
             return await coro
-        
+
         try:
             return await asyncio.wait_for(coro, timeout=remaining)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             elapsed = time.monotonic() - self.start_time if self.start_time else 0
             raise ConductorTimeoutError(
                 f"Timeout during {operation_name} ({self.timeout_seconds}s limit)",

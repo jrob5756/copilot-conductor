@@ -542,10 +542,10 @@ class TestParallelGroupContextAccess:
         """Test that parallel group outputs are correctly structured in accumulate mode."""
         ctx = WorkflowContext()
         ctx.set_workflow_inputs({"goal": "test"})
-        
+
         # Store a regular agent output
         ctx.store("planner", {"plan": "step 1"})
-        
+
         # Store a parallel group output
         parallel_output = {
             "outputs": {
@@ -555,13 +555,13 @@ class TestParallelGroupContextAccess:
             "errors": {},
         }
         ctx.store("parallel_research", parallel_output)
-        
+
         # Build context
         agent_ctx = ctx.build_for_agent("summarizer", [], mode="accumulate")
-        
+
         # Regular agent should be wrapped in output
         assert agent_ctx["planner"]["output"]["plan"] == "step 1"
-        
+
         # Parallel group should NOT be wrapped - direct access to outputs/errors
         assert "outputs" in agent_ctx["parallel_research"]
         assert "errors" in agent_ctx["parallel_research"]
@@ -573,7 +573,7 @@ class TestParallelGroupContextAccess:
         """Test that parallel group is correctly structured in last_only mode."""
         ctx = WorkflowContext()
         ctx.store("agent1", {"result": "first"})
-        
+
         parallel_output = {
             "outputs": {
                 "validator1": {"valid": True},
@@ -582,9 +582,9 @@ class TestParallelGroupContextAccess:
             "errors": {},
         }
         ctx.store("parallel_validation", parallel_output)
-        
+
         agent_ctx = ctx.build_for_agent("decision", [], mode="last_only")
-        
+
         # Should only have the parallel group (last agent)
         assert "agent1" not in agent_ctx
         assert "parallel_validation" in agent_ctx
@@ -593,7 +593,7 @@ class TestParallelGroupContextAccess:
     def test_explicit_mode_parallel_group_all_outputs(self) -> None:
         """Test explicit mode referencing all parallel outputs."""
         ctx = WorkflowContext()
-        
+
         parallel_output = {
             "outputs": {
                 "checker1": {"status": "pass"},
@@ -602,20 +602,20 @@ class TestParallelGroupContextAccess:
             "errors": {},
         }
         ctx.store("parallel_checks", parallel_output)
-        
+
         agent_ctx = ctx.build_for_agent(
             "reporter",
             ["parallel_checks.outputs"],
             mode="explicit",
         )
-        
+
         assert agent_ctx["parallel_checks"]["outputs"]["checker1"]["status"] == "pass"
         assert agent_ctx["parallel_checks"]["outputs"]["checker2"]["status"] == "fail"
 
     def test_explicit_mode_parallel_group_specific_agent(self) -> None:
         """Test explicit mode referencing specific agent in parallel group."""
         ctx = WorkflowContext()
-        
+
         parallel_output = {
             "outputs": {
                 "agent_a": {"data": "value_a", "extra": "ignored"},
@@ -624,13 +624,13 @@ class TestParallelGroupContextAccess:
             "errors": {},
         }
         ctx.store("my_parallel", parallel_output)
-        
+
         agent_ctx = ctx.build_for_agent(
             "consumer",
             ["my_parallel.outputs.agent_a"],
             mode="explicit",
         )
-        
+
         assert agent_ctx["my_parallel"]["outputs"]["agent_a"]["data"] == "value_a"
         assert agent_ctx["my_parallel"]["outputs"]["agent_a"]["extra"] == "ignored"
         # agent_b should not be in context
@@ -639,7 +639,7 @@ class TestParallelGroupContextAccess:
     def test_explicit_mode_parallel_group_specific_field(self) -> None:
         """Test explicit mode referencing specific field from parallel agent."""
         ctx = WorkflowContext()
-        
+
         parallel_output = {
             "outputs": {
                 "analyzer": {"score": 95, "details": "good", "notes": "extra"},
@@ -647,13 +647,13 @@ class TestParallelGroupContextAccess:
             "errors": {},
         }
         ctx.store("analysis_group", parallel_output)
-        
+
         agent_ctx = ctx.build_for_agent(
             "scorer",
             ["analysis_group.outputs.analyzer.score"],
             mode="explicit",
         )
-        
+
         assert agent_ctx["analysis_group"]["outputs"]["analyzer"]["score"] == 95
         # Other fields should not be present
         assert "details" not in agent_ctx["analysis_group"]["outputs"]["analyzer"]
@@ -662,7 +662,7 @@ class TestParallelGroupContextAccess:
     def test_explicit_mode_parallel_group_errors(self) -> None:
         """Test explicit mode accessing parallel group errors."""
         ctx = WorkflowContext()
-        
+
         parallel_output = {
             "outputs": {
                 "worker1": {"result": "success"},
@@ -677,13 +677,13 @@ class TestParallelGroupContextAccess:
             },
         }
         ctx.store("workers", parallel_output)
-        
+
         agent_ctx = ctx.build_for_agent(
             "error_handler",
             ["workers.errors"],
             mode="explicit",
         )
-        
+
         assert "errors" in agent_ctx["workers"]
         assert "worker2" in agent_ctx["workers"]["errors"]
         assert agent_ctx["workers"]["errors"]["worker2"]["message"] == "Invalid input"
@@ -691,7 +691,7 @@ class TestParallelGroupContextAccess:
     def test_explicit_mode_optional_parallel_agent_missing(self) -> None:
         """Test optional reference to missing parallel agent."""
         ctx = WorkflowContext()
-        
+
         parallel_output = {
             "outputs": {
                 "existing": {"data": "value"},
@@ -699,14 +699,14 @@ class TestParallelGroupContextAccess:
             "errors": {},
         }
         ctx.store("group1", parallel_output)
-        
+
         # Should not raise even though 'missing' doesn't exist
         agent_ctx = ctx.build_for_agent(
             "consumer",
             ["group1.outputs.missing?"],
             mode="explicit",
         )
-        
+
         # group1.outputs should exist but without 'missing'
         if "group1" in agent_ctx and "outputs" in agent_ctx["group1"]:
             assert "missing" not in agent_ctx["group1"]["outputs"]
@@ -714,7 +714,7 @@ class TestParallelGroupContextAccess:
     def test_explicit_mode_optional_parallel_field_missing(self) -> None:
         """Test optional reference to missing field in parallel agent."""
         ctx = WorkflowContext()
-        
+
         parallel_output = {
             "outputs": {
                 "agent1": {"field_a": "value"},
@@ -722,14 +722,14 @@ class TestParallelGroupContextAccess:
             "errors": {},
         }
         ctx.store("group1", parallel_output)
-        
+
         # Should not raise even though 'missing_field' doesn't exist
         agent_ctx = ctx.build_for_agent(
             "consumer",
             ["group1.outputs.agent1.missing_field?"],
             mode="explicit",
         )
-        
+
         # Agent1 might not be in context since the field was missing
         # and optional
         if "group1" in agent_ctx and "outputs" in agent_ctx["group1"]:
@@ -739,7 +739,7 @@ class TestParallelGroupContextAccess:
     def test_explicit_mode_required_parallel_agent_missing_raises(self) -> None:
         """Test that missing required parallel agent raises error."""
         ctx = WorkflowContext()
-        
+
         parallel_output = {
             "outputs": {
                 "existing": {"data": "value"},
@@ -747,7 +747,7 @@ class TestParallelGroupContextAccess:
             "errors": {},
         }
         ctx.store("group1", parallel_output)
-        
+
         with pytest.raises(KeyError, match="Missing key/agent 'missing' in outputs of 'group1'"):
             ctx.build_for_agent(
                 "consumer",
@@ -758,7 +758,7 @@ class TestParallelGroupContextAccess:
     def test_explicit_mode_required_parallel_field_missing_raises(self) -> None:
         """Test that missing required field from parallel agent raises error."""
         ctx = WorkflowContext()
-        
+
         parallel_output = {
             "outputs": {
                 "agent1": {"field_a": "value"},
@@ -766,7 +766,7 @@ class TestParallelGroupContextAccess:
             "errors": {},
         }
         ctx.store("group1", parallel_output)
-        
+
         with pytest.raises(KeyError, match="Missing field 'missing_field'"):
             ctx.build_for_agent(
                 "consumer",
@@ -779,7 +779,7 @@ class TestParallelGroupContextAccess:
         ctx = WorkflowContext()
         ctx.set_workflow_inputs({"input": "test"})
         ctx.store("agent1", {"result": "normal"})
-        
+
         parallel_output = {
             "outputs": {
                 "p1": {"value": 1},
@@ -788,12 +788,12 @@ class TestParallelGroupContextAccess:
             "errors": {},
         }
         ctx.store("parallel_group", parallel_output)
-        
+
         template_ctx = ctx.get_for_template()
-        
+
         # Regular agent wrapped in output
         assert template_ctx["agent1"]["output"]["result"] == "normal"
-        
+
         # Parallel group should have direct structure
         assert template_ctx["parallel_group"]["outputs"]["p1"]["value"] == 1
         assert template_ctx["parallel_group"]["outputs"]["p2"]["value"] == 2
@@ -803,7 +803,7 @@ class TestParallelGroupContextAccess:
         ctx = WorkflowContext()
         ctx.set_workflow_inputs({"goal": "test"})
         ctx.store("planner", {"plan": "step 1"})
-        
+
         parallel_output = {
             "outputs": {
                 "researcher": {"finding": "data"},
@@ -811,7 +811,7 @@ class TestParallelGroupContextAccess:
             "errors": {},
         }
         ctx.store("research_group", parallel_output)
-        
+
         agent_ctx = ctx.build_for_agent(
             "summarizer",
             [
@@ -821,7 +821,7 @@ class TestParallelGroupContextAccess:
             ],
             mode="explicit",
         )
-        
+
         assert agent_ctx["workflow"]["input"]["goal"] == "test"
         assert agent_ctx["planner"]["output"]["plan"] == "step 1"
         assert agent_ctx["research_group"]["outputs"]["researcher"]["finding"] == "data"
@@ -834,10 +834,10 @@ class TestContextTrimmingWithParallelOutputs:
         """Test that token estimation includes parallel group outputs."""
         ctx = WorkflowContext()
         ctx.set_workflow_inputs({"goal": "test"})
-        
+
         # Store regular agent output
         ctx.store("planner", {"plan": "step 1" * 100})
-        
+
         # Store parallel group output
         parallel_output = {
             "outputs": {
@@ -847,11 +847,11 @@ class TestContextTrimmingWithParallelOutputs:
             "errors": {},
         }
         ctx.store("research_group", parallel_output)
-        
+
         # Token estimate should include all content
         tokens = ctx.estimate_context_tokens()
         assert tokens > 0
-        
+
         # Should include parallel output content
         full_ctx = ctx.get_for_template()
         assert "research_group" in full_ctx
@@ -861,11 +861,11 @@ class TestContextTrimmingWithParallelOutputs:
         """Test drop_oldest trimming strategy with parallel group outputs."""
         ctx = WorkflowContext()
         ctx.set_workflow_inputs({"goal": "test"})
-        
+
         # Store a regular agent output (oldest)
         ctx.store("agent1", {"data": "x" * 1000})
         ctx.execution_history.append("agent1")
-        
+
         # Store parallel group output
         parallel_output = {
             "outputs": {
@@ -876,36 +876,36 @@ class TestContextTrimmingWithParallelOutputs:
         }
         ctx.store("parallel_group", parallel_output)
         ctx.execution_history.append("parallel_group")
-        
+
         # Store another regular agent output (newest)
         ctx.store("agent2", {"data": "w" * 100})
         ctx.execution_history.append("agent2")
-        
+
         initial_tokens = ctx.estimate_context_tokens()
-        
+
         # Trim to a smaller size
         max_tokens = initial_tokens // 3
         final_tokens = ctx.trim_context(max_tokens, strategy="drop_oldest")
-        
+
         # Should have dropped oldest agents
         assert final_tokens <= max_tokens
-        
+
         # The newest agent should still be present
         assert "agent2" in ctx.agent_outputs
 
     def test_trim_truncate_with_parallel_outputs(self) -> None:
         """Test truncate trimming strategy with parallel group outputs.
-        
+
         Note: The truncate strategy only handles flat string values,
         not nested structures. For parallel outputs, drop_oldest is recommended.
         """
         ctx = WorkflowContext()
         ctx.set_workflow_inputs({"goal": "test"})
-        
+
         # Store a regular agent with flat output
         ctx.store("agent1", {"data": "x" * 1000})
         ctx.execution_history.append("agent1")
-        
+
         # Store parallel group output with nested structure
         parallel_output = {
             "outputs": {
@@ -916,13 +916,13 @@ class TestContextTrimmingWithParallelOutputs:
         }
         ctx.store("research_group", parallel_output)
         ctx.execution_history.append("research_group")
-        
+
         initial_tokens = ctx.estimate_context_tokens()
-        
+
         # Trim to a smaller size
         max_tokens = initial_tokens // 3
         final_tokens = ctx.trim_context(max_tokens, strategy="truncate")
-        
+
         # Truncate only works on flat string values, so it may not achieve
         # the target if most content is nested
         # Just verify it doesn't crash and doesn't increase tokens
@@ -931,7 +931,7 @@ class TestContextTrimmingWithParallelOutputs:
     def test_trim_preserves_parallel_structure(self) -> None:
         """Test that trimming preserves parallel output structure."""
         ctx = WorkflowContext()
-        
+
         # Store parallel group output
         parallel_output = {
             "outputs": {
@@ -949,13 +949,13 @@ class TestContextTrimmingWithParallelOutputs:
         }
         ctx.store("parallel_group", parallel_output)
         ctx.execution_history.append("parallel_group")
-        
+
         initial_tokens = ctx.estimate_context_tokens()
-        
+
         # Trim aggressively
         max_tokens = initial_tokens // 4
         ctx.trim_context(max_tokens, strategy="truncate")
-        
+
         # Parallel group should still exist with proper structure
         if "parallel_group" in ctx.agent_outputs:
             pg_output = ctx.agent_outputs["parallel_group"]
@@ -964,7 +964,7 @@ class TestContextTrimmingWithParallelOutputs:
     def test_estimate_tokens_for_parallel_errors(self) -> None:
         """Test token estimation includes error information in parallel outputs."""
         ctx = WorkflowContext()
-        
+
         # Store parallel group with errors
         parallel_output = {
             "outputs": {
@@ -986,12 +986,12 @@ class TestContextTrimmingWithParallelOutputs:
             },
         }
         ctx.store("parallel_validators", parallel_output)
-        
+
         tokens = ctx.estimate_context_tokens()
-        
+
         # Should include error messages in token count
         assert tokens > 0
-        
+
         # Verify error content is in context
         full_ctx = ctx.get_for_template()
         assert "parallel_validators" in full_ctx
@@ -1002,7 +1002,7 @@ class TestContextTrimmingWithParallelOutputs:
     def test_trim_handles_empty_parallel_outputs(self) -> None:
         """Test trimming handles parallel groups with empty outputs."""
         ctx = WorkflowContext()
-        
+
         # Store parallel group with only errors (all agents failed)
         parallel_output = {
             "outputs": {},
@@ -1017,16 +1017,15 @@ class TestContextTrimmingWithParallelOutputs:
         }
         ctx.store("failed_group", parallel_output)
         ctx.execution_history.append("failed_group")
-        
+
         # Store another agent
         ctx.store("recovery", {"status": "recovered"})
         ctx.execution_history.append("recovery")
-        
+
         initial_tokens = ctx.estimate_context_tokens()
         max_tokens = initial_tokens // 2
-        
+
         # Should not crash with empty outputs dict
         final_tokens = ctx.trim_context(max_tokens, strategy="drop_oldest")
-        
-        assert final_tokens <= max_tokens
 
+        assert final_tokens <= max_tokens

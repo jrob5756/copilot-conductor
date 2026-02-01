@@ -24,18 +24,21 @@ from copilot_conductor.gates.human import GateResult, HumanGateHandler
 def _verbose_log(message: str, style: str = "dim") -> None:
     """Lazy import wrapper for verbose_log to avoid circular imports."""
     from copilot_conductor.cli.run import verbose_log
+
     verbose_log(message, style)
 
 
 def _verbose_log_timing(operation: str, elapsed: float) -> None:
     """Lazy import wrapper for verbose_log_timing to avoid circular imports."""
     from copilot_conductor.cli.run import verbose_log_timing
+
     verbose_log_timing(operation, elapsed)
 
 
 def _verbose_log_agent_start(agent_name: str, iteration: int) -> None:
     """Lazy import wrapper for verbose_log_agent_start to avoid circular imports."""
     from copilot_conductor.cli.run import verbose_log_agent_start
+
     verbose_log_agent_start(agent_name, iteration)
 
 
@@ -49,6 +52,7 @@ def _verbose_log_agent_complete(
 ) -> None:
     """Lazy import wrapper for verbose_log_agent_complete to avoid circular imports."""
     from copilot_conductor.cli.run import verbose_log_agent_complete
+
     verbose_log_agent_complete(
         agent_name, elapsed, model=model, tokens=tokens, output_keys=output_keys
     )
@@ -57,12 +61,14 @@ def _verbose_log_agent_complete(
 def _verbose_log_route(target: str) -> None:
     """Lazy import wrapper for verbose_log_route to avoid circular imports."""
     from copilot_conductor.cli.run import verbose_log_route
+
     verbose_log_route(target)
 
 
 def _verbose_log_parallel_start(group_name: str, agent_count: int) -> None:
     """Lazy import wrapper for verbose_log_parallel_start to avoid circular imports."""
     from copilot_conductor.cli.run import verbose_log_parallel_start
+
     verbose_log_parallel_start(group_name, agent_count)
 
 
@@ -75,9 +81,8 @@ def _verbose_log_parallel_agent_complete(
 ) -> None:
     """Lazy import wrapper for verbose_log_parallel_agent_complete to avoid circular imports."""
     from copilot_conductor.cli.run import verbose_log_parallel_agent_complete
-    verbose_log_parallel_agent_complete(
-        agent_name, elapsed, model=model, tokens=tokens
-    )
+
+    verbose_log_parallel_agent_complete(agent_name, elapsed, model=model, tokens=tokens)
 
 
 def _verbose_log_parallel_agent_failed(
@@ -88,9 +93,8 @@ def _verbose_log_parallel_agent_failed(
 ) -> None:
     """Lazy import wrapper for verbose_log_parallel_agent_failed to avoid circular imports."""
     from copilot_conductor.cli.run import verbose_log_parallel_agent_failed
-    verbose_log_parallel_agent_failed(
-        agent_name, elapsed, exception_type, message
-    )
+
+    verbose_log_parallel_agent_failed(agent_name, elapsed, exception_type, message)
 
 
 def _verbose_log_parallel_summary(
@@ -101,9 +105,8 @@ def _verbose_log_parallel_summary(
 ) -> None:
     """Lazy import wrapper for verbose_log_parallel_summary to avoid circular imports."""
     from copilot_conductor.cli.run import verbose_log_parallel_summary
-    verbose_log_parallel_summary(
-        group_name, success_count, failure_count, total_elapsed
-    )
+
+    verbose_log_parallel_summary(group_name, success_count, failure_count, total_elapsed)
 
 
 def _verbose_log_for_each_start(
@@ -114,6 +117,7 @@ def _verbose_log_for_each_start(
 ) -> None:
     """Lazy import wrapper for verbose_log_for_each_start to avoid circular imports."""
     from copilot_conductor.cli.run import verbose_log_for_each_start
+
     verbose_log_for_each_start(group_name, item_count, max_concurrent, failure_mode)
 
 
@@ -125,6 +129,7 @@ def _verbose_log_for_each_item_complete(
 ) -> None:
     """Lazy import wrapper for verbose_log_for_each_item_complete to avoid circular imports."""
     from copilot_conductor.cli.run import verbose_log_for_each_item_complete
+
     verbose_log_for_each_item_complete(item_key, elapsed, tokens=tokens)
 
 
@@ -136,6 +141,7 @@ def _verbose_log_for_each_item_failed(
 ) -> None:
     """Lazy import wrapper for verbose_log_for_each_item_failed to avoid circular imports."""
     from copilot_conductor.cli.run import verbose_log_for_each_item_failed
+
     verbose_log_for_each_item_failed(item_key, elapsed, exception_type, message)
 
 
@@ -147,9 +153,9 @@ def _verbose_log_for_each_summary(
 ) -> None:
     """Lazy import wrapper for verbose_log_for_each_summary to avoid circular imports."""
     from copilot_conductor.cli.run import verbose_log_for_each_summary
-    verbose_log_for_each_summary(
-        group_name, success_count, failure_count, total_elapsed
-    )
+
+    verbose_log_for_each_summary(group_name, success_count, failure_count, total_elapsed)
+
 
 if TYPE_CHECKING:
     from copilot_conductor.config.schema import AgentDef, ForEachDef, ParallelGroup, WorkflowConfig
@@ -434,7 +440,7 @@ class WorkflowEngine:
                         _verbose_log(
                             f"[{iteration}] Executing for-each group: {for_each_group.name} "
                             f"(source: {for_each_group.source}, {for_each_group.failure_mode} mode)",
-                            style="bold cyan"
+                            style="bold cyan",
                         )
 
                         # Trim context if max_tokens is configured
@@ -444,14 +450,13 @@ class WorkflowEngine:
                         _group_start = _time.time()
                         for_each_output = await self.limits.wait_for_with_timeout(
                             self._execute_for_each_group(for_each_group),
-                            operation_name=f"for-each group '{for_each_group.name}'"
+                            operation_name=f"for-each group '{for_each_group.name}'",
                         )
                         _group_elapsed = _time.time() - _group_start
 
                         # Verbose: Log for-each group completion
                         _verbose_log_timing(
-                            f"For-each group '{for_each_group.name}' completed",
-                            _group_elapsed
+                            f"For-each group '{for_each_group.name}' completed", _group_elapsed
                         )
 
                         # Store for-each group output in context
@@ -473,7 +478,9 @@ class WorkflowEngine:
                         self.context.store(for_each_group.name, for_each_output_dict)
 
                         # Record execution: count all items that executed
-                        self.limits.record_execution(for_each_group.name, count=for_each_output.count)
+                        self.limits.record_execution(
+                            for_each_group.name, count=for_each_output.count
+                        )
 
                         # Check timeout after for-each group
                         self.limits.check_timeout()
@@ -506,7 +513,7 @@ class WorkflowEngine:
                             f"[{iteration}] Executing parallel group: {parallel_group.name} "
                             f"({len(parallel_group.agents)} agents, "
                             f"{parallel_group.failure_mode} mode)",
-                            style="bold cyan"
+                            style="bold cyan",
                         )
 
                         # Trim context if max_tokens is configured
@@ -516,14 +523,13 @@ class WorkflowEngine:
                         _group_start = _time.time()
                         parallel_output = await self.limits.wait_for_with_timeout(
                             self._execute_parallel_group(parallel_group),
-                            operation_name=f"parallel group '{parallel_group.name}'"
+                            operation_name=f"parallel group '{parallel_group.name}'",
                         )
                         _group_elapsed = _time.time() - _group_start
 
                         # Verbose: Log parallel group completion
                         _verbose_log_timing(
-                            f"Parallel group '{parallel_group.name}' completed",
-                            _group_elapsed
+                            f"Parallel group '{parallel_group.name}' completed", _group_elapsed
                         )
 
                         # Store parallel group output in context
@@ -589,10 +595,13 @@ class WorkflowEngine:
                             )
 
                             # Store gate result in context
-                            self.context.store(agent.name, {
-                                "selected": gate_result.selected_option.value,
-                                **gate_result.additional_input,
-                            })
+                            self.context.store(
+                                agent.name,
+                                {
+                                    "selected": gate_result.selected_option.value,
+                                    **gate_result.additional_input,
+                                },
+                            )
 
                             # Record human gate as executed
                             self.limits.record_execution(agent.name)
@@ -618,9 +627,7 @@ class WorkflowEngine:
 
                         # Verbose: Log agent output summary
                         output_keys = (
-                            list(output.content.keys())
-                            if isinstance(output.content, dict)
-                            else []
+                            list(output.content.keys()) if isinstance(output.content, dict) else []
                         )
                         _verbose_log_agent_complete(
                             agent.name,
@@ -827,7 +834,7 @@ class WorkflowEngine:
         if len(parts) < 3:
             raise ExecutionError(
                 f"Invalid source reference format: '{source}'",
-                suggestion="Source must have at least 3 parts (e.g., 'agent_name.output.field')"
+                suggestion="Source must have at least 3 parts (e.g., 'agent_name.output.field')",
             )
 
         # First part is the agent name
@@ -841,12 +848,12 @@ class WorkflowEngine:
                 raise ExecutionError(
                     f"Agent '{agent_name}' output not found for source '{source}'",
                     suggestion=f"Agent '{agent_name}' must execute before this for-each group. "
-                               f"Executed agents so far: {executed}"
+                    f"Executed agents so far: {executed}",
                 )
             else:
                 raise ExecutionError(
                     f"Agent '{agent_name}' output not found for source '{source}'",
-                    suggestion=f"Agent '{agent_name}' must execute before this for-each group"
+                    suggestion=f"Agent '{agent_name}' must execute before this for-each group",
                 )
 
         # Get the agent's raw output
@@ -855,9 +862,7 @@ class WorkflowEngine:
         # Check if this is a parallel/for-each group output
         # (has 'outputs' and 'errors' keys at top level)
         is_group_output = (
-            isinstance(raw_output, dict)
-            and "outputs" in raw_output
-            and "errors" in raw_output
+            isinstance(raw_output, dict) and "outputs" in raw_output and "errors" in raw_output
         )
 
         # Wrap regular agent outputs with {"output": ...}
@@ -875,22 +880,23 @@ class WorkflowEngine:
             path_traversed.append(part)
 
             if not isinstance(current, dict):
-                parent_path = '.'.join(path_traversed[:-1])
+                parent_path = ".".join(path_traversed[:-1])
                 raise ExecutionError(
                     f"Cannot navigate to '{part}' in source '{source}': "
                     f"'{parent_path}' is not a dictionary (type: {type(current).__name__})",
-                    suggestion=f"Check that '{parent_path}' returns a dictionary structure"
+                    suggestion=f"Check that '{parent_path}' returns a dictionary structure",
                 )
 
             if part not in current:
-                parent_path = '.'.join(path_traversed[:-1])
+                parent_path = ".".join(path_traversed[:-1])
                 available_keys = list(current.keys()) if isinstance(current, dict) else []
                 raise ExecutionError(
                     f"Field '{part}' not found in '{parent_path}' for source '{source}'",
                     suggestion=(
-                        f"Available keys: {available_keys}" if available_keys
+                        f"Available keys: {available_keys}"
+                        if available_keys
                         else f"Check the output structure of '{agent_name}'"
-                    )
+                    ),
                 )
 
             current = current[part]
@@ -899,7 +905,7 @@ class WorkflowEngine:
         if not isinstance(current, (list, tuple)):
             raise ExecutionError(
                 f"Source '{source}' resolved to {type(current).__name__}, expected list or tuple",
-                suggestion=f"Ensure '{source}' returns an array/list from the agent output"
+                suggestion=f"Ensure '{source}' returns an array/list from the agent output",
             )
 
         return current
@@ -950,9 +956,7 @@ class WorkflowEngine:
         if key is not None:
             context["_key"] = key
 
-    async def _execute_parallel_group(
-        self, parallel_group: ParallelGroup
-    ) -> ParallelGroupOutput:
+    async def _execute_parallel_group(self, parallel_group: ParallelGroup) -> ParallelGroupOutput:
         """Execute agents in parallel with context isolation.
 
         This method:
@@ -1039,9 +1043,9 @@ class WorkflowEngine:
                 )
 
                 # Wrap exception with agent name and timing for better error reporting
-                if not hasattr(e, '_parallel_agent_name'):
+                if not hasattr(e, "_parallel_agent_name"):
                     e._parallel_agent_name = agent.name  # type: ignore
-                if not hasattr(e, '_parallel_agent_elapsed'):
+                if not hasattr(e, "_parallel_agent_elapsed"):
                     e._parallel_agent_elapsed = _agent_elapsed  # type: ignore
                 raise
 
@@ -1061,7 +1065,7 @@ class WorkflowEngine:
 
             except Exception as e:
                 # Extract agent name and exception type from wrapped exception
-                agent_name = getattr(e, '_parallel_agent_name', 'unknown')
+                agent_name = getattr(e, "_parallel_agent_name", "unknown")
                 exception_type = type(e).__name__
 
                 # Create error message with exception type and mode
@@ -1196,9 +1200,7 @@ class WorkflowEngine:
 
         return parallel_output
 
-    def _extract_key_from_item(
-        self, item: Any, key_by_path: str, fallback_index: int
-    ) -> str:
+    def _extract_key_from_item(self, item: Any, key_by_path: str, fallback_index: int) -> str:
         """Extract a key from an item using a dotted path.
 
         Args:
@@ -1224,13 +1226,11 @@ class WorkflowEngine:
             _verbose_log(
                 f"Warning: Failed to extract key from item {fallback_index} using '{key_by_path}': {e}. "
                 f"Falling back to index-based key.",
-                style="dim yellow"
+                style="dim yellow",
             )
             return str(fallback_index)
 
-    async def _execute_for_each_group(
-        self, for_each_group: ForEachDef
-    ) -> ForEachGroupOutput:
+    async def _execute_for_each_group(self, for_each_group: ForEachDef) -> ForEachGroupOutput:
         """Execute for-each group with batched parallel execution.
 
         This method:
@@ -1260,7 +1260,7 @@ class WorkflowEngine:
         if not items:
             _verbose_log(
                 f"For-each group '{for_each_group.name}': Empty array, skipping execution",
-                style="dim yellow"
+                style="dim yellow",
             )
             # Return empty output with appropriate structure
             empty_outputs = {} if for_each_group.key_by else []
@@ -1284,16 +1284,12 @@ class WorkflowEngine:
         item_keys: list[str] = []
         if for_each_group.key_by:
             for idx, item in enumerate(items):
-                item_keys.append(
-                    self._extract_key_from_item(item, for_each_group.key_by, idx)
-                )
+                item_keys.append(self._extract_key_from_item(item, for_each_group.key_by, idx))
         else:
             # Use index-based keys
             item_keys = [str(i) for i in range(len(items))]
 
-        async def execute_single_item(
-            item: Any, index: int, key: str
-        ) -> tuple[str, Any]:
+        async def execute_single_item(item: Any, index: int, key: str) -> tuple[str, Any]:
             """Execute a single for-each item with injected loop variables.
 
             Returns:
@@ -1344,17 +1340,15 @@ class WorkflowEngine:
                 )
 
                 # Attach metadata for error reporting
-                if not hasattr(e, '_for_each_item_key'):
+                if not hasattr(e, "_for_each_item_key"):
                     e._for_each_item_key = key  # type: ignore
-                if not hasattr(e, '_for_each_item_elapsed'):
+                if not hasattr(e, "_for_each_item_elapsed"):
                     e._for_each_item_elapsed = _item_elapsed  # type: ignore
                 raise
 
         # Process items in sequential batches
         for_each_output = ForEachGroupOutput(
-            outputs={} if for_each_group.key_by else [],
-            errors={},
-            count=len(items)
+            outputs={} if for_each_group.key_by else [], errors={}, count=len(items)
         )
 
         # Determine batch size
@@ -1369,7 +1363,7 @@ class WorkflowEngine:
 
             _verbose_log(
                 f"Batch {batch_idx + 1}/{batch_count}: Processing items {batch_start_idx} to {batch_end_idx - 1}",
-                style="dim cyan"
+                style="dim cyan",
             )
 
             # Execute based on failure mode
@@ -1392,7 +1386,7 @@ class WorkflowEngine:
 
                 except Exception as e:
                     # Extract item key from wrapped exception
-                    item_key = getattr(e, '_for_each_item_key', 'unknown')
+                    item_key = getattr(e, "_for_each_item_key", "unknown")
                     exception_type = type(e).__name__
 
                     error_msg = (
@@ -1468,7 +1462,11 @@ class WorkflowEngine:
 
         # Verbose: Log summary
         _group_elapsed = _time.time() - _group_start
-        success_count = len(for_each_output.outputs) if isinstance(for_each_output.outputs, dict) else len(for_each_output.outputs)  # type: ignore
+        success_count = (
+            len(for_each_output.outputs)
+            if isinstance(for_each_output.outputs, dict)
+            else len(for_each_output.outputs)
+        )  # type: ignore
         failure_count = len(for_each_output.errors)
         _verbose_log_for_each_summary(
             for_each_group.name,
@@ -1775,11 +1773,13 @@ class WorkflowEngine:
 
             if parallel_group.routes:
                 for route in parallel_group.routes:
-                    routes_info.append({
-                        "to": route.to,
-                        "when": route.when,
-                        "is_conditional": route.when is not None,
-                    })
+                    routes_info.append(
+                        {
+                            "to": route.to,
+                            "when": route.when,
+                            "is_conditional": route.when is not None,
+                        }
+                    )
                     route_targets.append(route.to)
 
             # Build step for parallel group
@@ -1809,21 +1809,25 @@ class WorkflowEngine:
 
             if agent.routes:
                 for route in agent.routes:
-                    routes_info.append({
-                        "to": route.to,
-                        "when": route.when,
-                        "is_conditional": route.when is not None,
-                    })
+                    routes_info.append(
+                        {
+                            "to": route.to,
+                            "when": route.when,
+                            "is_conditional": route.when is not None,
+                        }
+                    )
                     route_targets.append(route.to)
             elif agent.options:
                 # Human gate with options
                 for option in agent.options:
-                    routes_info.append({
-                        "to": option.route,
-                        "when": f"selection == '{option.value}'",
-                        "is_conditional": True,
-                        "label": option.label,
-                    })
+                    routes_info.append(
+                        {
+                            "to": option.route,
+                            "when": f"selection == '{option.value}'",
+                            "is_conditional": True,
+                            "label": option.label,
+                        }
+                    )
                     route_targets.append(option.route)
 
             # Build step

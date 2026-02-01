@@ -137,9 +137,7 @@ class TestWorkflowEngineBasic:
     """Basic WorkflowEngine tests."""
 
     @pytest.mark.asyncio
-    async def test_simple_workflow_execution(
-        self, simple_workflow_config: WorkflowConfig
-    ) -> None:
+    async def test_simple_workflow_execution(self, simple_workflow_config: WorkflowConfig) -> None:
         """Test executing a simple single-agent workflow."""
 
         def mock_handler(agent, prompt, context):
@@ -379,9 +377,7 @@ class TestWorkflowEngineErrors:
     """Tests for error handling."""
 
     @pytest.mark.asyncio
-    async def test_missing_agent_raises_error(
-        self, simple_workflow_config: WorkflowConfig
-    ) -> None:
+    async def test_missing_agent_raises_error(self, simple_workflow_config: WorkflowConfig) -> None:
         """Test that missing entry point agent raises error."""
         simple_workflow_config.workflow.entry_point = "nonexistent"
         # Need to bypass the validation since we're modifying after creation
@@ -393,13 +389,13 @@ class TestWorkflowEngineErrors:
         provider = CopilotProvider(mock_handler=mock_handler)
         engine = WorkflowEngine(simple_workflow_config, provider)
 
-        with pytest.raises(ExecutionError, match="Agent, parallel group, or for-each group not found"):
+        with pytest.raises(
+            ExecutionError, match="Agent, parallel group, or for-each group not found"
+        ):
             await engine.run({"question": "test"})
 
     @pytest.mark.asyncio
-    async def test_execution_summary(
-        self, multi_agent_workflow_config: WorkflowConfig
-    ) -> None:
+    async def test_execution_summary(self, multi_agent_workflow_config: WorkflowConfig) -> None:
         """Test getting execution summary."""
 
         def mock_handler(agent, prompt, context):
@@ -952,9 +948,7 @@ class TestWorkflowEngineHumanGates:
             return {}
 
         provider = CopilotProvider(mock_handler=mock_handler)
-        engine = WorkflowEngine(
-            human_gate_workflow_config, provider, skip_gates=True
-        )
+        engine = WorkflowEngine(human_gate_workflow_config, provider, skip_gates=True)
 
         result = await engine.run({})
 
@@ -981,9 +975,7 @@ class TestWorkflowEngineHumanGates:
             return {}
 
         provider = CopilotProvider(mock_handler=mock_handler)
-        engine = WorkflowEngine(
-            human_gate_workflow_config, provider, skip_gates=True
-        )
+        engine = WorkflowEngine(human_gate_workflow_config, provider, skip_gates=True)
 
         result = await engine.run({})
 
@@ -1053,9 +1045,7 @@ class TestWorkflowEngineHumanGates:
             return {"published": True}
 
         provider = CopilotProvider(mock_handler=mock_handler)
-        engine = WorkflowEngine(
-            human_gate_workflow_config, provider, skip_gates=True
-        )
+        engine = WorkflowEngine(human_gate_workflow_config, provider, skip_gates=True)
 
         await engine.run({})
 
@@ -1309,15 +1299,13 @@ class TestWorkflowEngineContextTrimming:
         assert len(engine.context.agent_outputs["agent2"]["result"]) > 500
 
 
-
-
-
 class TestExecutionPlanWithParallelGroups:
     """Tests for execution plan generation with parallel groups."""
 
     def test_execution_plan_with_parallel_group(self) -> None:
         """Test execution plan includes parallel groups."""
         from unittest.mock import MagicMock
+
         mock_provider = MagicMock()
 
         workflow = WorkflowConfig(
@@ -1391,6 +1379,7 @@ class TestExecutionPlanWithParallelGroups:
     def test_execution_plan_parallel_group_as_entry(self) -> None:
         """Test execution plan with parallel group as entry point."""
         from unittest.mock import MagicMock
+
         mock_provider = MagicMock()
 
         workflow = WorkflowConfig(
@@ -1439,6 +1428,7 @@ class TestResolveArrayReference:
     def workflow_engine_with_context(self) -> WorkflowEngine:
         """Create a WorkflowEngine with pre-populated context."""
         from unittest.mock import MagicMock
+
         mock_provider = MagicMock()
 
         config = WorkflowConfig(
@@ -1461,23 +1451,21 @@ class TestResolveArrayReference:
         engine = WorkflowEngine(config, mock_provider)
 
         # Populate context with test data (stored directly, will be wrapped by resolution logic)
-        engine.context.store("finder", {
-            "kpis": [
-                {"kpi_id": "K1", "name": "Revenue"},
-                {"kpi_id": "K2", "name": "Profit"},
-                {"kpi_id": "K3", "name": "Growth"},
-            ],
-            "metadata": {
-                "total": 3
-            }
-        })
+        engine.context.store(
+            "finder",
+            {
+                "kpis": [
+                    {"kpi_id": "K1", "name": "Revenue"},
+                    {"kpi_id": "K2", "name": "Profit"},
+                    {"kpi_id": "K3", "name": "Growth"},
+                ],
+                "metadata": {"total": 3},
+            },
+        )
 
-        engine.context.store("nested_agent", {
-            "data": {
-                "items": ["item1", "item2", "item3"],
-                "count": 3
-            }
-        })
+        engine.context.store(
+            "nested_agent", {"data": {"items": ["item1", "item2", "item3"], "count": 3}}
+        )
 
         return engine
 
@@ -1504,9 +1492,7 @@ class TestResolveArrayReference:
     def test_resolve_empty_array(self, workflow_engine_with_context: WorkflowEngine):
         """Test resolution of empty array (should succeed)."""
         # Add agent with empty array output
-        workflow_engine_with_context.context.store("empty_agent", {
-            "items": []
-        })
+        workflow_engine_with_context.context.store("empty_agent", {"items": []})
 
         result = workflow_engine_with_context._resolve_array_reference("empty_agent.output.items")
 
@@ -1533,6 +1519,7 @@ class TestResolveArrayReference:
     def test_resolve_agent_not_found_no_executed_agents(self):
         """Test error when no agents have executed yet."""
         from unittest.mock import MagicMock
+
         mock_provider = MagicMock()
 
         config = WorkflowConfig(
@@ -1570,7 +1557,9 @@ class TestResolveArrayReference:
     def test_resolve_nested_field_not_found(self, workflow_engine_with_context: WorkflowEngine):
         """Test error when nested field doesn't exist."""
         with pytest.raises(ExecutionError) as exc_info:
-            workflow_engine_with_context._resolve_array_reference("nested_agent.output.data.missing")
+            workflow_engine_with_context._resolve_array_reference(
+                "nested_agent.output.data.missing"
+            )
 
         assert "Field 'missing' not found in 'nested_agent.output.data'" in str(exc_info.value)
         assert "Available keys:" in str(exc_info.value.suggestion)
@@ -1578,12 +1567,12 @@ class TestResolveArrayReference:
     def test_resolve_wrong_type_not_dict(self, workflow_engine_with_context: WorkflowEngine):
         """Test error when trying to navigate through non-dict value."""
         # Add agent with string output
-        workflow_engine_with_context.context.store("string_agent", {
-            "result": "just a string"
-        })
+        workflow_engine_with_context.context.store("string_agent", {"result": "just a string"})
 
         with pytest.raises(ExecutionError) as exc_info:
-            workflow_engine_with_context._resolve_array_reference("string_agent.output.result.items")
+            workflow_engine_with_context._resolve_array_reference(
+                "string_agent.output.result.items"
+            )
 
         assert "Cannot navigate to 'items'" in str(exc_info.value)
         assert "is not a dictionary (type: str)" in str(exc_info.value)
@@ -1594,16 +1583,13 @@ class TestResolveArrayReference:
             workflow_engine_with_context._resolve_array_reference("finder.output.metadata")
 
         assert "resolved to dict, expected list" in str(exc_info.value)
-        assert (
-            "Ensure 'finder.output.metadata' returns an array/list"
-            in str(exc_info.value.suggestion)
+        assert "Ensure 'finder.output.metadata' returns an array/list" in str(
+            exc_info.value.suggestion
         )
 
     def test_resolve_wrong_type_string(self, workflow_engine_with_context: WorkflowEngine):
         """Test error when resolved value is a string instead of list."""
-        workflow_engine_with_context.context.store("text_agent", {
-            "text": "not an array"
-        })
+        workflow_engine_with_context.context.store("text_agent", {"text": "not an array"})
 
         with pytest.raises(ExecutionError) as exc_info:
             workflow_engine_with_context._resolve_array_reference("text_agent.output.text")
@@ -1612,9 +1598,7 @@ class TestResolveArrayReference:
 
     def test_resolve_wrong_type_number(self, workflow_engine_with_context: WorkflowEngine):
         """Test error when resolved value is a number instead of list."""
-        workflow_engine_with_context.context.store("number_agent", {
-            "count": 42
-        })
+        workflow_engine_with_context.context.store("number_agent", {"count": 42})
 
         with pytest.raises(ExecutionError) as exc_info:
             workflow_engine_with_context._resolve_array_reference("number_agent.output.count")
@@ -1625,13 +1609,11 @@ class TestResolveArrayReference:
         self, workflow_engine_with_context: WorkflowEngine
     ):
         """Test that array resolution accepts tuples as valid array types."""
-        workflow_engine_with_context.context.store("tuple_agent", {
-            "items": ("item1", "item2", "item3")
-        })
-
-        result = workflow_engine_with_context._resolve_array_reference(
-            "tuple_agent.output.items"
+        workflow_engine_with_context.context.store(
+            "tuple_agent", {"items": ("item1", "item2", "item3")}
         )
+
+        result = workflow_engine_with_context._resolve_array_reference("tuple_agent.output.items")
 
         assert isinstance(result, tuple)
         assert len(result) == 3
@@ -1645,6 +1627,7 @@ class TestInjectLoopVariables:
     def workflow_engine(self) -> WorkflowEngine:
         """Create a basic WorkflowEngine for testing."""
         from unittest.mock import MagicMock
+
         mock_provider = MagicMock()
 
         config = WorkflowConfig(
@@ -1672,7 +1655,7 @@ class TestInjectLoopVariables:
             "workflow": {"input": {"goal": "test"}},
             "context": {"iteration": 1},
         }
-        
+
         item = {"kpi_id": "K1", "name": "Revenue"}
         workflow_engine._inject_loop_variables(
             context=context,
@@ -1680,18 +1663,18 @@ class TestInjectLoopVariables:
             item=item,
             index=0,
         )
-        
+
         # Verify loop variable was injected
         assert "kpi" in context
         assert context["kpi"] == {"kpi_id": "K1", "name": "Revenue"}
-        
+
         # Verify _index was injected
         assert "_index" in context
         assert context["_index"] == 0
-        
+
         # Verify _key was not injected (not provided)
         assert "_key" not in context
-        
+
         # Verify original context keys were preserved
         assert "workflow" in context
         assert context["workflow"]["input"]["goal"] == "test"
@@ -1702,7 +1685,7 @@ class TestInjectLoopVariables:
             "workflow": {"input": {}},
             "context": {"iteration": 1},
         }
-        
+
         item = {"kpi_id": "KPI_123", "value": 100}
         workflow_engine._inject_loop_variables(
             context=context,
@@ -1711,7 +1694,7 @@ class TestInjectLoopVariables:
             index=5,
             key="KPI_123",
         )
-        
+
         # Verify all three variables were injected
         assert context["kpi"] == {"kpi_id": "KPI_123", "value": 100}
         assert context["_index"] == 5
@@ -1720,14 +1703,14 @@ class TestInjectLoopVariables:
     def test_inject_loop_variables_with_string_item(self, workflow_engine: WorkflowEngine):
         """Test injection when item is a simple string (not a dict)."""
         context = {}
-        
+
         workflow_engine._inject_loop_variables(
             context=context,
             var_name="color",
             item="red",
             index=2,
         )
-        
+
         assert context["color"] == "red"
         assert context["_index"] == 2
         assert "_key" not in context
@@ -1735,28 +1718,28 @@ class TestInjectLoopVariables:
     def test_inject_loop_variables_with_number_item(self, workflow_engine: WorkflowEngine):
         """Test injection when item is a number."""
         context = {}
-        
+
         workflow_engine._inject_loop_variables(
             context=context,
             var_name="value",
             item=42,
             index=10,
         )
-        
+
         assert context["value"] == 42
         assert context["_index"] == 10
 
     def test_inject_loop_variables_with_list_item(self, workflow_engine: WorkflowEngine):
         """Test injection when item is a list (nested array)."""
         context = {}
-        
+
         workflow_engine._inject_loop_variables(
             context=context,
             var_name="batch",
             item=["a", "b", "c"],
             index=3,
         )
-        
+
         assert context["batch"] == ["a", "b", "c"]
         assert context["_index"] == 3
 
@@ -1767,7 +1750,7 @@ class TestInjectLoopVariables:
             "_index": 999,
             "_key": "old_key",
         }
-        
+
         workflow_engine._inject_loop_variables(
             context=context,
             var_name="kpi",
@@ -1775,7 +1758,7 @@ class TestInjectLoopVariables:
             index=0,
             key="new_key",
         )
-        
+
         # All should be overwritten
         assert context["kpi"] == {"new": "value"}
         assert context["_index"] == 0
@@ -1784,14 +1767,14 @@ class TestInjectLoopVariables:
     def test_inject_loop_variables_zero_index(self, workflow_engine: WorkflowEngine):
         """Test that zero index is properly injected (not treated as falsy)."""
         context = {}
-        
+
         workflow_engine._inject_loop_variables(
             context=context,
             var_name="item",
             item="first",
             index=0,
         )
-        
+
         assert context["_index"] == 0
         assert context["_index"] is not None
 
@@ -1803,7 +1786,7 @@ class TestInjectLoopVariables:
             "analyzer": {"output": {"results": [1, 2]}},
             "context": {"iteration": 2},
         }
-        
+
         workflow_engine._inject_loop_variables(
             context=context,
             var_name="kpi",
@@ -1811,12 +1794,12 @@ class TestInjectLoopVariables:
             index=0,
             key="K1",
         )
-        
+
         # Verify loop variables were injected
         assert context["kpi"] == {"kpi_id": "K1"}
         assert context["_index"] == 0
         assert context["_key"] == "K1"
-        
+
         # Verify existing context was preserved
         assert context["workflow"]["input"]["goal"] == "test"
         assert context["finder"]["output"]["kpis"] == ["K1", "K2"]
@@ -1826,7 +1809,7 @@ class TestInjectLoopVariables:
     def test_inject_loop_variables_complex_nested_item(self, workflow_engine: WorkflowEngine):
         """Test injection with a complex nested item structure."""
         context = {}
-        
+
         complex_item = {
             "kpi": {
                 "id": "revenue",
@@ -1837,14 +1820,14 @@ class TestInjectLoopVariables:
                 "tags": ["financial", "quarterly"],
             }
         }
-        
+
         workflow_engine._inject_loop_variables(
             context=context,
             var_name="kpi_data",
             item=complex_item,
             index=7,
         )
-        
+
         assert context["kpi_data"] == complex_item
         assert context["kpi_data"]["kpi"]["metrics"]["current"] == 1000
         assert context["_index"] == 7
@@ -1852,7 +1835,7 @@ class TestInjectLoopVariables:
     def test_inject_loop_variables_none_key(self, workflow_engine: WorkflowEngine):
         """Test that None key is explicitly not injected."""
         context = {}
-        
+
         workflow_engine._inject_loop_variables(
             context=context,
             var_name="item",
@@ -1860,13 +1843,13 @@ class TestInjectLoopVariables:
             index=0,
             key=None,
         )
-        
+
         assert "_key" not in context
 
     def test_inject_loop_variables_empty_string_key(self, workflow_engine: WorkflowEngine):
         """Test that empty string key is injected (it's a valid key)."""
         context = {}
-        
+
         workflow_engine._inject_loop_variables(
             context=context,
             var_name="item",
@@ -1874,7 +1857,7 @@ class TestInjectLoopVariables:
             index=0,
             key="",
         )
-        
+
         # Empty string is a valid key, should be injected
         assert "_key" in context
         assert context["_key"] == ""
@@ -1887,6 +1870,7 @@ class TestExtractKeyFromItem:
     def workflow_engine(self) -> WorkflowEngine:
         """Create a basic WorkflowEngine for testing."""
         from unittest.mock import MagicMock
+
         mock_provider = MagicMock()
 
         config = WorkflowConfig(
@@ -1916,12 +1900,7 @@ class TestExtractKeyFromItem:
 
     def test_extract_key_from_nested_dict(self, workflow_engine: WorkflowEngine):
         """Test extracting key from nested dict using dotted path."""
-        item = {
-            "kpi": {
-                "kpi_id": "REV001",
-                "metadata": {"type": "financial"}
-            }
-        }
+        item = {"kpi": {"kpi_id": "REV001", "metadata": {"type": "financial"}}}
         key = workflow_engine._extract_key_from_item(item, "kpi.kpi_id", fallback_index=5)
         assert key == "REV001"
 
@@ -1965,15 +1944,7 @@ class TestExtractKeyFromItem:
 
     def test_extract_key_from_deeply_nested_path(self, workflow_engine: WorkflowEngine):
         """Test extracting key from deeply nested structure."""
-        item = {
-            "data": {
-                "metrics": {
-                    "financial": {
-                        "id": "DEEP123"
-                    }
-                }
-            }
-        }
+        item = {"data": {"metrics": {"financial": {"id": "DEEP123"}}}}
         key = workflow_engine._extract_key_from_item(
             item, "data.metrics.financial.id", fallback_index=0
         )
@@ -1985,5 +1956,3 @@ class TestExtractKeyFromItem:
         key = workflow_engine._extract_key_from_item(item, "missing", fallback_index=42)
         assert key == "42"
         assert isinstance(key, str)
-
-

@@ -435,8 +435,7 @@ class TimeoutError(ExecutionError):
         # Auto-generate suggestion
         if suggestion is None:
             suggestion = (
-                f"Increase workflow.limits.timeout_seconds "
-                f"(currently {int(timeout_seconds)}s)"
+                f"Increase workflow.limits.timeout_seconds (currently {int(timeout_seconds)}s)"
             )
             if current_agent:
                 suggestion += f". Timeout occurred while executing agent '{current_agent}'"

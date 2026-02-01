@@ -2,7 +2,7 @@
 
 import asyncio
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -83,9 +83,7 @@ class TestBuildRecoveryPrompt:
 
     def test_custom_recovery_prompt_template(self) -> None:
         """Test that custom recovery prompt template is used."""
-        config = IdleRecoveryConfig(
-            recovery_prompt="CUSTOM: {last_activity} END"
-        )
+        config = IdleRecoveryConfig(recovery_prompt="CUSTOM: {last_activity} END")
         provider = CopilotProvider(
             mock_handler=stub_handler,
             idle_recovery_config=config,

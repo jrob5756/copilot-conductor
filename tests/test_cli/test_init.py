@@ -57,10 +57,15 @@ class TestInitCommand:
         """Test initializing with simple template."""
         # Run in temp directory
         output_file = tmp_path / "my-workflow.yaml"
-        result = runner.invoke(app, [
-            "init", "my-workflow",
-            "--output", str(output_file),
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "init",
+                "my-workflow",
+                "--output",
+                str(output_file),
+            ],
+        )
 
         assert result.exit_code == 0
         assert output_file.exists()
@@ -73,11 +78,17 @@ class TestInitCommand:
     def test_init_with_loop_template(self, tmp_path: Path) -> None:
         """Test initializing with loop template."""
         output_file = tmp_path / "loop-workflow.yaml"
-        result = runner.invoke(app, [
-            "init", "loop-workflow",
-            "--template", "loop",
-            "--output", str(output_file),
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "init",
+                "loop-workflow",
+                "--template",
+                "loop",
+                "--output",
+                str(output_file),
+            ],
+        )
 
         assert result.exit_code == 0
         assert output_file.exists()
@@ -90,11 +101,17 @@ class TestInitCommand:
     def test_init_with_human_gate_template(self, tmp_path: Path) -> None:
         """Test initializing with human-gate template."""
         output_file = tmp_path / "gate-workflow.yaml"
-        result = runner.invoke(app, [
-            "init", "gate-workflow",
-            "--template", "human-gate",
-            "--output", str(output_file),
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "init",
+                "gate-workflow",
+                "--template",
+                "human-gate",
+                "--output",
+                str(output_file),
+            ],
+        )
 
         assert result.exit_code == 0
         assert output_file.exists()
@@ -107,11 +124,17 @@ class TestInitCommand:
     def test_init_invalid_template(self, tmp_path: Path) -> None:
         """Test init with invalid template name."""
         output_file = tmp_path / "workflow.yaml"
-        result = runner.invoke(app, [
-            "init", "workflow",
-            "--template", "nonexistent",
-            "--output", str(output_file),
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "init",
+                "workflow",
+                "--template",
+                "nonexistent",
+                "--output",
+                str(output_file),
+            ],
+        )
 
         assert result.exit_code != 0
         assert "not found" in result.output.lower()
@@ -121,10 +144,15 @@ class TestInitCommand:
         output_file = tmp_path / "existing.yaml"
         output_file.write_text("existing content")
 
-        result = runner.invoke(app, [
-            "init", "existing",
-            "--output", str(output_file),
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "init",
+                "existing",
+                "--output",
+                str(output_file),
+            ],
+        )
 
         assert result.exit_code != 0
         assert "exists" in result.output.lower()
@@ -149,11 +177,17 @@ class TestInitCommand:
     def test_init_short_template_option(self, tmp_path: Path) -> None:
         """Test init with short -t option."""
         output_file = tmp_path / "short-test.yaml"
-        result = runner.invoke(app, [
-            "init", "short-test",
-            "-t", "loop",
-            "-o", str(output_file),
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "init",
+                "short-test",
+                "-t",
+                "loop",
+                "-o",
+                str(output_file),
+            ],
+        )
 
         assert result.exit_code == 0
         assert output_file.exists()

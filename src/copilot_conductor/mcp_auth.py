@@ -56,7 +56,17 @@ def get_azure_token(scope: str) -> str | None:
     """
     try:
         result = subprocess.run(
-            ["az", "account", "get-access-token", "--scope", scope, "--query", "accessToken", "-o", "tsv"],
+            [
+                "az",
+                "account",
+                "get-access-token",
+                "--scope",
+                scope,
+                "--query",
+                "accessToken",
+                "-o",
+                "tsv",
+            ],
             capture_output=True,
             text=True,
             timeout=30,
@@ -103,7 +113,9 @@ async def get_mcp_oauth_headers(url: str, name: str) -> dict[str, str]:
     # Get Azure AD token
     token = await asyncio.to_thread(get_azure_token, scope)
     if not token:
-        verbose_log(f"Failed to get Azure AD token for '{name}'. Run 'az login' first.", style="yellow")
+        verbose_log(
+            f"Failed to get Azure AD token for '{name}'. Run 'az login' first.", style="yellow"
+        )
         return {}
 
     verbose_log(f"Successfully acquired OAuth token for '{name}'")

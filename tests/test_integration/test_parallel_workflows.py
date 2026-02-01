@@ -8,16 +8,12 @@ Tests cover:
 """
 
 import asyncio
-from pathlib import Path
-from typing import Any
 
 import pytest
 
-from copilot_conductor.config.loader import load_config
 from copilot_conductor.config.schema import (
     AgentDef,
     ContextConfig,
-    LimitsConfig,
     OutputField,
     ParallelGroup,
     RouteDef,
@@ -106,7 +102,7 @@ Experts: {{ parallel_research.outputs.expert_researcher.findings }}""",
 
         def mock_handler(agent, prompt, context):
             call_order.append(agent.name)
-            
+
             if agent.name == "web_researcher":
                 return {
                     "findings": "Web research findings about quantum computing",
@@ -234,7 +230,7 @@ Errors: {{ parallel_validators.errors | json }}""",
                 # This validator will fail
                 raise ExecutionError(
                     "Security validation failed: SQL injection detected",
-                    suggestion="Sanitize user inputs"
+                    suggestion="Sanitize user inputs",
                 )
             elif agent.name == "performance_validator":
                 return {"valid": False, "warnings": ["High memory usage", "Slow queries"]}
@@ -379,7 +375,7 @@ Original plan: {{ planner.output.plan }}""",
 
         def mock_handler(agent, prompt, context):
             execution_order.append(agent.name)
-            
+
             if agent.name == "planner":
                 return {
                     "plan": "Complete the task in 3 steps",
@@ -467,13 +463,13 @@ Original plan: {{ planner.output.plan }}""",
                     routes=[RouteDef(to="evaluator")],
                 ),
             ],
-            output={"result": "{{ success_handler.output.message if success_handler is defined else failure_handler.output.message }}"},
+            output={
+                "result": "{{ success_handler.output.message if success_handler is defined else failure_handler.output.message }}"
+            },
         )
 
         def mock_handler(agent, prompt, context):
-            if agent.name == "check1":
-                return {"passed": True}
-            elif agent.name == "check2":
+            if agent.name == "check1" or agent.name == "check2":
                 return {"passed": True}
             elif agent.name == "evaluator":
                 return {"all_passed": True, "action": "proceed"}
@@ -769,7 +765,7 @@ class TestParallelContextIsolation:
         engine = WorkflowEngine(workflow, provider)
 
         result = asyncio.run(engine.run({"value": 42}))
-        
+
         # Both agents processed independently
         assert result["result1"] == 100
         assert result["result2"] == 200

@@ -363,6 +363,7 @@ class TestCopilotProviderRetryLogic:
     @pytest.mark.asyncio
     async def test_retry_history_is_cleared_on_close(self) -> None:
         """Test that retry history is cleared when provider is closed."""
+
         def mock_handler(agent, prompt, context):
             raise ProviderError("Server error", status_code=500)
 
@@ -541,7 +542,9 @@ class TestLogParseRecovery:
         )
         # If we get here without exception, the test passes
 
-    def test_log_parse_recovery_truncates_long_error(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_log_parse_recovery_truncates_long_error(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Test that long error messages are truncated in logs."""
         provider = CopilotProvider(mock_handler=stub_handler)
 

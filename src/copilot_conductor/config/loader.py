@@ -142,9 +142,7 @@ class ConfigLoader:
 
         return self.load_string(content, source_path=path)
 
-    def load_string(
-        self, content: str, source_path: Path | None = None
-    ) -> WorkflowConfig:
+    def load_string(self, content: str, source_path: Path | None = None) -> WorkflowConfig:
         """Load a workflow configuration from a YAML string.
 
         Args:
@@ -255,9 +253,7 @@ def load_config(path: str | Path) -> WorkflowConfig:
     return loader.load(path)
 
 
-def load_config_string(
-    content: str, source_path: Path | None = None
-) -> WorkflowConfig:
+def load_config_string(content: str, source_path: Path | None = None) -> WorkflowConfig:
     """Convenience function to load a workflow configuration from a string.
 
     Args:

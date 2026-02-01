@@ -144,6 +144,7 @@ class TestMemoryUsage:
 
         # Run the workflow
         import asyncio
+
         result = asyncio.run(engine.run({"input": "test"}))
 
         # Get peak memory
@@ -179,15 +180,14 @@ class TestMemoryUsage:
         engine = WorkflowEngine(config, provider)
 
         import asyncio
+
         result = asyncio.run(engine.run({}))
 
         current, peak = tracemalloc.get_traced_memory()
         tracemalloc.stop()
 
         # Should still be under 100MB
-        assert peak < 100 * 1024 * 1024, (
-            f"Large context used {peak / (1024 * 1024):.1f}MB peak"
-        )
+        assert peak < 100 * 1024 * 1024, f"Large context used {peak / (1024 * 1024):.1f}MB peak"
         assert result is not None
 
     def test_many_iterations_memory(self) -> None:
@@ -231,15 +231,14 @@ class TestMemoryUsage:
         engine = WorkflowEngine(config, provider)
 
         import asyncio
+
         result = asyncio.run(engine.run({}))
 
         current, peak = tracemalloc.get_traced_memory()
         tracemalloc.stop()
 
         # Many iterations should still stay under limit
-        assert peak < 100 * 1024 * 1024, (
-            f"Many iterations used {peak / (1024 * 1024):.1f}MB peak"
-        )
+        assert peak < 100 * 1024 * 1024, f"Many iterations used {peak / (1024 * 1024):.1f}MB peak"
         assert result["final_count"] == 25
 
     def _create_ten_agent_config(self) -> WorkflowConfig:
@@ -309,6 +308,7 @@ class TestProviderPerformance:
     @pytest.mark.asyncio
     async def test_mock_handler_performance(self) -> None:
         """Test that mock handler execution is fast."""
+
         def mock_handler(agent, prompt, context):
             return {"result": "fast response"}
 
@@ -364,8 +364,7 @@ Metadata: {{ metadata | json }}
 
         context: dict[str, Any] = {
             "items": [
-                {"name": f"Item {i}", "active": i % 2 == 0, "data": {"value": i}}
-                for i in range(50)
+                {"name": f"Item {i}", "active": i % 2 == 0, "data": {"value": i}} for i in range(50)
             ],
             "summary": "Test summary with lots of text " * 10,
             "metadata": {"key1": "value1", "key2": ["a", "b", "c"]},
@@ -388,12 +387,7 @@ Metadata: {{ metadata | json }}
 
         # Large nested object
         large_obj: dict[str, Any] = {
-            "level1": {
-                f"key{i}": {
-                    "nested": [f"value{j}" for j in range(10)]
-                }
-                for i in range(100)
-            }
+            "level1": {f"key{i}": {"nested": [f"value{j}" for j in range(10)]} for i in range(100)}
         }
 
         template = "{{ data | json }}"
@@ -419,10 +413,7 @@ class TestRouterPerformance:
         router = Router()
 
         # Create many conditional routes
-        routes = [
-            RouteDef(to=f"agent{i}", when=f"value == {i}")
-            for i in range(50)
-        ]
+        routes = [RouteDef(to=f"agent{i}", when=f"value == {i}") for i in range(50)]
         routes.append(RouteDef(to="default"))  # Fallback
 
         output = {"value": 49}  # Match near the end
@@ -479,10 +470,13 @@ class TestContextPerformance:
 
         # Simulate 100 agent outputs
         for i in range(100):
-            context.store(f"agent{i}", {
-                "result": f"Output {i}",
-                "data": {"key": f"value{i}", "nested": [1, 2, 3]},
-            })
+            context.store(
+                f"agent{i}",
+                {
+                    "result": f"Output {i}",
+                    "data": {"key": f"value{i}", "nested": [1, 2, 3]},
+                },
+            )
 
         # Build context for each agent
         for i in range(100):
@@ -502,9 +496,12 @@ class TestContextPerformance:
 
         # Add many agent outputs
         for i in range(20):
-            context.store(f"agent{i}", {
-                "result": "Long output text that simulates real content " * 50,
-            })
+            context.store(
+                f"agent{i}",
+                {
+                    "result": "Long output text that simulates real content " * 50,
+                },
+            )
 
         start = time.perf_counter()
         for _ in range(1000):
@@ -522,7 +519,6 @@ class TestParallelExecutionPerformance:
     @pytest.mark.asyncio
     async def test_parallel_speedup_vs_sequential(self) -> None:
         """Test that parallel execution is faster than sequential execution."""
-        import asyncio
         import time
 
         from copilot_conductor.config.schema import ParallelGroup
@@ -623,7 +619,7 @@ class TestParallelExecutionPerformance:
         agent2_start = execution_times["agent2"][0]
         agent2_end = execution_times["agent2"][1]
         agent3_start = execution_times["agent3"][0]
-        
+
         # Each agent should start after the previous one ends (allowing for small overhead)
         assert agent2_start >= agent1_end - 0.01  # 10ms tolerance
         assert agent3_start >= agent2_end - 0.01
@@ -640,15 +636,17 @@ class TestParallelExecutionPerformance:
         # Verify agents ran in parallel (overlapping)
         par_starts = [execution_times[f"agent{i}"][0] for i in range(1, 4)]
         par_ends = [execution_times[f"agent{i}"][1] for i in range(1, 4)]
-        
+
         min_start = min(par_starts)
         max_start = max(par_starts)
-        
+
         # All agents should start within a reasonable time window
         # Note: With sync mock handler and Python GIL, there may be some serialization
         start_window = max_start - min_start
         # Allow up to 200ms window since sync handlers may serialize somewhat
-        assert start_window < 0.2, f"Parallel agents started {start_window:.3f}s apart, expected <0.2s"
+        assert start_window < 0.2, (
+            f"Parallel agents started {start_window:.3f}s apart, expected <0.2s"
+        )
 
         # Parallel should not be slower than sequential (allowing for overhead)
         # Note: With sync handlers, true parallelism is limited by GIL
@@ -658,7 +656,7 @@ class TestParallelExecutionPerformance:
             f"Parallel execution slower than sequential: {speedup:.2f}x "
             f"(sequential: {sequential_time:.3f}s, parallel: {parallel_time:.3f}s)"
         )
-        
+
         # Verify parallel execution structure is correct (all agents executed concurrently)
         # GIL limits true parallelism with sync handlers, but structure should be correct
 
@@ -706,14 +704,12 @@ class TestParallelExecutionPerformance:
         avg_time = elapsed / 10
 
         # Even with 5 agents, overhead should be minimal (<10ms per run)
-        assert avg_time < 0.01, (
-            f"Parallel overhead {avg_time * 1000:.2f}ms, expected <10ms"
-        )
+        assert avg_time < 0.01, f"Parallel overhead {avg_time * 1000:.2f}ms, expected <10ms"
 
 
 class TestForEachPerformance:
     """Performance tests for for-each (dynamic parallel) execution.
-    
+
     Tests cover Epic 10 acceptance criteria:
     - 100-item array completes within reasonable time (10x single execution + overhead)
     - Memory usage acceptable for 1000-item arrays
@@ -723,7 +719,7 @@ class TestForEachPerformance:
     @pytest.mark.asyncio
     async def test_100_item_array_with_max_concurrent_10(self) -> None:
         """E10-T1: Test performance with 100-item array and max_concurrent=10.
-        
+
         Acceptance: Should complete within reasonable time (10x single execution + overhead).
         With max_concurrent=10, we expect ~10 batches, so roughly 10x the time of
         a single execution, plus some overhead.
@@ -751,11 +747,11 @@ class TestForEachPerformance:
         def mock_handler(agent, prompt, context):
             # Simulate 50ms of work per agent
             time.sleep(0.05)
-            return {"result": f"processed"}
+            return {"result": "processed"}
 
         provider_single = CopilotProvider(mock_handler=mock_handler)
         engine_single = WorkflowEngine(single_workflow, provider_single)
-        
+
         start_single = time.perf_counter()
         await engine_single.run({})
         single_time = time.perf_counter() - start_single
@@ -801,7 +797,7 @@ class TestForEachPerformance:
             else:
                 # Processor agent - simulate 50ms work
                 time.sleep(0.05)
-                return {"result": f"processed"}
+                return {"result": "processed"}
 
         provider_foreach = CopilotProvider(mock_handler=mock_handler_with_array)
         engine_foreach = WorkflowEngine(for_each_workflow, provider_foreach)
@@ -816,7 +812,7 @@ class TestForEachPerformance:
         # Performance expectation: ~10 batches @ 50ms each = ~500ms baseline
         # Allow for overhead: should complete within 10x single execution + 200ms overhead
         expected_max_time = (single_time * 10) + 0.2
-        
+
         assert foreach_time < expected_max_time, (
             f"100-item for-each took {foreach_time:.3f}s, "
             f"expected <{expected_max_time:.3f}s "
@@ -826,7 +822,7 @@ class TestForEachPerformance:
         # Also verify it's actually running in parallel (should be much faster than sequential)
         sequential_estimate = single_time * 100
         speedup = sequential_estimate / foreach_time
-        
+
         # With max_concurrent=10, we should see significant speedup
         assert speedup > 5, (
             f"For-each speedup is only {speedup:.1f}x, "
@@ -837,7 +833,7 @@ class TestForEachPerformance:
     @pytest.mark.asyncio
     async def test_10_item_array_with_max_concurrent_5(self) -> None:
         """E10-T2: Test performance with 10-item array and max_concurrent=5.
-        
+
         Acceptance: Should complete within reasonable time with proper batching.
         """
         from copilot_conductor.config.schema import ForEachDef
@@ -882,10 +878,12 @@ class TestForEachPerformance:
                 return {"items": list(range(10))}
             else:
                 # Track execution timing
-                execution_order.append({
-                    "agent": agent.name,
-                    "time": time.perf_counter(),
-                })
+                execution_order.append(
+                    {
+                        "agent": agent.name,
+                        "time": time.perf_counter(),
+                    }
+                )
                 time.sleep(0.05)  # 50ms per agent
                 return {"result": "processed"}
 
@@ -902,18 +900,17 @@ class TestForEachPerformance:
         # With max_concurrent=5 and 10 items, we expect 2 batches
         # Each batch ~50ms, so ~100ms total + overhead
         # Allow generous overhead for test stability
-        assert elapsed < 0.5, (
-            f"10-item for-each took {elapsed:.3f}s, expected <0.5s"
-        )
+        assert elapsed < 0.5, f"10-item for-each took {elapsed:.3f}s, expected <0.5s"
 
     @pytest.mark.asyncio
     async def test_memory_usage_1000_items(self) -> None:
         """E10-T3: Memory profiling for large arrays (1000 items).
-        
+
         Acceptance: Memory usage should be acceptable for 1000-item arrays.
         With batching, memory should not grow linearly with array size.
         """
         import tracemalloc
+
         from copilot_conductor.config.schema import ForEachDef
 
         tracemalloc.start()
@@ -958,7 +955,7 @@ class TestForEachPerformance:
             else:
                 # Small delay to simulate work
                 time.sleep(0.001)  # 1ms per item for faster test
-                return {"result": f"ok"}
+                return {"result": "ok"}
 
         provider = CopilotProvider(mock_handler=mock_handler)
         engine = WorkflowEngine(for_each_workflow, provider)
@@ -972,16 +969,15 @@ class TestForEachPerformance:
         # This is conservative; with proper batching it should be much less
         max_allowed_mb = 200
         peak_mb = peak / (1024 * 1024)
-        
+
         assert peak_mb < max_allowed_mb, (
-            f"1000-item for-each used {peak_mb:.1f}MB peak memory, "
-            f"expected <{max_allowed_mb}MB"
+            f"1000-item for-each used {peak_mb:.1f}MB peak memory, expected <{max_allowed_mb}MB"
         )
 
     @pytest.mark.asyncio
     async def test_performance_parity_with_static_parallel(self) -> None:
         """E10-T4: Test that for-each has no significant regression vs static parallel.
-        
+
         Acceptance: For-each should perform similarly to static parallel
         for the same number of agents.
         """
@@ -1061,7 +1057,7 @@ class TestForEachPerformance:
         # Test static parallel
         provider_static = CopilotProvider(mock_handler=mock_handler_static)
         engine_static = WorkflowEngine(static_workflow, provider_static)
-        
+
         start_static = time.perf_counter()
         await engine_static.run({})
         static_time = time.perf_counter() - start_static
@@ -1069,7 +1065,7 @@ class TestForEachPerformance:
         # Test for-each
         provider_foreach = CopilotProvider(mock_handler=mock_handler_foreach)
         engine_foreach = WorkflowEngine(foreach_workflow, provider_foreach)
-        
+
         start_foreach = time.perf_counter()
         result = await engine_foreach.run({})
         foreach_time = time.perf_counter() - start_foreach
@@ -1080,7 +1076,7 @@ class TestForEachPerformance:
         # For-each should be within 50% of static parallel performance
         # (allowing for array resolution and batching overhead)
         max_allowed = static_time * 1.5
-        
+
         assert foreach_time < max_allowed, (
             f"For-each took {foreach_time:.3f}s vs static parallel {static_time:.3f}s, "
             f"expected for-each <{max_allowed:.3f}s (1.5x static)"
@@ -1191,17 +1187,17 @@ class TestForEachPerformance:
 
         # Test with same batch count but different item counts
         # Both should take similar time since they have same number of batches
-        
+
         # 20 items with max_concurrent=10 = 2 batches
         time_20_items = await run_foreach_with_items(20, 10)
-        
+
         # 100 items with max_concurrent=50 = 2 batches
         time_100_items = await run_foreach_with_items(100, 50)
 
         # Both should complete in similar time (2 batches each)
         # Allow 50% variance for overhead differences
         ratio = max(time_20_items, time_100_items) / min(time_20_items, time_100_items)
-        
+
         assert ratio < 1.5, (
             f"Execution time should scale with batch count, not item count. "
             f"20 items: {time_20_items:.3f}s, 100 items: {time_100_items:.3f}s, "

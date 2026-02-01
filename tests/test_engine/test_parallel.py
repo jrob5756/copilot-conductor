@@ -9,7 +9,7 @@ Tests cover:
 """
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -81,9 +81,7 @@ def simple_parallel_workflow() -> WorkflowConfig:
 
 
 @pytest.mark.asyncio
-async def test_parallel_group_execution_success(
-    simple_parallel_workflow, mock_provider
-):
+async def test_parallel_group_execution_success(simple_parallel_workflow, mock_provider):
     """Test successful execution of parallel agents."""
     # Mock both agents to succeed
     mock_provider.execute.side_effect = [
@@ -115,6 +113,7 @@ async def test_parallel_group_execution_success(
 @pytest.mark.asyncio
 async def test_parallel_group_fail_fast_mode(simple_parallel_workflow, mock_provider):
     """Test fail_fast mode stops immediately on first failure."""
+
     # Mock first agent to fail
     async def mock_execute_side_effect(*args, **kwargs):
         # Simulate agent failure
@@ -444,11 +443,12 @@ async def test_parallel_agents_execute_concurrently(mock_provider):
     mock_provider.execute.side_effect = mock_execute_with_delay
 
     import time
+
     overall_start = time.time()
-    
+
     engine = WorkflowEngine(workflow, mock_provider)
     await engine.run({})
-    
+
     overall_end = time.time()
     overall_duration = overall_end - overall_start
 
@@ -741,7 +741,6 @@ async def test_error_message_distinguishes_exception_types(
     # Should show messages
     assert "Invalid value" in error_msg
     assert "Missing key" in error_msg
-
 
 
 class TestParallelGroupRouting:

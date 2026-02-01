@@ -161,11 +161,9 @@ class WorkflowContext:
                     # Check if this is a parallel group output
                     # (has 'outputs' and 'errors' keys at top level)
                     is_parallel_group = (
-                        isinstance(output, dict)
-                        and "outputs" in output
-                        and "errors" in output
+                        isinstance(output, dict) and "outputs" in output and "errors" in output
                     )
-                    
+
                     if is_parallel_group:
                         # Parallel groups store their structure directly
                         ctx[agent] = output
@@ -177,14 +175,14 @@ class WorkflowContext:
                 # Only the most recent agent's output
                 last_agent = self.execution_history[-1]
                 last_output = self.agent_outputs.get(last_agent, {})
-                
+
                 # Check if this is a parallel group output
                 is_parallel_group = (
                     isinstance(last_output, dict)
                     and "outputs" in last_output
                     and "errors" in last_output
                 )
-                
+
                 if is_parallel_group:
                     ctx[last_agent] = last_output
                 else:
@@ -250,14 +248,14 @@ class WorkflowContext:
 
             if entity_name in self.agent_outputs:
                 agent_output = self.agent_outputs[entity_name]
-                
+
                 # Check if this is a parallel group (has 'outputs' and 'errors' keys)
                 is_parallel_group = (
-                    isinstance(agent_output, dict) 
-                    and "outputs" in agent_output 
+                    isinstance(agent_output, dict)
+                    and "outputs" in agent_output
                     and "errors" in agent_output
                 )
-                
+
                 if is_parallel_group:
                     # Handle parallel group references
                     self._add_parallel_group_input(ctx, entity_name, parts[1:], is_optional)
@@ -268,20 +266,16 @@ class WorkflowContext:
                 raise KeyError(f"Missing required agent output: {entity_name}")
 
     def _add_agent_input(
-        self, 
-        ctx: dict[str, Any], 
-        agent_name: str, 
-        remaining_parts: list[str], 
-        is_optional: bool
+        self, ctx: dict[str, Any], agent_name: str, remaining_parts: list[str], is_optional: bool
     ) -> None:
         """Add a regular agent output reference to context.
-        
+
         Args:
             ctx: The context dictionary to update.
             agent_name: The name of the agent.
             remaining_parts: The remaining path parts after agent name.
             is_optional: Whether this is an optional reference.
-            
+
         Raises:
             KeyError: If a required field is missing.
         """
@@ -305,55 +299,47 @@ class WorkflowContext:
             if field_name in agent_output:
                 ctx[agent_name]["output"][field_name] = agent_output[field_name]
             elif not is_optional:
-                raise KeyError(
-                    f"Missing output field '{field_name}' from agent '{agent_name}'"
-                )
+                raise KeyError(f"Missing output field '{field_name}' from agent '{agent_name}'")
         elif len(remaining_parts) == 1 and remaining_parts[0] != "output":
             # Shorthand format: agent_name.field -> agent_name.output.field
             field_name = remaining_parts[0]
             if field_name in agent_output:
                 ctx[agent_name]["output"][field_name] = agent_output[field_name]
             elif not is_optional:
-                raise KeyError(
-                    f"Missing output field '{field_name}' from agent '{agent_name}'"
-                )
+                raise KeyError(f"Missing output field '{field_name}' from agent '{agent_name}'")
 
     def _add_parallel_group_input(
-        self, 
-        ctx: dict[str, Any], 
-        group_name: str, 
-        remaining_parts: list[str], 
-        is_optional: bool
+        self, ctx: dict[str, Any], group_name: str, remaining_parts: list[str], is_optional: bool
     ) -> None:
         """Add a parallel/for-each group output reference to context.
-        
+
         Supports patterns for static parallel groups:
         - parallel_group.outputs - All outputs
         - parallel_group.outputs.agent_name - Specific agent's output
         - parallel_group.outputs.agent_name.field - Specific field
         - parallel_group.errors - All errors
-        
+
         Supports patterns for for-each groups (list-based):
         - for_each.outputs - All outputs (list)
         - for_each.outputs[0] - Cannot be handled here (requires template eval)
         - for_each.errors - All errors
-        
+
         Supports patterns for for-each groups (dict-based with key_by):
         - for_each.outputs - All outputs (dict)
         - for_each.outputs["key"] - Cannot be handled here (requires template eval)
         - for_each.outputs.key - Specific key's output
         - for_each.errors - All errors
-        
+
         Note: Index/key access like outputs[0] or outputs["key"] is handled
         by the template engine, not by this method. This method only handles
         dotted path access in explicit input declarations.
-        
+
         Args:
             ctx: The context dictionary to update.
             group_name: The name of the parallel/for-each group.
             remaining_parts: The remaining path parts after group name.
             is_optional: Whether this is an optional reference.
-            
+
         Raises:
             KeyError: If a required field is missing.
         """
@@ -370,15 +356,17 @@ class WorkflowContext:
             # Determine if this is a for-each group or static parallel group using 'type' field
             outputs = group_output["outputs"]
             group_type = group_output.get("type")  # 'parallel' or 'for_each'
-            
+
             # For backward compatibility, fall back to heuristic if 'type' is missing
             if group_type is None:
                 is_for_each_list = isinstance(outputs, list)
-                is_for_each_dict = isinstance(outputs, dict) and group_output.get("count") is not None
+                is_for_each_dict = (
+                    isinstance(outputs, dict) and group_output.get("count") is not None
+                )
             else:
                 is_for_each_list = group_type == "for_each" and isinstance(outputs, list)
                 is_for_each_dict = group_type == "for_each" and isinstance(outputs, dict)
-            
+
             if len(remaining_parts) == 1:
                 # group.outputs - copy all outputs (works for both static parallel and for-each)
                 ctx[group_name]["outputs"] = outputs.copy()
@@ -396,10 +384,10 @@ class WorkflowContext:
                 # For-each group with dict outputs OR static parallel group
                 # Both use: group.outputs.key_or_agent_name
                 key_or_agent = remaining_parts[1]
-                
+
                 if "outputs" not in ctx[group_name]:
                     ctx[group_name]["outputs"] = {}
-                
+
                 if key_or_agent in outputs:
                     ctx[group_name]["outputs"][key_or_agent] = outputs[key_or_agent]
                 elif not is_optional:
@@ -410,17 +398,19 @@ class WorkflowContext:
                 # group.outputs.key_or_agent.field - access specific field
                 key_or_agent = remaining_parts[1]
                 field_name = remaining_parts[2]
-                
+
                 if "outputs" not in ctx[group_name]:
                     ctx[group_name]["outputs"] = {}
-                
+
                 if key_or_agent in outputs:
                     item_output = outputs[key_or_agent]
                     if isinstance(item_output, dict) and field_name in item_output:
                         # Ensure the key/agent dict exists in context
                         if key_or_agent not in ctx[group_name]["outputs"]:
                             ctx[group_name]["outputs"][key_or_agent] = {}
-                        ctx[group_name]["outputs"][key_or_agent][field_name] = item_output[field_name]
+                        ctx[group_name]["outputs"][key_or_agent][field_name] = item_output[
+                            field_name
+                        ]
                     elif not is_optional:
                         raise KeyError(
                             f"Missing field '{field_name}' in outputs['{key_or_agent}'] of '{group_name}'"
