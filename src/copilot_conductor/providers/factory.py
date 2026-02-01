@@ -10,6 +10,7 @@ from typing import Any, Literal
 
 from copilot_conductor.exceptions import ProviderError
 from copilot_conductor.providers.base import AgentProvider
+from copilot_conductor.providers.claude import ANTHROPIC_SDK_AVAILABLE, ClaudeProvider
 from copilot_conductor.providers.copilot import CopilotProvider
 
 
@@ -51,10 +52,15 @@ async def create_provider(
                 suggestion="Use 'copilot' provider for now",
             )
         case "claude":
-            raise ProviderError(
-                "Claude provider not yet implemented",
-                suggestion="Use 'copilot' provider for now",
-            )
+            if not ANTHROPIC_SDK_AVAILABLE:
+                raise ProviderError(
+                    "Claude provider requires anthropic SDK",
+                    suggestion="Install with: uv add 'anthropic>=0.77.0,<1.0.0'",
+                )
+            # ClaudeProvider initialization is synchronous (safe in async context)
+            # The SDK client is created in __init__ but actual I/O happens in
+            # validate_connection() and execute() which are properly async
+            provider = ClaudeProvider()
         case _:
             raise ProviderError(
                 f"Unknown provider: {provider_type}",

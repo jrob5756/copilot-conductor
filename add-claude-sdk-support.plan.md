@@ -1114,6 +1114,8 @@ if structured_output is None:
 
 ### EPIC-001: Core Claude Provider Implementation (Phase 1)
 
+**Status**: DONE
+
 **Goal**: Implement the foundational ClaudeProvider class with basic message execution capabilities
 
 **Prerequisites**: None
@@ -1122,30 +1124,30 @@ if structured_output is None:
 
 | Task ID | Type | Description | Files | Status |
 |---------|------|-------------|-------|--------|
-| EPIC-001-T1 | IMPL | Add anthropic>=0.77.0,<1.0.0 to dependencies | `pyproject.toml` | TO DO |
-| EPIC-001-T1A | IMPL | Add model verification helper: call `client.models.list()` at startup, log available models, warn if requested model not in list (verified API exists via Context7 SDK docs) | `src/copilot_conductor/providers/claude.py` | TO DO |
-| EPIC-001-T1B | IMPL | Add SDK version logging at provider initialization, warn if version < 0.77.0 OR >= 1.0.0 | `src/copilot_conductor/providers/claude.py` | TO DO |
-| EPIC-001-T1C | TEST | Test that SDK raises BadRequestError for temperature > 1.0 (documents SDK-enforced behavior, provider wraps error with clear message) | `tests/test_providers/test_claude.py` | TO DO |
-| EPIC-001-T2 | IMPL | Create ClaudeProvider class skeleton with ABC methods | `src/copilot_conductor/providers/claude.py` | TO DO |
-| EPIC-001-T3 | IMPL | Implement `__init__()` with client initialization and config (no duplicate temperature validation - SDK enforces) | `src/copilot_conductor/providers/claude.py` | TO DO |
-| EPIC-001-T4 | IMPL | Implement `validate_connection()` with API key verification | `src/copilot_conductor/providers/claude.py` | TO DO |
-| EPIC-001-T5 | IMPL | Implement `close()` for resource cleanup | `src/copilot_conductor/providers/claude.py` | TO DO |
-| EPIC-001-T6 | IMPL | Implement basic `execute()` method with non-streaming calls and error wrapping (wrap BadRequestError as ValidationError with clear message) | `src/copilot_conductor/providers/claude.py` | TO DO |
-| EPIC-001-T7 | IMPL | Implement `_build_messages()` helper for system/user messages | `src/copilot_conductor/providers/claude.py` | TO DO |
-| EPIC-001-T8 | TEST | Create test file with basic provider tests | `tests/test_providers/test_claude.py` | TO DO |
-| EPIC-001-T9 | TEST | Add tests for initialization, connection validation, and error wrapping | `tests/test_providers/test_claude.py` | TO DO |
-| EPIC-001-T10 | TEST | Add tests for basic message execution with mock client | `tests/test_providers/test_claude.py` | TO DO |
+| EPIC-001-T1 | IMPL | Add anthropic>=0.77.0,<1.0.0 to dependencies | `pyproject.toml` | DONE |
+| EPIC-001-T1A | IMPL | Add model verification helper: call `client.models.list()` at startup, log available models, warn if requested model not in list (verified API exists via Context7 SDK docs) | `src/copilot_conductor/providers/claude.py` | DONE |
+| EPIC-001-T1B | IMPL | Add SDK version logging at provider initialization, warn if version < 0.77.0 OR >= 1.0.0 | `src/copilot_conductor/providers/claude.py` | DONE |
+| EPIC-001-T1C | TEST | Test that SDK raises BadRequestError for temperature > 1.0 (documents SDK-enforced behavior, provider wraps error with clear message) | `tests/test_providers/test_claude.py` | DONE |
+| EPIC-001-T2 | IMPL | Create ClaudeProvider class skeleton with ABC methods | `src/copilot_conductor/providers/claude.py` | DONE |
+| EPIC-001-T3 | IMPL | Implement `__init__()` with client initialization and config (no duplicate temperature validation - SDK enforces) | `src/copilot_conductor/providers/claude.py` | DONE |
+| EPIC-001-T4 | IMPL | Implement `validate_connection()` with API key verification | `src/copilot_conductor/providers/claude.py` | DONE |
+| EPIC-001-T5 | IMPL | Implement `close()` for resource cleanup | `src/copilot_conductor/providers/claude.py` | DONE |
+| EPIC-001-T6 | IMPL | Implement basic `execute()` method with non-streaming calls and error wrapping (wrap BadRequestError as ValidationError with clear message) | `src/copilot_conductor/providers/claude.py` | DONE |
+| EPIC-001-T7 | IMPL | Implement `_build_messages()` helper for system/user messages | `src/copilot_conductor/providers/claude.py` | DONE |
+| EPIC-001-T8 | TEST | Create test file with basic provider tests | `tests/test_providers/test_claude.py` | DONE |
+| EPIC-001-T9 | TEST | Add tests for initialization, connection validation, and error wrapping | `tests/test_providers/test_claude.py` | DONE |
+| EPIC-001-T10 | TEST | Add tests for basic message execution with mock client | `tests/test_providers/test_claude.py` | DONE |
 
 **Acceptance Criteria**:
-- [ ] ClaudeProvider class implements all AgentProvider methods
-- [ ] Connection validation works with valid/invalid API keys
-- [ ] Temperature validation error properly surfaced with clear message (SDK raises BadRequestError, provider wraps as ValidationError)
-- [ ] Model availability verified at startup via `client.models.list()` (API confirmed in Context7 docs) with warning for unavailable models
-- [ ] SDK version logged at startup, warns if != 0.77.0
-- [ ] Basic non-streaming message execution works
-- [ ] Unit tests achieve ≥85% coverage for implemented methods
-- [ ] Code passes linting (`make lint`) and type checking (`make typecheck`)
-- [ ] SDK temperature validation behavior documented in test file comments
+- [x] ClaudeProvider class implements all AgentProvider methods
+- [x] Connection validation works with valid/invalid API keys
+- [x] Temperature validation error properly surfaced with clear message (SDK raises BadRequestError, provider wraps as ValidationError)
+- [x] Model availability verified at startup via `client.models.list()` (API confirmed in Context7 docs) with warning for unavailable models
+- [x] SDK version logged at startup, warns if != 0.77.0
+- [x] Basic non-streaming message execution works
+- [x] Unit tests achieve ≥85% coverage for implemented methods
+- [x] Code passes linting (`make lint`) and type checking (`make typecheck`)
+- [x] SDK temperature validation behavior documented in test file comments
 
 ---
 

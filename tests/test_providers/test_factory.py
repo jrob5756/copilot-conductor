@@ -1,5 +1,8 @@
 """Unit tests for the provider factory."""
 
+from typing import Any
+from unittest.mock import MagicMock, patch
+
 import pytest
 
 from copilot_conductor.exceptions import ProviderError
@@ -42,13 +45,31 @@ class TestCreateProvider:
         assert exc_info.value.suggestion is not None
         assert "copilot" in exc_info.value.suggestion
 
+    @patch("copilot_conductor.providers.factory.ANTHROPIC_SDK_AVAILABLE", False)
     @pytest.mark.asyncio
-    async def test_create_claude_provider_raises(self) -> None:
-        """Test that Claude provider raises ProviderError (not implemented)."""
+    async def test_create_claude_provider_raises_when_sdk_not_available(self) -> None:
+        """Test that Claude provider raises ProviderError when SDK not available."""
         with pytest.raises(ProviderError) as exc_info:
             await create_provider("claude")
-        assert "not yet implemented" in str(exc_info.value)
+        assert "anthropic SDK" in str(exc_info.value)
         assert exc_info.value.suggestion is not None
+
+    @patch("copilot_conductor.providers.factory.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("copilot_conductor.providers.claude.Anthropic")
+    @patch("copilot_conductor.providers.claude.anthropic")
+    @pytest.mark.asyncio
+    async def test_create_claude_provider_success(
+        self, mock_anthropic_module: Any, mock_anthropic_class: Any
+    ) -> None:
+        """Test that Claude provider can be created successfully."""
+        mock_anthropic_module.__version__ = "0.77.0"
+        mock_client = MagicMock()
+        mock_client.models.list.return_value = MagicMock(data=[])
+        mock_anthropic_class.return_value = mock_client
+
+        provider = await create_provider("claude", validate=False)
+        assert provider is not None
+        assert provider.__class__.__name__ == "ClaudeProvider"
 
     @pytest.mark.asyncio
     async def test_create_unknown_provider_raises(self) -> None:
