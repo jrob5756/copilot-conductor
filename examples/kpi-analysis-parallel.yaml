@@ -47,16 +47,15 @@ workflow:
       description: Optional category filter
     output_dir:
       type: string
-      required: false
-      default: "/Users/jason/src/notes/projects/ai-development/anti-patterns/get-green-stay-green/analysis"
+      required: true
       description: Directory where analysis documents will be saved
 
   context:
     mode: explicit
 
-  limits:
-    max_iterations: 50
-    timeout_seconds: 3600  # 1 hour max
+  # limits:
+  #   max_iterations: 50
+  #   timeout_seconds: 3600  # 1 hour max
 
 # For-each group for parallel KPI analysis
 for_each:
@@ -68,14 +67,16 @@ for_each:
     as: kpi
     max_concurrent: 5                # Process 5 KPIs at a time
     failure_mode: continue_on_error  # Continue even if some KPIs fail
-    key_by: kpi.kpi_id               # Use kpi_id as output key
+    key_by: kpi_id                   # Use kpi_id as output key (path relative to item)
     
     agent:
+      name: kpi_analyzer
       model: claude-opus-4.5
       tools: ["*"]  # Access all MCP tools
       input:
         - workflow.input.output_dir
         - kpi_loader.output.category_name
+        - kpi_loader.output.total_count
       prompt: |
         You are a KPI Analysis agent specializing in Microsoft SFI (Secure Future Initiative) compliance.
         
