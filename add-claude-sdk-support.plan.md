@@ -1498,24 +1498,24 @@ async def _handle_tool_use(self, initial_response, mcp_executor, messages_histor
 
 | Task ID | Type | Description | Files | Status |
 |---------|------|-------------|-------|--------|
-| EPIC-008-T1 | TEST | Create test fixtures with recorded Claude API responses | `tests/fixtures/claude/` | TO DO |
-| EPIC-008-T2 | TEST | Create basic workflow integration test (mocked API) | `tests/test_integration/test_claude_workflows.py` | TO DO |
-| EPIC-008-T3 | TEST | Add parallel execution test with Claude | `tests/test_integration/test_claude_workflows.py` | TO DO |
-| EPIC-008-T4 | TEST | Add for-each loop test with Claude | `tests/test_integration/test_claude_workflows.py` | TO DO |
-| EPIC-008-T5 | TEST | Add routing and conditional logic test | `tests/test_integration/test_claude_workflows.py` | TO DO |
-| EPIC-008-T6 | TEST | Add error handling and recovery test (rate limits, auth failures) | `tests/test_integration/test_claude_workflows.py` | TO DO |
-| EPIC-008-T7 | TEST | Add provider comparison test (same workflow, different provider) | `tests/test_integration/test_provider_comparison.py` | TO DO |
-| EPIC-008-T8 | TEST | Add performance test for Claude non-streaming (measure provider overhead with mock client, 100-sample baseline) | `tests/test_integration/test_claude_workflows.py` | TO DO |
-| EPIC-008-T9 | TEST | Add real API tests marked with pytest.mark.real_api | `tests/test_integration/test_claude_real_api.py` | TO DO |
+| EPIC-008-T1 | TEST | Create test fixtures with recorded Claude API responses | `tests/fixtures/claude/` | DONE |
+| EPIC-008-T2 | TEST | Create basic workflow integration test (mocked API) | `tests/test_integration/test_claude_workflows.py` | DONE |
+| EPIC-008-T3 | TEST | Add parallel execution test with Claude | `tests/test_integration/test_claude_workflows.py` | DONE |
+| EPIC-008-T4 | TEST | Add for-each loop test with Claude | `tests/test_integration/test_claude_workflows.py` | DONE |
+| EPIC-008-T5 | TEST | Add routing and conditional logic test | `tests/test_integration/test_claude_workflows.py` | DONE |
+| EPIC-008-T6 | TEST | Add error handling and recovery test (rate limits, auth failures) | `tests/test_integration/test_claude_workflows.py` | DONE |
+| EPIC-008-T7 | TEST | Add provider comparison test (same workflow, different provider) | `tests/test_integration/test_provider_comparison.py` | DONE |
+| EPIC-008-T8 | TEST | Add performance test for Claude non-streaming (measure provider overhead with mock client, 100-sample baseline) | `tests/test_integration/test_claude_workflows.py` | DONE |
+| EPIC-008-T9 | TEST | Add real API tests marked with pytest.mark.real_api | `tests/test_integration/test_claude_real_api.py` | DONE |
 
 **Acceptance Criteria**:
-- [ ] All workflow features work with Claude provider (parallel, for-each, routing)
-- [ ] Integration tests pass with mocked API responses in CI
-- [ ] Real API tests can be run manually with ANTHROPIC_API_KEY
-- [ ] Performance baseline established (<100ms provider overhead mean, <150ms p95)
-- [ ] Error scenarios are tested (rate limits, auth failures, invalid models)
-- [ ] Tests use pytest markers appropriately (`@pytest.mark.real_api`, `@pytest.mark.performance`)
-- [ ] Coverage for Claude provider ≥85%
+- [x] All workflow features work with Claude provider (parallel, for-each, routing)
+- [x] Integration tests pass with mocked API responses in CI
+- [x] Real API tests can be run manually with ANTHROPIC_API_KEY
+- [x] Performance baseline established (<100ms provider overhead mean, <150ms p95)
+- [x] Error scenarios are tested (rate limits, auth failures, invalid models)
+- [x] Tests use pytest markers appropriately (`@pytest.mark.real_api`, `@pytest.mark.performance`)
+- [x] Coverage for Claude provider ≥85% (achieved 91%)
 
 ---
 
