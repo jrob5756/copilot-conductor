@@ -47,8 +47,12 @@ jobs:
         run: uv run ruff format --check .
 
   test:
-    name: Test
+    name: Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12", "3.13"]
+      fail-fast: false
 
     steps:
       - name: Checkout code
@@ -60,14 +64,20 @@ jobs:
           version: "latest"
           enable-cache: true
 
-      - name: Set up Python
-        run: uv python install ${{ env.PYTHON_VERSION }}
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
 
       - name: Install dependencies
         run: uv sync --group dev
 
       - name: Run tests with coverage
-        run: uv run pytest --cov=src/copilot_conductor --cov-report=xml --cov-report=term-missing
+        run: uv run pytest --cov=src/copilot_conductor --cov-report=xml --cov-report=term-missing -m "not real_api"
+        env:
+          # Fake API key for mock tests to prevent accidental real API calls.
+          # Real API tests (marked with @pytest.mark.real_api) are excluded from CI
+          # via the '-m "not real_api"' filter and must be run manually with valid key.
+          # This ensures CI tests are fast, free, and don't leak credentials.
+          ANTHROPIC_API_KEY: "sk-ant-test-fake-key-for-mocking"
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4

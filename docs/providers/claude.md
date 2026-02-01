@@ -110,7 +110,7 @@ Claude offers multiple model tiers optimized for different use cases. All models
 | claude-haiku-4-20250318 | Simple tasks, high volume | Fastest | $1/$5 per MTok | 4096 | Classification, routing, simple Q&A |
 | claude-3-opus-20240229 | Legacy - complex reasoning | Slow | $15/$75 per MTok | 4096 | Legacy workflows (not recommended) |
 
-**Note**: Pricing is verified as of the latest Anthropic documentation. Always verify current rates at [anthropic.com/pricing](https://www.anthropic.com/pricing) before production deployment.
+**Note**: Pricing verified as of 2026-02-01 from Anthropic documentation. Always verify current rates at [anthropic.com/pricing](https://www.anthropic.com/pricing) before production deployment.
 
 ### Model Naming Patterns
 
@@ -178,7 +178,7 @@ The Claude provider supports several runtime configuration options that control 
 | Parameter | Type | Range | Default | Description |
 |-----------|------|-------|---------|-------------|
 | `temperature` | float | 0.0 - 1.0 | 1.0 | Controls randomness (0=deterministic, 1=creative) |
-| `max_tokens_claude` | int | 1 - 8192 | 8192 | Maximum OUTPUT tokens per response |
+| `max_tokens` | int | 1 - 8192 | 8192 | Maximum OUTPUT tokens per response |
 | `top_p` | float | 0.0 - 1.0 | - | Nucleus sampling threshold |
 | `top_k` | int | ≥ 0 | - | Top-k sampling parameter |
 | `stop_sequences` | list[str] | - | - | Custom sequences to halt generation |
@@ -210,7 +210,7 @@ Controls the maximum number of OUTPUT tokens Claude can generate:
 workflow:
   runtime:
     provider: claude
-    max_tokens_claude: 4096  # Limit response length
+    max_tokens: 4096  # Limit response length
 ```
 
 **Important**:
@@ -304,7 +304,7 @@ workflow:
     provider: claude
     default_model: claude-3-5-sonnet-latest
     temperature: 0.7
-    max_tokens_claude: 4096
+    max_tokens: 4096
     top_p: 0.9
     stop_sequences: ["END"]
     metadata:
@@ -341,10 +341,10 @@ These features are complex and deferred to Phase 2+ to keep Phase 1 focused on c
 
 If you need faster responses:
 
-1. **Reduce `max_tokens_claude`**: Smaller responses complete faster
+1. **Reduce `max_tokens`**: Smaller responses complete faster
    ```yaml
    runtime:
-     max_tokens_claude: 1024  # Faster than 8192
+     max_tokens: 1024  # Faster than 8192
    ```
 
 2. **Use Haiku models**: 3-5x faster than Sonnet/Opus
@@ -453,10 +453,10 @@ runtime:
 agents:
   - name: simple_task
     model: claude-haiku-4-20250318
-    # Bad: max_tokens_claude: 8192 (exceeds Haiku limit)
+    # Bad: max_tokens: 8192 (exceeds Haiku limit)
     # Good:
     runtime:
-      max_tokens_claude: 4096
+      max_tokens: 4096
 ```
 
 #### 6. Output Schema Validation Errors
@@ -590,11 +590,11 @@ agents:
 
 ### Strategy 2: Limit Output Tokens
 
-Reduce `max_tokens_claude` to limit response length:
+Reduce `max_tokens` to limit response length:
 
 ```yaml
 runtime:
-  max_tokens_claude: 1024  # Instead of default 8192
+  max_tokens: 1024  # Instead of default 8192
 ```
 
 **Potential savings**: 
@@ -707,7 +707,7 @@ Look for:
 - [ ] Use Haiku for simple tasks (classification, routing)
 - [ ] Use Sonnet for general purpose (default)
 - [ ] Use Opus only for complex reasoning
-- [ ] Set `max_tokens_claude` to minimum necessary
+- [ ] Set `max_tokens` to minimum necessary
 - [ ] Keep prompts concise
 - [ ] Use `context: mode: explicit` for multi-agent workflows
 - [ ] Enable prompt caching with `metadata.user_id`

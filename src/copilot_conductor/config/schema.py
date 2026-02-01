@@ -439,12 +439,36 @@ class RuntimeConfig(BaseModel):
         ge=1,
         le=200000,
         description=(
-            "Maximum OUTPUT tokens per response. "
-            "Claude 4: 8192 (Opus/Sonnet) or 4096 (Haiku). "
-            "Context window: 200K tokens (separate limit)"
+            "Maximum OUTPUT tokens Claude generates per response (NOT context window limit). "
+            "Claude 4: max 8192 (Opus/Sonnet) or 4096 (Haiku). "
+            "Context window: 200K tokens input+output combined (separate from this setting)"
         ),
     )
-    """Maximum number of output tokens Claude can generate per response."""
+    """Maximum number of output tokens Claude can generate per response.
+    
+    Note: This controls response length, NOT context window. Context trimming
+    is handled separately by the workflow engine if needed.
+    
+    Claude 4 limits: Opus/Sonnet 8192, Haiku 4096.
+    """
+
+    timeout: float | None = Field(
+        None,
+        ge=1.0,
+        description=(
+            "Request timeout in seconds for each individual API call (NOT per-workflow). "
+            "Default: 600s. Each agent execution gets its own timeout. "
+            "For workflow-level timeout, use limits.timeout_seconds instead."
+        ),
+    )
+    """Timeout for individual API requests (per-request, not per-workflow).
+    
+    This timeout applies to each agent execution independently. For example,
+    if timeout=60 and a workflow has 3 agents, each agent gets 60 seconds.
+    
+    For workflow-level timeout enforcement, use `limits.timeout_seconds` instead,
+    which limits the total wall-clock time for the entire workflow.
+    """
 
     top_p: float | None = Field(
         None,

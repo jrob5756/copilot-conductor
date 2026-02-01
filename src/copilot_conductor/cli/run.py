@@ -621,6 +621,10 @@ async def run_workflow_async(
         temperature=getattr(config.workflow.runtime, "temperature", None),
         max_tokens=getattr(config.workflow.runtime, "max_tokens", None),
         timeout=getattr(config.workflow.runtime, "timeout", None),
+        top_p=getattr(config.workflow.runtime, "top_p", None),
+        top_k=getattr(config.workflow.runtime, "top_k", None),
+        stop_sequences=getattr(config.workflow.runtime, "stop_sequences", None),
+        metadata=getattr(config.workflow.runtime, "metadata", None),
     )
 
     try:

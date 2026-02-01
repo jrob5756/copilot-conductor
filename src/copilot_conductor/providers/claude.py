@@ -2,6 +2,18 @@
 
 This module provides the ClaudeProvider class for executing agents
 using the Anthropic Claude SDK with tool-based structured output.
+
+Error Handling Strategy:
+- ValidationError: Used for invalid inputs, schema violations, and parameter range errors.
+  These are non-retryable and indicate user/configuration errors that should fail fast.
+  Examples: temperature out of range, invalid output schema, malformed prompt.
+  
+- ProviderError: Used for API failures, network errors, and SDK exceptions.
+  These may be retryable (connection errors, rate limits) or non-retryable (invalid API key).
+  The error includes metadata (status_code, is_retryable) to guide retry logic.
+  Examples: HTTP 500 errors, rate limits, authentication failures.
+
+This distinction ensures clear error classification and appropriate retry behavior.
 """
 
 from __future__ import annotations
@@ -10,8 +22,9 @@ import asyncio
 import json
 import logging
 import random
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
+
+from pydantic import BaseModel
 
 from copilot_conductor.exceptions import ProviderError, ValidationError
 from copilot_conductor.executor.output import validate_output
@@ -34,8 +47,24 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class RetryConfig:
+# Protocol for Claude API response structure (improves type safety)
+class ClaudeContentBlock(Protocol):
+    """Protocol for Claude response content blocks."""
+
+    type: str
+    text: str  # for text blocks
+    name: str  # for tool_use blocks
+    input: dict[str, Any]  # for tool_use blocks
+
+
+class ClaudeResponse(Protocol):
+    """Protocol for Claude API response structure."""
+
+    content: list[ClaudeContentBlock]
+    usage: Any  # Usage object with input_tokens, output_tokens
+
+
+class RetryConfig(BaseModel):
     """Configuration for retry behavior.
 
     Attributes:
@@ -80,6 +109,10 @@ class ClaudeProvider(AgentProvider):
         max_tokens: int | None = None,
         timeout: float = 600.0,
         retry_config: RetryConfig | None = None,
+        top_p: float | None = None,
+        top_k: int | None = None,
+        stop_sequences: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """Initialize the Claude provider.
 
@@ -93,6 +126,10 @@ class ClaudeProvider(AgentProvider):
             max_tokens: Maximum output tokens. Defaults to 8192.
             timeout: Request timeout in seconds. Defaults to 600s.
             retry_config: Optional retry configuration. Uses default if not provided.
+            top_p: Nucleus sampling parameter (0.0-1.0). Optional.
+            top_k: Top-k sampling parameter. Optional.
+            stop_sequences: Custom stop sequences for generation. Optional.
+            metadata: Metadata dict (e.g., user_id for caching). Optional.
 
         Raises:
             ProviderError: If SDK is not installed.
@@ -106,20 +143,39 @@ class ClaudeProvider(AgentProvider):
         self._client: AsyncAnthropic | None = None
         self._api_key = api_key
         self._default_model = model or "claude-3-5-sonnet-latest"
+        
+        # Validate and store temperature (enforce schema bounds at instantiation)
+        if temperature is not None:
+            self._validate_temperature(temperature)
         self._default_temperature = temperature
+        
+        # Validate and store max_tokens (enforce schema bounds at instantiation)
+        if max_tokens is not None:
+            self._validate_max_tokens(max_tokens)
         self._default_max_tokens = max_tokens or 8192
+        
         self._timeout = timeout
         self._sdk_version: str | None = None
         self._retry_config = retry_config or RetryConfig()
         self._retry_history: list[dict[str, Any]] = []  # For testing/debugging retries
         self._max_parse_recovery_attempts = 2  # Max retry attempts for malformed JSON
         self._max_schema_depth = 10  # Max nesting depth for recursive schema building
+        
+        # Claude-specific parameters - validate ranges before storing
+        self._top_p = self._validate_top_p(top_p) if top_p is not None else None
+        self._top_k = self._validate_top_k(top_k) if top_k is not None else None
+        self._stop_sequences = stop_sequences
+        self._metadata = metadata
 
-        # Initialize the client
+        # Initialize the client (sync initialization)
         self._initialize_client()
 
     def _initialize_client(self) -> None:
-        """Initialize the Anthropic client and verify SDK version."""
+        """Initialize the Anthropic client and log SDK version.
+        
+        Note: Model verification is deferred to validate_connection() to keep
+        initialization synchronous and avoid async operations in __init__.
+        """
         if not ANTHROPIC_SDK_AVAILABLE or AsyncAnthropic is None:
             return
 
@@ -150,33 +206,95 @@ class ClaudeProvider(AgentProvider):
                         )
                 except (ValueError, AttributeError):
                     logger.debug(f"Could not parse SDK version: {self._sdk_version}")
-
-    async def _verify_available_models(self) -> None:
-        """List and log available models, warn if default model is unavailable.
-
-        Note: This is async and should be called from async context (e.g., validate_connection).
+    
+    def _validate_temperature(self, temperature: float) -> None:
+        """Validate temperature parameter is in acceptable range.
+        
+        Enforces schema.py validation bounds (0.0-1.0) at provider instantiation
+        to fail fast before workflow execution. SDK also enforces this range.
+        
+        Args:
+            temperature: Temperature value to validate.
+            
+        Raises:
+            ValidationError: If temperature is out of range (0.0-1.0).
         """
-        if self._client is None:
-            return
-
-        try:
-            # Call client.models.list() to get available models (async)
-            models_page = await self._client.models.list()
-            available_models = [model.id for model in models_page.data]
-
-            logger.debug(f"Available Claude models: {', '.join(available_models)}")
-
-            # Warn if default model not in list
-            if self._default_model not in available_models:
-                logger.warning(
-                    f"Requested model '{self._default_model}' is not in the list of "
-                    f"available models. API calls may fail. Available: {available_models}"
-                )
-        except Exception as e:
-            logger.debug(f"Could not list available models: {e}")
+        if not (0.0 <= temperature <= 1.0):
+            raise ValidationError(
+                f"Temperature must be between 0.0 and 1.0 (schema validation), got {temperature}",
+                suggestion="Adjust temperature to be within the valid range"
+            )
+    
+    def _validate_max_tokens(self, max_tokens: int) -> None:
+        """Validate max_tokens parameter is in acceptable range.
+        
+        Enforces schema.py validation bounds (1-200000) at provider instantiation
+        to fail fast before workflow execution.
+        
+        Args:
+            max_tokens: Max tokens value to validate.
+            
+        Raises:
+            ValidationError: If max_tokens is out of range (1-200000).
+        """
+        if not (1 <= max_tokens <= 200000):
+            raise ValidationError(
+                f"max_tokens must be between 1 and 200000 (schema validation), got {max_tokens}",
+                suggestion="Adjust max_tokens to be within the valid range"
+            )
+    
+    def _validate_top_p(self, top_p: float) -> float:
+        """Validate top_p parameter is in acceptable range.
+        
+        Args:
+            top_p: Top-p value to validate.
+            
+        Returns:
+            The validated top_p value.
+            
+        Raises:
+            ValidationError: If top_p is out of range.
+        """
+        if not (0.0 <= top_p <= 1.0):
+            raise ValidationError(
+                f"top_p must be between 0.0 and 1.0, got {top_p}",
+                suggestion="Adjust top_p to be within the valid range"
+            )
+        return top_p
+    
+    def _validate_top_k(self, top_k: int) -> int:
+        """Validate top_k parameter is positive.
+        
+        Args:
+            top_k: Top-k value to validate.
+            
+        Returns:
+            The validated top_k value.
+            
+        Raises:
+            ValidationError: If top_k is invalid.
+        """
+        if top_k < 1:
+            raise ValidationError(
+                f"top_k must be a positive integer, got {top_k}",
+                suggestion="Adjust top_k to be at least 1"
+            )
+        return top_k
+    
+    def get_retry_history(self) -> list[dict[str, Any]]:
+        """Get the retry history for debugging purposes.
+        
+        Returns:
+            List of dictionaries containing retry attempt details.
+        """
+        return self._retry_history.copy()
 
     async def validate_connection(self) -> bool:
         """Verify the provider can connect to the Claude API.
+        
+        This method serves dual purposes:
+        1. Validates API connectivity and credentials
+        2. Performs async model verification (deferred from __init__)
 
         Returns:
             True if connection successful, False otherwise.
@@ -185,14 +303,41 @@ class ClaudeProvider(AgentProvider):
             return False
 
         try:
-            # Simple test: list models to verify API key works
+            # Test: list models to verify API key works and perform model verification
             await self._client.models.list()
-            # Also verify available models on first connection
-            await self._verify_available_models()
+            # Log available models for debugging
+            await self._log_available_models()
             return True
         except Exception as e:
             logger.error(f"Connection validation failed: {e}")
             return False
+
+    async def _log_available_models(self) -> None:
+        """List and log available models, warn if default model is unavailable.
+
+        Consolidated from the former _verify_available_models method.
+        """
+        if self._client is None:
+            return
+
+        try:
+            # Call client.models.list() to get available models (async)
+            logger.debug(f"Discovering available Claude models via client.models.list()...")
+            models_page = await self._client.models.list()
+            available_models = [model.id for model in models_page.data]
+
+            logger.info(f"Available Claude models: {', '.join(available_models)}")
+
+            # Warn if default model not in list
+            if self._default_model not in available_models:
+                logger.warning(
+                    f"Requested model '{self._default_model}' is not in the list of "
+                    f"available models. API calls may fail. Available: {available_models}"
+                )
+            else:
+                logger.debug(f"Default model '{self._default_model}' verified in available models")
+        except Exception as e:
+            logger.warning(f"Could not list available models (discovery failed): {e}")
 
     async def close(self) -> None:
         """Release provider resources and close connections."""
@@ -394,9 +539,9 @@ class ClaudeProvider(AgentProvider):
             )
 
         # Build tools for structured output if schema is defined
-        sdk_tools = None
+        tools = None
         if agent.output:
-            sdk_tools = self._build_tools_for_structured_output(agent.output)
+            tools = self._build_tools_for_structured_output(agent.output)
             # Append instruction to use the tool
             messages[-1]["content"] += (
                 "\n\nPlease use the 'emit_output' tool to return your response "
@@ -411,7 +556,7 @@ class ClaudeProvider(AgentProvider):
                     model=model,
                     temperature=temperature,
                     max_tokens=max_tokens,
-                    sdk_tools=sdk_tools,
+                    tools=tools,
                     output_schema=agent.output,
                 )
 
@@ -459,30 +604,28 @@ class ClaudeProvider(AgentProvider):
                 # Determine if error is retryable
                 is_retryable = self._is_retryable_error(e)
 
-                # Track retry history
-                self._retry_history.append(
-                    {
-                        "attempt": attempt,
-                        "agent_name": agent.name,
-                        "error": str(e),
-                        "error_type": type(e).__name__,
-                        "is_retryable": is_retryable,
-                    }
+                # Track retry history with consistent metadata
+                retry_entry = {
+                    "attempt": attempt,
+                    "agent_name": agent.name,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "is_retryable": is_retryable,
+                }
+                self._retry_history.append(retry_entry)
+                
+                # Log retry information
+                logger.debug(
+                    f"Execution attempt {attempt} failed: {type(e).__name__}: {e} "
+                    f"(retryable={is_retryable})"
                 )
 
                 # Don't retry non-retryable errors
                 if not is_retryable:
+                    # Extract status code consistently
+                    status_code = self._extract_status_code(e)
+                    
                     # Wrap as ProviderError with proper metadata
-                    status_code = None
-                    # Try to extract status code (handle both real and mocked exceptions)
-                    try:
-                        if anthropic and isinstance(e, anthropic.APIStatusError):
-                            status_code = e.status_code
-                    except TypeError:
-                        # Handle mocked exceptions
-                        if hasattr(e, "status_code"):
-                            status_code = e.status_code
-
                     if status_code is not None:
                         raise ProviderError(
                             f"Claude API error: {e}",
@@ -505,16 +648,17 @@ class ClaudeProvider(AgentProvider):
                 retry_after = self._get_retry_after(e)
                 if retry_after is not None:
                     delay = retry_after
-                    logger.info(f"Rate limit hit, respecting retry-after header: {delay}s")
+                    logger.warning(f"Rate limit hit (HTTP 429), respecting retry-after header: {delay}s")
                 else:
                     # Calculate delay with exponential backoff
                     delay = self._calculate_delay(attempt, config)
+                    logger.info(f"Calculated exponential backoff delay: {delay:.2f}s for attempt {attempt}")
 
-                # Log retry attempt
-                logger.info(
-                    f"Retrying after {delay:.2f}s (attempt {attempt}/{config.max_attempts}): {e}"
+                # Log retry attempt with full context
+                logger.warning(
+                    f"[Retry {attempt}/{config.max_attempts}] Retrying after {delay:.2f}s due to {type(e).__name__}: {e}"
                 )
-                self._retry_history[-1]["delay"] = delay
+                retry_entry["delay"] = delay
 
                 await asyncio.sleep(delay)
 
@@ -526,6 +670,26 @@ class ClaudeProvider(AgentProvider):
             ),
             is_retryable=False,
         )
+    
+    def _extract_status_code(self, exception: Exception) -> int | None:
+        """Extract HTTP status code from exception if available.
+        
+        Args:
+            exception: Exception to extract status code from.
+            
+        Returns:
+            HTTP status code or None if not available.
+        """
+        # Try to extract from APIStatusError
+        try:
+            if anthropic and isinstance(exception, anthropic.APIStatusError):
+                return exception.status_code
+        except TypeError:
+            # Handle mocked exceptions - check by attribute
+            if hasattr(exception, "status_code"):
+                return exception.status_code
+        
+        return None
 
     async def _execute_api_call(
         self,
@@ -533,8 +697,8 @@ class ClaudeProvider(AgentProvider):
         model: str,
         temperature: float | None,
         max_tokens: int,
-        sdk_tools: list[dict[str, Any]] | None = None,
-    ) -> Any:
+        tools: list[dict[str, Any]] | None = None,
+    ) -> ClaudeResponse:
         """Execute non-streaming Claude API call using AsyncAnthropic.
 
         This method makes an asynchronous (non-streaming) call to the Claude
@@ -545,7 +709,7 @@ class ClaudeProvider(AgentProvider):
             model: Model identifier.
             temperature: Temperature setting (0.0-1.0, enforced by SDK).
             max_tokens: Maximum output tokens.
-            sdk_tools: Optional tool definitions for structured output.
+            tools: Optional tool definitions for structured output.
 
         Returns:
             Claude API response object with content blocks and usage metadata.
@@ -570,8 +734,21 @@ class ClaudeProvider(AgentProvider):
         if temperature is not None:
             kwargs["temperature"] = temperature
 
-        if sdk_tools:
-            kwargs["tools"] = sdk_tools
+        if tools:
+            kwargs["tools"] = tools
+        
+        # Add Claude-specific parameters if set
+        if self._top_p is not None:
+            kwargs["top_p"] = self._top_p
+        
+        if self._top_k is not None:
+            kwargs["top_k"] = self._top_k
+        
+        if self._stop_sequences is not None:
+            kwargs["stop_sequences"] = self._stop_sequences
+        
+        if self._metadata is not None:
+            kwargs["metadata"] = self._metadata
 
         # Execute non-streaming API call (async)
         logger.debug(
@@ -588,9 +765,9 @@ class ClaudeProvider(AgentProvider):
         model: str,
         temperature: float | None,
         max_tokens: int,
-        sdk_tools: list[dict[str, Any]] | None,
+        tools: list[dict[str, Any]] | None,
         output_schema: dict[str, OutputField] | None,
-    ) -> Any:
+    ) -> ClaudeResponse:
         """Execute API call with parse recovery for malformed JSON responses.
 
         This method handles the fallback case where Claude returns text instead
@@ -602,7 +779,7 @@ class ClaudeProvider(AgentProvider):
             model: Model identifier.
             temperature: Temperature setting.
             max_tokens: Maximum output tokens.
-            sdk_tools: Tool definitions for structured output.
+            tools: Tool definitions for structured output.
             output_schema: Expected output schema (None if no schema).
 
         Returns:
@@ -620,7 +797,7 @@ class ClaudeProvider(AgentProvider):
             model=model,
             temperature=temperature,
             max_tokens=max_tokens,
-            sdk_tools=sdk_tools,
+            tools=tools,
         )
 
         # If no output schema, return immediately (no recovery needed)
@@ -629,20 +806,26 @@ class ClaudeProvider(AgentProvider):
 
         # Check if we got tool_use (success path)
         if self._extract_structured_output(response) is not None:
-            logger.debug("Extracted structured output from tool_use block")
+            logger.debug("Successfully extracted structured output from tool_use block")
             return response
 
         # Check if we can extract JSON from text (fallback success path)
         json_content = self._extract_json_fallback(response)
         if json_content is not None:
-            logger.info("Claude returned text instead of tool_use, but JSON extraction succeeded")
+            logger.warning(
+                "Claude returned text instead of tool_use, but JSON extraction succeeded via fallback parsing. "
+                "Consider reviewing prompt to encourage tool usage."
+            )
             return response
 
         # Parse recovery: JSON extraction failed
         initial_text = self._extract_text_from_response(response)
         failure_reason = self._diagnose_json_failure(initial_text)
         recovery_history.append(f"Attempt 0 (initial): {failure_reason}")
-        logger.info(f"Initial extraction failed: {failure_reason}, starting parse recovery")
+        logger.warning(
+            f"Initial JSON extraction failed: {failure_reason}. "
+            f"Starting parse recovery (max {self._max_parse_recovery_attempts} attempts)"
+        )
 
         for attempt in range(1, self._max_parse_recovery_attempts + 1):
             logger.info(f"Parse recovery attempt {attempt}/{self._max_parse_recovery_attempts}")
@@ -673,7 +856,7 @@ class ClaudeProvider(AgentProvider):
                 model=model,
                 temperature=temperature,
                 max_tokens=max_tokens,
-                sdk_tools=sdk_tools,
+                tools=tools,
             )
 
             # Check if recovery succeeded (tool_use)
@@ -691,12 +874,16 @@ class ClaudeProvider(AgentProvider):
             attempt_text = self._extract_text_from_response(response)
             attempt_failure = self._diagnose_json_failure(attempt_text)
             recovery_history.append(f"Attempt {attempt}: {attempt_failure}")
+            logger.warning(f"Parse recovery attempt {attempt} failed: {attempt_failure}")
             # Update for next iteration
             initial_text = attempt_text
             failure_reason = attempt_failure
 
         # All recovery attempts exhausted - raise detailed error
-        logger.error(f"Parse recovery exhausted after {self._max_parse_recovery_attempts} attempts")
+        logger.error(
+            f"Parse recovery exhausted after {self._max_parse_recovery_attempts} attempts. "
+            f"History: {'; '.join(recovery_history)}"
+        )
         raise ProviderError(
             f"Failed to extract valid JSON after {self._max_parse_recovery_attempts} "
             "recovery attempts",
@@ -740,16 +927,11 @@ class ClaudeProvider(AgentProvider):
     def _process_response_content_blocks(
         self, response: Any
     ) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
-        """Process content blocks from Claude response.
+        """Process content blocks from Claude response for debugging.
 
-        Extracts both text content and tool_use content from the response,
-        categorizing each block by its type.
-
-        Note:
-            This method is provided for debugging and future features (e.g.,
-            detailed response logging, tool call tracing). It is not currently
-            used in the main execution flow but is tested to ensure correctness
-            for when it's needed.
+        RETENTION RATIONALE: Reserved for Phase 2 MCP tool integration where
+        detailed tool_use block inspection will be required for tool call tracing
+        and debugging. Tested to ensure API contract remains stable.
 
         Args:
             response: Claude API response with content blocks.
@@ -758,10 +940,6 @@ class ClaudeProvider(AgentProvider):
             Tuple of (all_blocks, tool_use_data) where:
                 - all_blocks: List of dicts describing each content block
                 - tool_use_data: Dict from emit_output tool_use, or None
-
-        Note:
-            This method processes non-streaming responses only. Each response
-            contains a list of content blocks which can be text or tool_use.
         """
         blocks = []
         tool_use_data = None
@@ -1055,14 +1233,24 @@ class ClaudeProvider(AgentProvider):
         try:
             # Look for JSON code blocks
             if "```json" in text:
-                start = text.index("```json") + 7
-                end = text.index("```", start)
-                json_str = text[start:end].strip()
-                return json.loads(json_str)
+                start_idx = text.find("```json")
+                if start_idx != -1:
+                    start = start_idx + 7
+                    end = text.find("```", start)
+                    if end != -1:
+                        json_str = text[start:end].strip()
+                        try:
+                            return json.loads(json_str)
+                        except json.JSONDecodeError as e:
+                            logger.warning(f"JSON code block parsing failed: {e}")
+                            # Fall through to try whole text
 
             # Try parsing the whole text
-            return json.loads(text)
-        except (json.JSONDecodeError, ValueError):
+            result = json.loads(text)
+            logger.debug("Successfully parsed JSON from text response")
+            return result
+        except json.JSONDecodeError as e:
+            logger.debug(f"JSON fallback parsing failed: {e}")
             return None
 
     def _extract_text_from_response(self, response: Any) -> str:

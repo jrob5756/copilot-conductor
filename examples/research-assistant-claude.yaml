@@ -36,7 +36,7 @@ workflow:
     provider: claude
     default_model: claude-3-5-sonnet-latest
     temperature: 0.7
-    max_tokens_claude: 4096
+    max_tokens: 4096
 
   context:
     mode: explicit  # Only declared inputs are available

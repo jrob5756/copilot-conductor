@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import random
 import time
 from collections.abc import Callable
@@ -19,6 +20,8 @@ from copilot_conductor.providers.base import AgentOutput, AgentProvider
 
 if TYPE_CHECKING:
     from copilot_conductor.config.schema import AgentDef
+
+logger = logging.getLogger(__name__)
 
 # Try to import the Copilot SDK
 try:
@@ -163,6 +166,9 @@ class CopilotProvider(AgentProvider):
             }
         )
 
+        logger.info(f"Executing agent '{agent.name}' with model {agent.model or self._default_model}")
+        logger.debug(f"Prompt length: {len(rendered_prompt)} chars, Tools: {tools}")
+
         # Use retry logic for both mock and real SDK calls
         return await self._execute_with_retry(agent, context, rendered_prompt, tools)
 
@@ -206,8 +212,14 @@ class CopilotProvider(AgentProvider):
                         "attempt": attempt,
                         "agent_name": agent.name,
                         "error": str(e),
+                        "error_type": type(e).__name__,
                         "is_retryable": e.is_retryable,
                     }
+                )
+
+                logger.warning(
+                    f"Agent '{agent.name}' attempt {attempt}/{config.max_attempts} failed: {e}. "
+                    f"Retryable: {e.is_retryable}"
                 )
 
                 # Don't retry non-retryable errors
@@ -221,6 +233,8 @@ class CopilotProvider(AgentProvider):
                 # Calculate delay with exponential backoff
                 delay = self._calculate_delay(attempt, config)
 
+                logger.debug(f"Retrying agent '{agent.name}' in {delay:.2f}s")
+
                 # Log retry attempt (for testing visibility)
                 self._retry_history[-1]["delay"] = delay
 
@@ -229,11 +243,13 @@ class CopilotProvider(AgentProvider):
             except Exception as e:
                 # Wrap unexpected errors as retryable
                 last_error = e
+                logger.error(f"Unexpected error in agent '{agent.name}': {type(e).__name__}: {e}")
                 self._retry_history.append(
                     {
                         "attempt": attempt,
                         "agent_name": agent.name,
                         "error": str(e),
+                        "error_type": type(e).__name__,
                         "is_retryable": True,
                     }
                 )

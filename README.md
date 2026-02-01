@@ -99,7 +99,7 @@ pip install 'anthropic>=0.77.0,<1.0.0'
 ### 2. Set your API key
 
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...
+export ANTHROPIC_API_KEY=sk-ant-api03-...
 ```
 
 Get your API key at [console.anthropic.com](https://console.anthropic.com)
@@ -115,7 +115,8 @@ workflow:
   runtime:
     provider: claude  # Change from 'copilot' to 'claude'
     default_model: claude-3-5-sonnet-latest
-    max_tokens_claude: 4096
+    temperature: 0.7
+    max_tokens: 2048  # Note: max_tokens not max_tokens_claude
 
 agents:
   - name: answerer

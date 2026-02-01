@@ -36,6 +36,7 @@ for_each:
     failure_mode: continue_on_error    # Continue even if some items fail
     
     agent:
+      name: item_processor
       model: claude-sonnet-4
       prompt: |
         You are a data processor. Process this item:

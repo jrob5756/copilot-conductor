@@ -102,14 +102,14 @@ workflow:
     provider: claude
     default_model: claude-3-5-sonnet-latest
     temperature: 0.7  # Keep this (Claude also uses 0.0-1.0)
-    max_tokens_claude: 4096  # Renamed parameter
+    max_tokens: 4096  # Controls output length (Claude-specific meaning)
     # Optional Claude-specific settings:
     top_p: 0.9
     top_k: 50
 ```
 
 **Key changes**:
-- `max_tokens` → `max_tokens_claude`
+- `max_tokens` now controls output length (different from Copilot's context trimming)
 - Add Claude-specific parameters: `top_p`, `top_k`, `stop_sequences`, `metadata`
 
 ### Step 5: Remove Copilot-Specific Features
@@ -178,7 +178,7 @@ workflow:
     provider: claude
     default_model: claude-3-5-sonnet-latest
     temperature: 0.7
-    max_tokens_claude: 4096
+    max_tokens: 4096
     # Remove mcp_servers
 
 agents:
@@ -250,22 +250,27 @@ runtime:
 
 ### 2. Max Tokens Requirement
 
-**Copilot**: `max_tokens` is optional (has defaults)
-**Claude**: `max_tokens_claude` is required by the API
+**IMPORTANT**: The `max_tokens` field in RuntimeConfig has DIFFERENT meanings for Claude vs other providers:
+- **Copilot/OpenAI**: Context window trimming (optional, handled by workflow engine)
+- **Claude**: Maximum OUTPUT tokens per response (required by Claude API)
 
 **Migration**:
 ```yaml
-# Before (Copilot) - Works without max_tokens
+# Before (Copilot) - max_tokens for context trimming
 runtime:
   provider: copilot
+  max_tokens: 4096  # Optional: trim context to fit window
 
-# After (Claude) - Must specify
+# After (Claude) - max_tokens for output generation
 runtime:
   provider: claude
-  max_tokens_claude: 8192  # Required
+  max_tokens: 8192  # Required: max response length
 ```
 
-**Recommendation**: Always specify `max_tokens_claude` (default: 8192)
+**Recommendation**: 
+- Always specify `max_tokens` for Claude (default: 8192)
+- Understand it controls OUTPUT length, not context window (Claude has 200K context)
+- Use lower values (1024-2048) for concise responses, higher (4096-8192) for detailed output
 
 ### 3. Output Verbosity
 
@@ -275,7 +280,7 @@ runtime:
 - Longer responses for the same prompt
 
 **Mitigation**:
-1. Reduce `max_tokens_claude` to enforce conciseness
+1. Reduce `max_tokens` to enforce conciseness
 2. Update prompts: "Answer concisely" or "Be brief"
 3. Use Haiku for simple tasks (naturally more concise)
 
@@ -286,8 +291,10 @@ agents:
     prompt: |
       Answer the following question CONCISELY (2-3 sentences max):
       {{ question }}
-    runtime:
-      max_tokens_claude: 512  # Enforce brevity
+
+workflow:
+  runtime:
+    max_tokens: 512  # Enforce brevity
 ```
 
 ### 4. System Prompt Sensitivity
@@ -318,7 +325,7 @@ agents:
 - Cannot cancel mid-generation
 
 **Workarounds**:
-1. Reduce `max_tokens_claude` for faster responses
+1. Reduce `max_tokens` for faster responses (less to generate)
 2. Use Haiku models (3-5x faster)
 3. Break workflows into smaller agents
 
@@ -472,14 +479,14 @@ temperature: 1.5
 temperature: 1.0
 ```
 
-### Pitfall 4: Missing max_tokens_claude
+### Pitfall 4: Missing max_tokens
 
 **Error**: `BadRequestError: max_tokens is required`
 
 **Solution**: Always specify:
 ```yaml
 runtime:
-  max_tokens_claude: 8192
+  max_tokens: 8192
 ```
 
 ### Pitfall 5: Expecting Tools to Work
@@ -497,7 +504,7 @@ runtime:
 
 **Solution**: 
 1. Accept non-streaming in Phase 1
-2. Reduce `max_tokens_claude` for faster responses
+2. Reduce `max_tokens` for faster responses
 3. Use Haiku models
 
 ### Pitfall 7: Cost Surprises
@@ -506,7 +513,7 @@ runtime:
 
 **Solution**: Monitor token usage and optimize:
 - Use Haiku for simple tasks
-- Reduce `max_tokens_claude`
+- Reduce `max_tokens` to limit response length
 - Enable prompt caching with `metadata.user_id`
 
 ## Rollback Procedures
@@ -580,7 +587,7 @@ Use this checklist for each workflow:
 - [ ] Change `provider: copilot` → `provider: claude`
 - [ ] Set `ANTHROPIC_API_KEY` environment variable
 - [ ] Map model names (GPT → Claude)
-- [ ] Update `max_tokens` → `max_tokens_claude`
+- [ ] Understand `max_tokens` meaning change (context → output length)
 - [ ] Remove `mcp_servers` section
 - [ ] Remove agent `tools` fields
 

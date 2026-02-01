@@ -103,7 +103,7 @@ workflow:
   runtime:
     provider: claude
     default_model: claude-3-5-sonnet-latest
-    max_tokens_claude: 4096
+    max_tokens: 4096
     temperature: 0.7
 
 agents:
@@ -164,7 +164,7 @@ agents:
 
 **Claude**:
 - Use Haiku for simple tasks (3x cheaper than Sonnet)
-- Limit `max_tokens_claude` to reduce output costs
+- Limit `max_tokens` to reduce output costs
 - Enable prompt caching with `metadata.user_id`
 - Use `context: mode: explicit` to reduce input tokens
 
@@ -273,7 +273,7 @@ workflow:
   runtime:
     provider: claude
     default_model: claude-3-5-sonnet-latest
-    max_tokens_claude: 4096
+    max_tokens: 4096
 
 # After (Copilot)
 workflow:
