@@ -5,9 +5,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from copilot_conductor.exceptions import ProviderError
-from copilot_conductor.providers.copilot import CopilotProvider
-from copilot_conductor.providers.factory import create_provider
+from conductor.exceptions import ProviderError
+from conductor.providers.copilot import CopilotProvider
+from conductor.providers.factory import create_provider
 
 
 class TestCreateProvider:
@@ -45,7 +45,7 @@ class TestCreateProvider:
         assert exc_info.value.suggestion is not None
         assert "copilot" in exc_info.value.suggestion
 
-    @patch("copilot_conductor.providers.factory.ANTHROPIC_SDK_AVAILABLE", False)
+    @patch("conductor.providers.factory.ANTHROPIC_SDK_AVAILABLE", False)
     @pytest.mark.asyncio
     async def test_create_claude_provider_raises_when_sdk_not_available(self) -> None:
         """Test that Claude provider raises ProviderError when SDK not available."""
@@ -54,9 +54,9 @@ class TestCreateProvider:
         assert "anthropic SDK" in str(exc_info.value)
         assert exc_info.value.suggestion is not None
 
-    @patch("copilot_conductor.providers.factory.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.factory.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_create_claude_provider_success(
         self, mock_anthropic_module: Any, mock_anthropic_class: Any
@@ -73,9 +73,9 @@ class TestCreateProvider:
         assert provider is not None
         assert provider.__class__.__name__ == "ClaudeProvider"
 
-    @patch("copilot_conductor.providers.factory.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.factory.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_create_claude_provider_with_config(
         self, mock_anthropic_module: Any, mock_anthropic_class: Any
@@ -104,9 +104,9 @@ class TestCreateProvider:
         assert provider._default_max_tokens == 4096
         assert provider._timeout == 300.0
 
-    @patch("copilot_conductor.providers.factory.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.factory.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_create_claude_provider_with_validation(
         self, mock_anthropic_module: Any, mock_anthropic_class: Any

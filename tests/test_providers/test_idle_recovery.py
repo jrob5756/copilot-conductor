@@ -6,9 +6,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from copilot_conductor.config.schema import AgentDef
-from copilot_conductor.exceptions import ProviderError
-from copilot_conductor.providers.copilot import (
+from conductor.config.schema import AgentDef
+from conductor.exceptions import ProviderError
+from conductor.providers.copilot import (
     CopilotProvider,
     IdleRecoveryConfig,
 )
@@ -188,7 +188,7 @@ class TestWaitWithIdleDetection:
     async def test_timeout_triggers_recovery(self) -> None:
         """Test that timeout triggers a recovery message."""
         config = IdleRecoveryConfig(
-            idle_timeout_seconds=0.01,  # 10ms for fast testing
+            idle_timeout_seconds=0.05,  # 50ms for more reliable testing
             max_recovery_attempts=3,
         )
         provider = CopilotProvider(
@@ -202,7 +202,7 @@ class TestWaitWithIdleDetection:
 
         # Set done after the first recovery attempt
         async def set_done_after_delay():
-            await asyncio.sleep(0.02)  # Wait for first recovery
+            await asyncio.sleep(0.1)  # Wait for first recovery
             done.set()
 
         last_activity_ref = ["tool.execution_start", "web_search", 0.0]
@@ -226,7 +226,7 @@ class TestWaitWithIdleDetection:
     async def test_max_recovery_attempts_exhausted(self) -> None:
         """Test that ProviderError is raised after max recovery attempts."""
         config = IdleRecoveryConfig(
-            idle_timeout_seconds=0.01,  # 10ms for fast testing
+            idle_timeout_seconds=0.05,  # 50ms for more reliable testing
             max_recovery_attempts=2,
         )
         provider = CopilotProvider(
@@ -257,7 +257,7 @@ class TestWaitWithIdleDetection:
     async def test_recovery_sends_correct_prompt(self) -> None:
         """Test that recovery sends the correct prompt based on last activity."""
         config = IdleRecoveryConfig(
-            idle_timeout_seconds=0.01,
+            idle_timeout_seconds=0.05,  # 50ms for more reliable testing
             max_recovery_attempts=1,
             recovery_prompt="Continue from {last_activity}",
         )
@@ -272,7 +272,7 @@ class TestWaitWithIdleDetection:
 
         # Set done after recovery is sent
         async def set_done_after_recovery():
-            await asyncio.sleep(0.02)
+            await asyncio.sleep(0.1)  # 100ms to ensure recovery happens
             done.set()
 
         last_activity_ref = ["tool.execution_start", "my_tool", 0.0]

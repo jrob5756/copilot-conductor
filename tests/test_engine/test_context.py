@@ -11,7 +11,7 @@ Tests cover:
 
 import pytest
 
-from copilot_conductor.engine.context import (
+from conductor.engine.context import (
     CHARS_PER_TOKEN,
     WorkflowContext,
     estimate_dict_tokens,

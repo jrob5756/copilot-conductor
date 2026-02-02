@@ -12,10 +12,10 @@ from unittest.mock import patch
 import pytest
 from typer.testing import CliRunner
 
-from copilot_conductor.cli.app import app
+from conductor.cli.app import app
 
 if TYPE_CHECKING:
-    from copilot_conductor.config.schema import AgentDef
+    from conductor.config.schema import AgentDef
 
 runner = CliRunner()
 
@@ -105,16 +105,16 @@ output:
 
     async def test_simple_workflow_e2e(self, simple_workflow: Path) -> None:
         """Test end-to-end execution of a simple workflow."""
-        from copilot_conductor.cli.run import run_workflow_async
-        from copilot_conductor.providers.copilot import CopilotProvider
+        from conductor.cli.run import run_workflow_async
+        from conductor.providers.copilot import CopilotProvider
 
         # Create a mock handler that matches CopilotProvider's expected signature
         # (AgentDef, str, dict[str, Any]) -> dict[str, Any]
         def mock_handler(agent: AgentDef, prompt: str, context: dict[str, Any]) -> dict[str, Any]:
             return {"answer": "Python is a programming language."}
 
-        # Patch create_provider to return our mock provider
-        with patch("copilot_conductor.cli.run.create_provider") as mock_factory:
+        # Patch create_provider in the registry module (used by CLI)
+        with patch("conductor.providers.registry.create_provider") as mock_factory:
             mock_provider = CopilotProvider(mock_handler=mock_handler)
             mock_factory.return_value = mock_provider
 
@@ -128,8 +128,8 @@ output:
 
     async def test_multi_agent_workflow_e2e(self, multi_agent_workflow: Path) -> None:
         """Test end-to-end execution of a multi-agent workflow."""
-        from copilot_conductor.cli.run import run_workflow_async
-        from copilot_conductor.providers.copilot import CopilotProvider
+        from conductor.cli.run import run_workflow_async
+        from conductor.providers.copilot import CopilotProvider
 
         call_count = 0
 
@@ -144,7 +144,7 @@ output:
                 # Second agent (summarizer)
                 return {"summary": "Summary of the three facts."}
 
-        with patch("copilot_conductor.cli.run.create_provider") as mock_factory:
+        with patch("conductor.providers.registry.create_provider") as mock_factory:
             mock_provider = CopilotProvider(mock_handler=mock_handler)
             mock_factory.return_value = mock_provider
 
@@ -159,7 +159,7 @@ output:
 
     def test_simple_workflow_cli_e2e(self, simple_workflow: Path) -> None:
         """Test CLI execution of a simple workflow."""
-        with patch("copilot_conductor.cli.run.run_workflow_async") as mock_run:
+        with patch("conductor.cli.run.run_workflow_async") as mock_run:
             mock_run.return_value = {"answer": "42"}
 
             result = runner.invoke(
@@ -186,9 +186,9 @@ output:
         """Test that missing required input produces error."""
         # Don't mock - let it actually try to run
         # The workflow requires 'question' input
-        with patch("copilot_conductor.cli.run.run_workflow_async") as mock_run:
+        with patch("conductor.cli.run.run_workflow_async") as mock_run:
             # Simulate validation error for missing input
-            from copilot_conductor.exceptions import ValidationError
+            from conductor.exceptions import ValidationError
 
             mock_run.side_effect = ValidationError("Missing required input: question")
 
@@ -206,7 +206,7 @@ output:
 
     def test_workflow_output_is_json(self, simple_workflow: Path) -> None:
         """Test that workflow output is valid JSON."""
-        with patch("copilot_conductor.cli.run.run_workflow_async") as mock_run:
+        with patch("conductor.cli.run.run_workflow_async") as mock_run:
             mock_run.return_value = {
                 "answer": "The answer is 42.",
                 "metadata": {"confidence": 0.95},
@@ -234,7 +234,7 @@ class TestFixtureWorkflows:
         """Test running the valid_simple fixture."""
         workflow_file = fixtures_dir / "valid_simple.yaml"
 
-        with patch("copilot_conductor.cli.run.run_workflow_async") as mock_run:
+        with patch("conductor.cli.run.run_workflow_async") as mock_run:
             mock_run.return_value = {"message": "Hello!"}
 
             result = runner.invoke(
@@ -312,7 +312,7 @@ output:
 
     def test_numeric_input_coercion(self, typed_inputs_workflow: Path) -> None:
         """Test that numeric inputs are coerced correctly."""
-        with patch("copilot_conductor.cli.run.run_workflow_async") as mock_run:
+        with patch("conductor.cli.run.run_workflow_async") as mock_run:
             mock_run.return_value = {"result": "done"}
 
             runner.invoke(
@@ -332,7 +332,7 @@ output:
 
     def test_boolean_input_coercion(self, typed_inputs_workflow: Path) -> None:
         """Test that boolean inputs are coerced correctly."""
-        with patch("copilot_conductor.cli.run.run_workflow_async") as mock_run:
+        with patch("conductor.cli.run.run_workflow_async") as mock_run:
             mock_run.return_value = {"result": "done"}
 
             runner.invoke(
@@ -354,7 +354,7 @@ output:
 
     def test_array_input_coercion(self, typed_inputs_workflow: Path) -> None:
         """Test that array inputs are coerced correctly."""
-        with patch("copilot_conductor.cli.run.run_workflow_async") as mock_run:
+        with patch("conductor.cli.run.run_workflow_async") as mock_run:
             mock_run.return_value = {"result": "done"}
 
             runner.invoke(

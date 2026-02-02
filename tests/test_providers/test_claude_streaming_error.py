@@ -10,16 +10,16 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from copilot_conductor.config.schema import AgentDef, OutputField
-from copilot_conductor.providers.claude import ClaudeProvider
+from conductor.config.schema import AgentDef, OutputField
+from conductor.providers.claude import ClaudeProvider
 
 
 class TestClaudeStreamingDeferral:
     """Tests for streaming behavior in Phase 1 (should not stream)."""
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_non_streaming_execution(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -56,9 +56,9 @@ class TestClaudeStreamingDeferral:
         call_kwargs = mock_client.messages.create.call_args[1]
         assert "stream" not in call_kwargs or call_kwargs.get("stream") is False
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_complete_response_returned(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -103,9 +103,9 @@ class TestClaudeStreamingDeferral:
 class TestClaudeMaxTokensValidation:
     """Tests for max_tokens configuration."""
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_respects_configured_max_tokens(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -142,9 +142,9 @@ class TestClaudeMaxTokensValidation:
         call_kwargs = mock_client.messages.create.call_args[1]
         assert call_kwargs["max_tokens"] == 1024
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     def test_default_max_tokens_set(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
     ) -> None:

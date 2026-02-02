@@ -1,6 +1,6 @@
 """Test that the exceptions module works correctly."""
 
-from copilot_conductor.exceptions import (
+from conductor.exceptions import (
     ConductorError,
     ConfigurationError,
     ExecutionError,

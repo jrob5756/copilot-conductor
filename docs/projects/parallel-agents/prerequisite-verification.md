@@ -47,7 +47,7 @@ All parallel infrastructure tests are **passing**:
 
 ### 1. Core Execution Pattern (`_execute_parallel_group`)
 
-**Location**: `src/copilot_conductor/engine/workflow.py:614-830`
+**Location**: `src/conductor/engine/workflow.py:614-830`
 
 **Key Features**:
 - ✅ Immutable context snapshot via `copy.deepcopy()`
@@ -91,7 +91,7 @@ elif failure_mode == "all_or_nothing":
 
 ### 2. Output Aggregation (`ParallelGroupOutput`)
 
-**Location**: `src/copilot_conductor/engine/workflow.py:26-50`
+**Location**: `src/conductor/engine/workflow.py:26-50`
 
 **Structure**:
 ```python
@@ -126,7 +126,7 @@ parallel_output.errors[agent_name] = ParallelAgentError(
 
 ### 3. Error Handling (`ParallelAgentError`)
 
-**Location**: `src/copilot_conductor/engine/workflow.py:18-24`
+**Location**: `src/conductor/engine/workflow.py:18-24`
 
 **Structure**:
 ```python
@@ -158,7 +158,7 @@ raise
 
 ### 4. Failure Mode Logic
 
-**Location**: `src/copilot_conductor/engine/workflow.py:712-830`
+**Location**: `src/conductor/engine/workflow.py:712-830`
 
 **Fail-Fast Mode** (lines 712-748):
 ```python
@@ -199,7 +199,7 @@ if len(parallel_output.errors) > 0:
 
 ### 5. Verbose Logging Helpers
 
-**Location**: `src/copilot_conductor/engine/workflow.py` (helper functions)
+**Location**: `src/conductor/engine/workflow.py` (helper functions)
 
 **Functions Available**:
 - `_verbose_log_parallel_start(group_name, agent_count)`
@@ -216,7 +216,7 @@ if len(parallel_output.errors) > 0:
 
 ### 6. Context Snapshot Pattern
 
-**Location**: `src/copilot_conductor/engine/workflow.py:644`
+**Location**: `src/conductor/engine/workflow.py:644`
 
 **Implementation**:
 ```python
@@ -243,7 +243,7 @@ agent_context = context_snapshot.build_for_agent(
 
 ### ParallelGroup Definition
 
-**Location**: `src/copilot_conductor/config/schema.py:209-245`
+**Location**: `src/conductor/config/schema.py:209-245`
 
 **Fields**:
 ```python

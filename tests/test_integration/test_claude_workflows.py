@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from copilot_conductor.config.schema import (
+from conductor.config.schema import (
     AgentDef,
     ContextConfig,
     OutputField,
@@ -26,9 +26,9 @@ from copilot_conductor.config.schema import (
     WorkflowConfig,
     WorkflowDef,
 )
-from copilot_conductor.engine.workflow import WorkflowEngine
-from copilot_conductor.exceptions import ExecutionError, ProviderError
-from copilot_conductor.providers.claude import ClaudeProvider
+from conductor.engine.workflow import WorkflowEngine
+from conductor.exceptions import ExecutionError, ProviderError
+from conductor.providers.claude import ClaudeProvider
 
 
 @pytest.fixture
@@ -119,9 +119,9 @@ class TestBasicClaudeWorkflow:
     """EPIC-008-T2: Basic workflow integration test (mocked API)."""
 
     @pytest.mark.asyncio
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     async def test_simple_qa_workflow(
         self,
         mock_anthropic_module: Mock,
@@ -172,9 +172,9 @@ class TestParallelClaudeWorkflow:
     """EPIC-008-T3: Parallel execution test with Claude."""
 
     @pytest.mark.asyncio
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     async def test_parallel_research_agents(
         self,
         mock_anthropic_module: Mock,
@@ -318,9 +318,9 @@ class TestForEachClaudeWorkflow:
     """EPIC-008-T4: For-each loop test with Claude."""
 
     @pytest.mark.asyncio
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     async def test_for_each_data_processing(
         self,
         mock_anthropic_module: Mock,
@@ -445,9 +445,9 @@ class TestRoutingClaudeWorkflow:
     """EPIC-008-T5: Routing and conditional logic test."""
 
     @pytest.mark.asyncio
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     async def test_conditional_routing_high_confidence(
         self,
         mock_anthropic_module: Mock,
@@ -549,9 +549,9 @@ class TestErrorHandlingClaudeWorkflow:
     """EPIC-008-T6: Error handling and recovery test."""
 
     @pytest.mark.asyncio
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     async def test_rate_limit_error_handling(
         self,
         mock_anthropic_module: Mock,
@@ -650,9 +650,9 @@ class TestErrorHandlingClaudeWorkflow:
         assert result["result"] == "Success after retry"
 
     @pytest.mark.asyncio
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     async def test_auth_failure_no_retry(
         self,
         mock_anthropic_module: Mock,
@@ -724,9 +724,9 @@ class TestClaudePerformance:
     """EPIC-008-T8: Performance test for Claude non-streaming."""
 
     @pytest.mark.asyncio
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     async def test_provider_overhead_baseline(
         self,
         mock_anthropic_module: Mock,

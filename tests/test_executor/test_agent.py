@@ -10,11 +10,11 @@ Tests cover:
 
 import pytest
 
-from copilot_conductor.config.schema import AgentDef, OutputField
-from copilot_conductor.exceptions import TemplateError, ValidationError
-from copilot_conductor.executor.agent import AgentExecutor, resolve_agent_tools
-from copilot_conductor.providers.base import AgentOutput
-from copilot_conductor.providers.copilot import CopilotProvider
+from conductor.config.schema import AgentDef, OutputField
+from conductor.exceptions import TemplateError, ValidationError
+from conductor.executor.agent import AgentExecutor, resolve_agent_tools
+from conductor.providers.base import AgentOutput
+from conductor.providers.copilot import CopilotProvider
 
 
 @pytest.fixture

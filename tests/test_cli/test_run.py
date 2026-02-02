@@ -15,8 +15,8 @@ from unittest.mock import patch
 import pytest
 from typer.testing import CliRunner
 
-from copilot_conductor.cli.app import app
-from copilot_conductor.cli.run import (
+from conductor.cli.app import app
+from conductor.cli.run import (
     InputCollector,
     coerce_value,
     parse_input_flags,
@@ -218,7 +218,7 @@ output:
 """)
 
         # Mock the run_workflow_async function
-        with patch("copilot_conductor.cli.run.run_workflow_async") as mock_run:
+        with patch("conductor.cli.run.run_workflow_async") as mock_run:
             mock_run.return_value = {"message": "Hello, World!"}
 
             runner.invoke(
@@ -257,7 +257,7 @@ output:
   result: "done"
 """)
 
-        with patch("copilot_conductor.cli.run.run_workflow_async") as mock_run:
+        with patch("conductor.cli.run.run_workflow_async") as mock_run:
             mock_run.return_value = {"result": "done"}
 
             runner.invoke(
@@ -293,7 +293,7 @@ output:
   greeting: "Hello"
 """)
 
-        with patch("copilot_conductor.cli.run.run_workflow_async") as mock_run:
+        with patch("conductor.cli.run.run_workflow_async") as mock_run:
             mock_run.return_value = {"greeting": "Hello, World!"}
 
             result = runner.invoke(app, ["run", str(workflow_file)])
@@ -310,13 +310,13 @@ class TestVersionFlag:
         """Test --version shows version."""
         result = runner.invoke(app, ["--version"])
         assert result.exit_code == 0
-        assert "Copilot Conductor v" in result.output
+        assert "Conductor v" in result.output
 
     def test_version_short_flag(self) -> None:
         """Test -v shows version."""
         result = runner.invoke(app, ["-v"])
         assert result.exit_code == 0
-        assert "Copilot Conductor v" in result.output
+        assert "Conductor v" in result.output
 
 
 class TestHelpFlag:
@@ -326,7 +326,7 @@ class TestHelpFlag:
         """Test --help shows help."""
         result = runner.invoke(app, ["--help"])
         assert result.exit_code == 0
-        assert "Copilot Conductor" in result.output
+        assert "Conductor" in result.output
         assert "run" in result.output
 
     def test_no_args_shows_help(self) -> None:
@@ -557,7 +557,7 @@ output:
 """)
 
         # Mock the run_workflow_async to ensure it's never called
-        with patch("copilot_conductor.cli.run.run_workflow_async") as mock_run:
+        with patch("conductor.cli.run.run_workflow_async") as mock_run:
             result = runner.invoke(app, ["run", str(workflow_file), "--dry-run"])
 
             # Should succeed
@@ -705,14 +705,14 @@ class TestDryRunDisplayFunctions:
 
     def test_format_routes_empty(self) -> None:
         """Test format_routes with empty list."""
-        from copilot_conductor.cli.run import format_routes
+        from conductor.cli.run import format_routes
 
         result = format_routes([])
         assert "$end" in result
 
     def test_format_routes_unconditional(self) -> None:
         """Test format_routes with unconditional route."""
-        from copilot_conductor.cli.run import format_routes
+        from conductor.cli.run import format_routes
 
         routes = [{"to": "next_agent", "when": None, "is_conditional": False}]
         result = format_routes(routes)
@@ -721,7 +721,7 @@ class TestDryRunDisplayFunctions:
 
     def test_format_routes_conditional(self) -> None:
         """Test format_routes with conditional route."""
-        from copilot_conductor.cli.run import format_routes
+        from conductor.cli.run import format_routes
 
         routes = [{"to": "next_agent", "when": "output.success", "is_conditional": True}]
         result = format_routes(routes)
@@ -730,7 +730,7 @@ class TestDryRunDisplayFunctions:
 
     def test_format_routes_multiple(self) -> None:
         """Test format_routes with multiple routes."""
-        from copilot_conductor.cli.run import format_routes
+        from conductor.cli.run import format_routes
 
         routes = [
             {"to": "agent_a", "when": "condition1", "is_conditional": True},
@@ -742,7 +742,7 @@ class TestDryRunDisplayFunctions:
 
     def test_format_routes_long_condition_truncated(self) -> None:
         """Test that long conditions are truncated."""
-        from copilot_conductor.cli.run import format_routes
+        from conductor.cli.run import format_routes
 
         long_condition = "a" * 100  # Very long condition
         routes = [{"to": "next", "when": long_condition, "is_conditional": True}]
@@ -756,7 +756,7 @@ class TestBuildDryRunPlan:
 
     def test_build_plan_simple_workflow(self, tmp_path: Path) -> None:
         """Test building execution plan for simple workflow."""
-        from copilot_conductor.cli.run import build_dry_run_plan
+        from conductor.cli.run import build_dry_run_plan
 
         workflow_file = tmp_path / "test.yaml"
         workflow_file.write_text("""\
@@ -785,7 +785,7 @@ output:
 
     def test_build_plan_multi_agent(self, tmp_path: Path) -> None:
         """Test building execution plan with multiple agents."""
-        from copilot_conductor.cli.run import build_dry_run_plan
+        from conductor.cli.run import build_dry_run_plan
 
         workflow_file = tmp_path / "test.yaml"
         workflow_file.write_text("""\
@@ -818,7 +818,7 @@ output:
 
     def test_build_plan_with_limits(self, tmp_path: Path) -> None:
         """Test that limits are captured in the plan."""
-        from copilot_conductor.cli.run import build_dry_run_plan
+        from conductor.cli.run import build_dry_run_plan
 
         workflow_file = tmp_path / "test.yaml"
         workflow_file.write_text("""\
@@ -846,7 +846,7 @@ output:
 
     def test_build_plan_detects_loop(self, tmp_path: Path) -> None:
         """Test that loop targets are detected."""
-        from copilot_conductor.cli.run import build_dry_run_plan
+        from conductor.cli.run import build_dry_run_plan
 
         workflow_file = tmp_path / "test.yaml"
         workflow_file.write_text("""\

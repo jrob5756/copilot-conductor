@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from copilot_conductor.config.schema import (
+from conductor.config.schema import (
     AgentDef,
     ContextConfig,
     ForEachDef,
@@ -21,8 +21,8 @@ from copilot_conductor.config.schema import (
     WorkflowConfig,
     WorkflowDef,
 )
-from copilot_conductor.engine.workflow import WorkflowEngine
-from copilot_conductor.providers.base import AgentOutput
+from conductor.engine.workflow import WorkflowEngine
+from conductor.providers.base import AgentOutput
 
 
 class TestForEachVerboseLogging:
@@ -90,10 +90,10 @@ class TestForEachVerboseLogging:
         ]
 
         # Mock the verbose logging functions
-        mock_path_start = "copilot_conductor.engine.workflow._verbose_log_for_each_start"
-        mock_path_complete = "copilot_conductor.engine.workflow._verbose_log_for_each_item_complete"
-        mock_path_failed = "copilot_conductor.engine.workflow._verbose_log_for_each_item_failed"
-        mock_path_summary = "copilot_conductor.engine.workflow._verbose_log_for_each_summary"
+        mock_path_start = "conductor.engine.workflow._verbose_log_for_each_start"
+        mock_path_complete = "conductor.engine.workflow._verbose_log_for_each_item_complete"
+        mock_path_failed = "conductor.engine.workflow._verbose_log_for_each_item_failed"
+        mock_path_summary = "conductor.engine.workflow._verbose_log_for_each_summary"
 
         with (
             patch(mock_path_start) as mock_start,
@@ -193,10 +193,10 @@ class TestForEachVerboseLogging:
         ]
 
         # Mock the verbose logging functions
-        mock_path_start = "copilot_conductor.engine.workflow._verbose_log_for_each_start"
-        mock_path_complete = "copilot_conductor.engine.workflow._verbose_log_for_each_item_complete"
-        mock_path_failed = "copilot_conductor.engine.workflow._verbose_log_for_each_item_failed"
-        mock_path_summary = "copilot_conductor.engine.workflow._verbose_log_for_each_summary"
+        mock_path_start = "conductor.engine.workflow._verbose_log_for_each_start"
+        mock_path_complete = "conductor.engine.workflow._verbose_log_for_each_item_complete"
+        mock_path_failed = "conductor.engine.workflow._verbose_log_for_each_item_failed"
+        mock_path_summary = "conductor.engine.workflow._verbose_log_for_each_summary"
 
         with (
             patch(mock_path_start) as _mock_start,

@@ -1,1 +1,1 @@
-"""Test suite for Copilot Conductor."""
+"""Test suite for Conductor."""

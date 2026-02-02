@@ -19,8 +19,8 @@ from pathlib import Path
 
 import pytest
 
-from copilot_conductor.config.loader import load_config
-from copilot_conductor.config.schema import (
+from conductor.config.loader import load_config
+from conductor.config.schema import (
     AgentDef,
     OutputField,
     RouteDef,

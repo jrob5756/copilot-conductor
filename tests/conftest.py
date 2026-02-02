@@ -1,4 +1,4 @@
-"""Pytest configuration and shared fixtures for Copilot Conductor tests.
+"""Pytest configuration and shared fixtures for Conductor tests.
 
 This module contains fixtures used across multiple test modules.
 """

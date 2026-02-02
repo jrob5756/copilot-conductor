@@ -11,7 +11,7 @@ import asyncio
 
 import pytest
 
-from copilot_conductor.config.schema import (
+from conductor.config.schema import (
     AgentDef,
     ContextConfig,
     OutputField,
@@ -21,9 +21,9 @@ from copilot_conductor.config.schema import (
     WorkflowConfig,
     WorkflowDef,
 )
-from copilot_conductor.engine.workflow import WorkflowEngine
-from copilot_conductor.exceptions import ExecutionError
-from copilot_conductor.providers.copilot import CopilotProvider
+from conductor.engine.workflow import WorkflowEngine
+from conductor.exceptions import ExecutionError
+from conductor.providers.copilot import CopilotProvider
 
 
 class TestParallelResearchWorkflow:

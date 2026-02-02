@@ -11,10 +11,10 @@ from typing import Any
 
 import pytest
 
-from copilot_conductor.config.loader import load_workflow
-from copilot_conductor.config.schema import AgentDef
-from copilot_conductor.engine.workflow import WorkflowEngine
-from copilot_conductor.providers.copilot import CopilotProvider
+from conductor.config.loader import load_workflow
+from conductor.config.schema import AgentDef
+from conductor.engine.workflow import WorkflowEngine
+from conductor.providers.copilot import CopilotProvider
 
 
 def create_mock_handler() -> Any:
@@ -171,7 +171,7 @@ async def test_all_copilot_examples_load_and_validate(tmp_path):
 @pytest.mark.asyncio
 async def test_schema_changes_dont_affect_copilot_provider():
     """Verify that Claude schema fields don't interfere with Copilot provider."""
-    from copilot_conductor.config.schema import RuntimeConfig
+    from conductor.config.schema import RuntimeConfig
 
     # Create runtime config with provider=copilot
     runtime = RuntimeConfig(provider="copilot")

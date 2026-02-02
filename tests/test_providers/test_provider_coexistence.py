@@ -9,15 +9,15 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from copilot_conductor.providers.claude import ANTHROPIC_SDK_AVAILABLE
+from conductor.providers.claude import ANTHROPIC_SDK_AVAILABLE
 
 
 class TestProviderCoexistence:
     """Tests for Claude and Copilot provider coexistence."""
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     def test_both_providers_can_be_imported(
         self,
         mock_anthropic_module: Mock,
@@ -30,8 +30,8 @@ class TestProviderCoexistence:
         mock_anthropic_class.return_value = mock_claude_client
 
         # Import both providers
-        from copilot_conductor.providers.claude import ClaudeProvider
-        from copilot_conductor.providers.copilot import CopilotProvider
+        from conductor.providers.claude import ClaudeProvider
+        from conductor.providers.copilot import CopilotProvider
 
         # Verify both can be instantiated
         claude = ClaudeProvider()
@@ -45,12 +45,12 @@ class TestProviderCoexistence:
     @pytest.mark.asyncio
     async def test_factory_can_create_both_providers(self) -> None:
         """Test that factory can create both provider types."""
-        from copilot_conductor.providers.factory import create_provider
+        from conductor.providers.factory import create_provider
 
         with (
-            patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True),
-            patch("copilot_conductor.providers.claude.AsyncAnthropic") as mock_anthropic,
-            patch("copilot_conductor.providers.claude.anthropic") as mock_module,
+            patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True),
+            patch("conductor.providers.claude.AsyncAnthropic") as mock_anthropic,
+            patch("conductor.providers.claude.anthropic") as mock_module,
         ):
             mock_module.__version__ = "0.77.0"
             mock_client = Mock()
@@ -70,9 +70,9 @@ class TestProviderCoexistence:
             await claude.close()
             await copilot.close()
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_both_providers_can_execute_concurrently(
         self,
@@ -101,9 +101,9 @@ class TestProviderCoexistence:
         mock_anthropic_class.return_value = mock_claude_client
 
         # Import providers
-        from copilot_conductor.config.schema import AgentDef, OutputField
-        from copilot_conductor.providers.claude import ClaudeProvider
-        from copilot_conductor.providers.copilot import CopilotProvider
+        from conductor.config.schema import AgentDef, OutputField
+        from conductor.providers.claude import ClaudeProvider
+        from conductor.providers.copilot import CopilotProvider
 
         # Setup Copilot mock handler
         def copilot_mock_handler(agent, prompt, context):
@@ -135,9 +135,9 @@ class TestProviderCoexistence:
         await claude_provider.close()
         await copilot_provider.close()
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     def test_claude_retry_config_independent_from_copilot(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
     ) -> None:
@@ -148,10 +148,10 @@ class TestProviderCoexistence:
         mock_anthropic_class.return_value = mock_claude_client
 
         # Import both RetryConfigs
-        from copilot_conductor.providers.claude import (
+        from conductor.providers.claude import (
             RetryConfig as ClaudeRetryConfig,
         )
-        from copilot_conductor.providers.copilot import (
+        from conductor.providers.copilot import (
             RetryConfig as CopilotRetryConfig,
         )
 
@@ -173,7 +173,7 @@ class TestProviderCoexistence:
         """Test that Claude-specific exception handling doesn't affect Copilot."""
         # This test verifies that both providers can handle their own exceptions
         # without namespace collisions
-        from copilot_conductor.exceptions import ProviderError, ValidationError
+        from conductor.exceptions import ProviderError, ValidationError
 
         # Both providers should use the same base exceptions
         # This ensures consistent error handling across providers
@@ -195,7 +195,7 @@ class TestProviderCoexistenceIntegration:
     @pytest.mark.asyncio
     async def test_both_providers_can_be_created_and_closed(self) -> None:
         """Test creating and closing both provider types without validation."""
-        from copilot_conductor.providers.factory import create_provider
+        from conductor.providers.factory import create_provider
 
         # Create both providers (without API validation)
         copilot = await create_provider("copilot", validate=False)
@@ -214,7 +214,7 @@ class TestProviderCoexistenceIntegration:
     @pytest.mark.asyncio
     async def test_multiple_claude_instances_with_different_configs(self) -> None:
         """Test multiple Claude instances with different configurations."""
-        from copilot_conductor.providers.claude import ClaudeProvider
+        from conductor.providers.claude import ClaudeProvider
 
         claude1 = ClaudeProvider(
             model="claude-3-5-sonnet-latest",
@@ -247,7 +247,7 @@ class TestProviderCoexistenceIntegration:
     @pytest.mark.asyncio
     async def test_provider_state_isolation(self) -> None:
         """Test that provider state is isolated between instances."""
-        from copilot_conductor.providers.claude import ClaudeProvider
+        from conductor.providers.claude import ClaudeProvider
 
         claude1 = ClaudeProvider()
         claude2 = ClaudeProvider()

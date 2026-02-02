@@ -1,6 +1,6 @@
 # Claude Provider Documentation
 
-The Claude provider enables Copilot Conductor workflows to use Anthropic's Claude models via the official Anthropic Python SDK.
+The Claude provider enables Conductor workflows to use Anthropic's Claude models via the official Anthropic Python SDK.
 
 ## Table of Contents
 

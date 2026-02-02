@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-This design document outlines the implementation of **dynamic parallel execution** (for-each) for Copilot Conductor workflows. The feature enables runtime-determined parallelism where one agent's output (an array) spawns N parallel instances of another agent template. This addresses the current limitation where workflows must process array items sequentially, creating unnecessary latency.
+This design document outlines the implementation of **dynamic parallel execution** (for-each) for Conductor workflows. The feature enables runtime-determined parallelism where one agent's output (an array) spawns N parallel instances of another agent template. This addresses the current limitation where workflows must process array items sequentially, creating unnecessary latency.
 
 **Key Benefits:**
 - Process 50 KPIs concurrently instead of sequentially (50x potential speedup)
@@ -23,7 +23,7 @@ This design document outlines the implementation of **dynamic parallel execution
 
 ## 1. Problem Statement
 
-Copilot Conductor currently supports sequential agent execution and static parallel execution (where agent count is known at YAML load time). However, there is no mechanism for **dynamic parallel execution** where the number of parallel agents is determined at runtime based on an array resolved from context (e.g., a list of KPIs from a previous agent's output).
+Conductor currently supports sequential agent execution and static parallel execution (where agent count is known at YAML load time). However, there is no mechanism for **dynamic parallel execution** where the number of parallel agents is determined at runtime based on an array resolved from context (e.g., a list of KPIs from a previous agent's output).
 
 The current KPI analysis workflow (`examples/kpi-analysis.yaml`) uses a sequential loop that processes 50 KPIs one at a time through repeated agent executions. This creates unnecessary latency and makes the workflow inefficient.
 
@@ -192,7 +192,7 @@ finder.output.kpis = [{kpi_id: "K1"}, {kpi_id: "K2"}, ..., {kpi_id: "K50"}]
 
 **Purpose:** Schema definition for dynamic parallel (for-each) agent groups.
 
-**Location:** `src/copilot_conductor/config/schema.py`
+**Location:** `src/conductor/config/schema.py`
 
 **Integration Point:** Added to `WorkflowConfig.for_each: list[ForEachDef]` field alongside existing `agents` and `parallel` fields.
 
@@ -337,7 +337,7 @@ ForEachDef(..., source="finder")  # Raises ValueError (needs at least 3 parts)
 
 **Purpose:** Data structure for aggregated for-each execution results.
 
-**Location:** `src/copilot_conductor/engine/workflow.py`
+**Location:** `src/conductor/engine/workflow.py`
 
 **Integration:** Stored in `WorkflowContext` under for-each group name, accessible to downstream agents.
 
@@ -939,8 +939,8 @@ def _find_for_each_group(self, name: str) -> ForEachDef | None:
 | Task ID | Type | Description | Files | Status |
 |---------|------|-------------|-------|--------|
 | E0-T1 | TEST | Run all existing parallel workflow tests | `tests/test_integration/test_parallel_workflows.py`, `examples/parallel-validation.yaml` | DONE |
-| E0-T2 | TEST | Verify `_execute_parallel_group` handles all failure modes correctly | `src/copilot_conductor/engine/workflow.py` | DONE |
-| E0-T3 | TEST | Confirm `asyncio.gather` error handling works as expected | `src/copilot_conductor/engine/workflow.py` | DONE |
+| E0-T2 | TEST | Verify `_execute_parallel_group` handles all failure modes correctly | `src/conductor/engine/workflow.py` | DONE |
+| E0-T3 | TEST | Confirm `asyncio.gather` error handling works as expected | `src/conductor/engine/workflow.py` | DONE |
 | E0-T4 | IMPL | Document static parallel features that will be reused | `docs/projects/parallel-agents/prerequisite-verification.md` | DONE |
 
 **Acceptance Criteria**:
@@ -960,10 +960,10 @@ def _find_for_each_group(self, name: str) -> ForEachDef | None:
 **Tasks**:
 | Task ID | Type | Description | Files | Status |
 |---------|------|-------------|-------|--------|
-| E1-T1 | IMPL | Define `ForEachDef` class with Pydantic v2 field aliases | `src/copilot_conductor/config/schema.py` | DONE |
-| E1-T2 | IMPL | Update `WorkflowConfig.for_each` field and validation logic | `src/copilot_conductor/config/schema.py` | DONE |
-| E1-T3 | IMPL | Add loop variable name validation (reserved names check) | `src/copilot_conductor/config/schema.py` | DONE |
-| E1-T4 | IMPL | Add source format validation | `src/copilot_conductor/config/schema.py` | DONE |
+| E1-T1 | IMPL | Define `ForEachDef` class with Pydantic v2 field aliases | `src/conductor/config/schema.py` | DONE |
+| E1-T2 | IMPL | Update `WorkflowConfig.for_each` field and validation logic | `src/conductor/config/schema.py` | DONE |
+| E1-T3 | IMPL | Add loop variable name validation (reserved names check) | `src/conductor/config/schema.py` | DONE |
+| E1-T4 | IMPL | Add source format validation | `src/conductor/config/schema.py` | DONE |
 | E1-T5 | TEST | Unit tests for `ForEachDef` validation (valid/invalid cases) | `tests/test_config/test_schema.py` | DONE |
 | E1-T6 | TEST | Test Pydantic v2 `as` field alias roundtrip serialization | `tests/test_config/test_schema.py` | DONE |
 | E1-T7 | TEST | Test reserved name validation | `tests/test_config/test_schema.py` | DONE |
@@ -987,10 +987,10 @@ def _find_for_each_group(self, name: str) -> ForEachDef | None:
 **Tasks**:
 | Task ID | Type | Description | Files | Status |
 |---------|------|-------------|-------|--------|
-| E2-T1 | IMPL | Implement `_resolve_array_reference()` method | `src/copilot_conductor/engine/workflow.py` | DONE |
-| E2-T2 | IMPL | Add dotted path navigation logic | `src/copilot_conductor/engine/workflow.py` | DONE |
-| E2-T3 | IMPL | Add type validation (ensure resolved value is list) | `src/copilot_conductor/engine/workflow.py` | DONE |
-| E2-T4 | IMPL | Add error handling with clear suggestions | `src/copilot_conductor/engine/workflow.py` | DONE |
+| E2-T1 | IMPL | Implement `_resolve_array_reference()` method | `src/conductor/engine/workflow.py` | DONE |
+| E2-T2 | IMPL | Add dotted path navigation logic | `src/conductor/engine/workflow.py` | DONE |
+| E2-T3 | IMPL | Add type validation (ensure resolved value is list) | `src/conductor/engine/workflow.py` | DONE |
+| E2-T4 | IMPL | Add error handling with clear suggestions | `src/conductor/engine/workflow.py` | DONE |
 | E2-T5 | TEST | Unit tests for successful resolution | `tests/test_engine/test_workflow.py` | DONE |
 | E2-T6 | TEST | Test error cases (missing path, wrong type, nested access) | `tests/test_engine/test_workflow.py` | DONE |
 | E2-T7 | TEST | Test empty array handling | `tests/test_engine/test_workflow.py` | DONE |
@@ -1013,9 +1013,9 @@ def _find_for_each_group(self, name: str) -> ForEachDef | None:
 **Tasks**:
 | Task ID | Type | Description | Files | Status |
 |---------|------|-------------|-------|--------|
-| E3-T1 | IMPL | Extend context building to support loop variable injection | `src/copilot_conductor/engine/workflow.py` | DONE |
-| E3-T2 | IMPL | Add `_inject_loop_variables()` helper method | `src/copilot_conductor/engine/workflow.py` | DONE |
-| E3-T3 | IMPL | Inject `{{ <var> }}`, `{{ _index }}`, `{{ _key }}` | `src/copilot_conductor/engine/workflow.py` | DONE |
+| E3-T1 | IMPL | Extend context building to support loop variable injection | `src/conductor/engine/workflow.py` | DONE |
+| E3-T2 | IMPL | Add `_inject_loop_variables()` helper method | `src/conductor/engine/workflow.py` | DONE |
+| E3-T3 | IMPL | Inject `{{ <var> }}`, `{{ _index }}`, `{{ _key }}` | `src/conductor/engine/workflow.py` | DONE |
 | E3-T4 | TEST | Unit tests for variable injection | `tests/test_engine/test_workflow.py` | DONE |
 | E3-T5 | TEST | Integration test: render template with loop variables | `tests/test_integration/test_for_each.py` | DONE |
 
@@ -1038,13 +1038,13 @@ def _find_for_each_group(self, name: str) -> ForEachDef | None:
 **Tasks**:
 | Task ID | Type | Description | Files | Status |
 |---------|------|-------------|-------|--------|
-| E4-T1 | IMPL | Define `ForEachGroupOutput` and `ForEachError` dataclasses | `src/copilot_conductor/engine/workflow.py` | DONE |
-| E4-T2 | IMPL | Implement `_execute_for_each_group()` method | `src/copilot_conductor/engine/workflow.py` | DONE |
-| E4-T3 | IMPL | Implement sequential batching logic | `src/copilot_conductor/engine/workflow.py` | DONE |
-| E4-T4 | IMPL | Implement `execute_single_item()` inner function | `src/copilot_conductor/engine/workflow.py` | DONE |
-| E4-T5 | IMPL | Add context snapshot creation (reuse from parallel) | `src/copilot_conductor/engine/workflow.py` | DONE |
-| E4-T6 | IMPL | Add asyncio.gather() per-batch execution | `src/copilot_conductor/engine/workflow.py` | DONE |
-| E4-T7 | IMPL | Add for-each routing support in main execution loop | `src/copilot_conductor/engine/workflow.py` | DONE |
+| E4-T1 | IMPL | Define `ForEachGroupOutput` and `ForEachError` dataclasses | `src/conductor/engine/workflow.py` | DONE |
+| E4-T2 | IMPL | Implement `_execute_for_each_group()` method | `src/conductor/engine/workflow.py` | DONE |
+| E4-T3 | IMPL | Implement sequential batching logic | `src/conductor/engine/workflow.py` | DONE |
+| E4-T4 | IMPL | Implement `execute_single_item()` inner function | `src/conductor/engine/workflow.py` | DONE |
+| E4-T5 | IMPL | Add context snapshot creation (reuse from parallel) | `src/conductor/engine/workflow.py` | DONE |
+| E4-T6 | IMPL | Add asyncio.gather() per-batch execution | `src/conductor/engine/workflow.py` | DONE |
+| E4-T7 | IMPL | Add for-each routing support in main execution loop | `src/conductor/engine/workflow.py` | DONE |
 | E4-T8 | TEST | Unit tests for single-item execution | `tests/test_engine/test_workflow.py` | DONE |
 | E4-T9 | TEST | Integration test: simple for-each (3 items, max_concurrent=2) | `tests/test_integration/test_for_each.py` | DONE |
 
@@ -1066,9 +1066,9 @@ def _find_for_each_group(self, name: str) -> ForEachDef | None:
 **Tasks**:
 | Task ID | Type | Description | Files | Status |
 |---------|------|-------------|-------|--------|
-| E5-T1 | IMPL | Implement fail_fast mode (stop on first error) | `src/copilot_conductor/engine/workflow.py` | DONE |
-| E5-T2 | IMPL | Implement continue_on_error mode (fail if all fail) | `src/copilot_conductor/engine/workflow.py` | DONE |
-| E5-T3 | IMPL | Implement all_or_nothing mode (fail if any fail) | `src/copilot_conductor/engine/workflow.py` | DONE |
+| E5-T1 | IMPL | Implement fail_fast mode (stop on first error) | `src/conductor/engine/workflow.py` | DONE |
+| E5-T2 | IMPL | Implement continue_on_error mode (fail if all fail) | `src/conductor/engine/workflow.py` | DONE |
+| E5-T3 | IMPL | Implement all_or_nothing mode (fail if any fail) | `src/conductor/engine/workflow.py` | DONE |
 | E5-T4 | TEST | Test fail_fast: verify early termination | `tests/test_integration/test_for_each.py` | DONE |
 | E5-T5 | TEST | Test continue_on_error: verify partial success | `tests/test_integration/test_for_each.py` | DONE |
 | E5-T6 | TEST | Test all_or_nothing: verify all-or-none semantics | `tests/test_integration/test_for_each.py` | DONE |
@@ -1091,11 +1091,11 @@ def _find_for_each_group(self, name: str) -> ForEachDef | None:
 **Tasks**:
 | Task ID | Type | Description | Files | Status |
 |---------|------|-------------|-------|--------|
-| E6-T1 | IMPL | Implement list-based output aggregation (default) | `src/copilot_conductor/engine/workflow.py` | DONE |
-| E6-T2 | IMPL | Implement dict-based output aggregation (with `key_by`) | `src/copilot_conductor/engine/workflow.py` | DONE |
-| E6-T3 | IMPL | Implement `_extract_key_from_item()` method | `src/copilot_conductor/engine/workflow.py` | DONE |
-| E6-T4 | IMPL | Add fallback to index when key extraction fails | `src/copilot_conductor/engine/workflow.py` | DONE |
-| E6-T5 | IMPL | Store aggregated output in WorkflowContext | `src/copilot_conductor/engine/workflow.py` | DONE |
+| E6-T1 | IMPL | Implement list-based output aggregation (default) | `src/conductor/engine/workflow.py` | DONE |
+| E6-T2 | IMPL | Implement dict-based output aggregation (with `key_by`) | `src/conductor/engine/workflow.py` | DONE |
+| E6-T3 | IMPL | Implement `_extract_key_from_item()` method | `src/conductor/engine/workflow.py` | DONE |
+| E6-T4 | IMPL | Add fallback to index when key extraction fails | `src/conductor/engine/workflow.py` | DONE |
+| E6-T5 | IMPL | Store aggregated output in WorkflowContext | `src/conductor/engine/workflow.py` | DONE |
 | E6-T6 | TEST | Test index-based output access (`outputs[0]`) | `tests/test_integration/test_for_each.py` | DONE |
 | E6-T7 | TEST | Test key-based output access (`outputs["key"]`) | `tests/test_integration/test_for_each.py` | DONE |
 | E6-T8 | TEST | Test key extraction fallback logic | `tests/test_engine/test_workflow.py` | DONE |
@@ -1118,8 +1118,8 @@ def _find_for_each_group(self, name: str) -> ForEachDef | None:
 **Tasks**:
 | Task ID | Type | Description | Files | Status |
 |---------|------|-------------|-------|--------|
-| E7-T1 | IMPL | Update `WorkflowContext.build_for_agent()` to handle for-each outputs | `src/copilot_conductor/engine/context.py` | DONE |
-| E7-T2 | IMPL | Add for-each output format to `_add_explicit_input()` | `src/copilot_conductor/engine/context.py` | DONE |
+| E7-T1 | IMPL | Update `WorkflowContext.build_for_agent()` to handle for-each outputs | `src/conductor/engine/context.py` | DONE |
+| E7-T2 | IMPL | Add for-each output format to `_add_explicit_input()` | `src/conductor/engine/context.py` | DONE |
 | E7-T3 | TEST | Test accessing `for_each.outputs` in subsequent agent | `tests/test_integration/test_for_each.py` | DONE |
 | E7-T4 | TEST | Test accessing `for_each.errors` in subsequent agent | `tests/test_integration/test_for_each.py` | DONE |
 | E7-T5 | TEST | Test empty outputs behavior (list → `[]`, dict → `{}`) | `tests/test_integration/test_for_each.py` | DONE |
@@ -1143,11 +1143,11 @@ def _find_for_each_group(self, name: str) -> ForEachDef | None:
 **Tasks**:
 | Task ID | Type | Description | Files | Status |
 |---------|------|-------------|-------|--------|
-| E8-T1 | IMPL | Add `_verbose_log_for_each_start()` | `src/copilot_conductor/cli/run.py` | DONE |
-| E8-T2 | IMPL | Add `_verbose_log_for_each_item_complete()` | `src/copilot_conductor/cli/run.py` | DONE |
-| E8-T3 | IMPL | Add `_verbose_log_for_each_item_failed()` | `src/copilot_conductor/cli/run.py` | DONE |
-| E8-T4 | IMPL | Add `_verbose_log_for_each_summary()` | `src/copilot_conductor/cli/run.py` | DONE |
-| E8-T5 | IMPL | Integrate verbose logging into `_execute_for_each_group()` | `src/copilot_conductor/engine/workflow.py` | DONE |
+| E8-T1 | IMPL | Add `_verbose_log_for_each_start()` | `src/conductor/cli/run.py` | DONE |
+| E8-T2 | IMPL | Add `_verbose_log_for_each_item_complete()` | `src/conductor/cli/run.py` | DONE |
+| E8-T3 | IMPL | Add `_verbose_log_for_each_item_failed()` | `src/conductor/cli/run.py` | DONE |
+| E8-T4 | IMPL | Add `_verbose_log_for_each_summary()` | `src/conductor/cli/run.py` | DONE |
+| E8-T5 | IMPL | Integrate verbose logging into `_execute_for_each_group()` | `src/conductor/engine/workflow.py` | DONE |
 | E8-T6 | TEST | Manual test: Run with `--verbose` flag | Manual | DONE |
 
 **Acceptance Criteria**:
@@ -1228,10 +1228,10 @@ def _find_for_each_group(self, name: str) -> ForEachDef | None:
 
 | File Path | Changes |
 |-----------|---------|
-| `src/copilot_conductor/config/schema.py` | Add `ForEachDef` class; update `WorkflowConfig` with `for_each` field and validation logic |
-| `src/copilot_conductor/engine/workflow.py` | Add `ForEachGroupOutput`, `ForEachError`, `_execute_for_each_group()`, `_resolve_array_reference()`, `_extract_key_from_item()`, `_find_for_each_group()`; update main execution loop |
-| `src/copilot_conductor/engine/context.py` | Update `build_for_agent()` and `_add_explicit_input()` to handle for-each outputs |
-| `src/copilot_conductor/cli/run.py` | Add verbose logging functions for for-each |
+| `src/conductor/config/schema.py` | Add `ForEachDef` class; update `WorkflowConfig` with `for_each` field and validation logic |
+| `src/conductor/engine/workflow.py` | Add `ForEachGroupOutput`, `ForEachError`, `_execute_for_each_group()`, `_resolve_array_reference()`, `_extract_key_from_item()`, `_find_for_each_group()`; update main execution loop |
+| `src/conductor/engine/context.py` | Update `build_for_agent()` and `_add_explicit_input()` to handle for-each outputs |
+| `src/conductor/cli/run.py` | Add verbose logging functions for for-each |
 | `tests/test_config/test_schema.py` | Add tests for `ForEachDef` validation |
 | `tests/test_engine/test_workflow.py` | Add tests for array resolution, variable injection, and execution |
 | `docs/reference/workflow-yaml.md` | Document for-each syntax |

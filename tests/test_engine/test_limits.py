@@ -13,7 +13,7 @@ import asyncio
 
 import pytest
 
-from copilot_conductor.config.schema import (
+from conductor.config.schema import (
     AgentDef,
     LimitsConfig,
     OutputField,
@@ -21,15 +21,15 @@ from copilot_conductor.config.schema import (
     WorkflowConfig,
     WorkflowDef,
 )
-from copilot_conductor.engine.limits import LimitEnforcer
-from copilot_conductor.engine.workflow import WorkflowEngine
-from copilot_conductor.exceptions import (
+from conductor.engine.limits import LimitEnforcer
+from conductor.engine.workflow import WorkflowEngine
+from conductor.exceptions import (
     MaxIterationsError,
 )
-from copilot_conductor.exceptions import (
+from conductor.exceptions import (
     TimeoutError as ConductorTimeoutError,
 )
-from copilot_conductor.providers.copilot import CopilotProvider
+from conductor.providers.copilot import CopilotProvider
 
 
 class TestLimitEnforcerBasic:
@@ -607,7 +607,7 @@ class TestParallelGroupLimits:
     @pytest.mark.asyncio
     async def test_parallel_group_with_max_iterations(self) -> None:
         """Test that parallel groups count all agents toward iteration limit."""
-        from copilot_conductor.config.schema import ParallelGroup
+        from conductor.config.schema import ParallelGroup
 
         config = WorkflowConfig(
             workflow=WorkflowDef(
@@ -662,7 +662,7 @@ class TestParallelGroupLimits:
     @pytest.mark.asyncio
     async def test_parallel_group_exceeds_iteration_limit(self) -> None:
         """Test that parallel group execution fails when exceeding iteration limit."""
-        from copilot_conductor.config.schema import ParallelGroup
+        from conductor.config.schema import ParallelGroup
 
         config = WorkflowConfig(
             workflow=WorkflowDef(
@@ -762,7 +762,7 @@ class TestParallelGroupLimits:
     @pytest.mark.asyncio
     async def test_parallel_group_with_timeout(self) -> None:
         """Test that timeout is enforced during parallel group execution."""
-        from copilot_conductor.config.schema import ParallelGroup
+        from conductor.config.schema import ParallelGroup
 
         config = WorkflowConfig(
             workflow=WorkflowDef(
@@ -904,7 +904,7 @@ class TestMaxIterationsWorkflowIntegration:
         self, looping_workflow_config: WorkflowConfig
     ) -> None:
         """Test that providing more iterations via prompt allows workflow to continue."""
-        from unittest.mock import AsyncMock, patch
+        from unittest.mock import AsyncMock
 
         call_count = 0
 

@@ -8,16 +8,16 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from copilot_conductor.config.schema import AgentDef, OutputField
-from copilot_conductor.providers.claude import ClaudeProvider
+from conductor.config.schema import AgentDef, OutputField
+from conductor.providers.claude import ClaudeProvider
 
 
 class TestClaudeErrorConditions:
     """Test error handling for various failure scenarios."""
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_malformed_output_triggers_parse_recovery(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -64,9 +64,9 @@ class TestClaudeErrorConditions:
         # Should have made 2 API calls (initial + recovery)
         assert mock_client.messages.create.call_count == 2
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_rate_limit_error_retryable(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -116,9 +116,9 @@ class TestClaudeErrorConditions:
 class TestClaudeEdgeCases:
     """Test edge cases and boundary conditions."""
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_empty_prompt(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -152,9 +152,9 @@ class TestClaudeEdgeCases:
 
         assert result.content["answer"] == "default"
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_special_characters_in_prompt(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -199,9 +199,9 @@ class TestClaudeEdgeCases:
         # The provider appends tool use instructions, so we check the beginning
         assert messages[0]["content"].startswith(special_prompt)
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_null_context(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock

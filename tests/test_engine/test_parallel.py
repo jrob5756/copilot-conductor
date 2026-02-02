@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from copilot_conductor.config.schema import (
+from conductor.config.schema import (
     AgentDef,
     ContextConfig,
     LimitsConfig,
@@ -24,13 +24,13 @@ from copilot_conductor.config.schema import (
     WorkflowConfig,
     WorkflowDef,
 )
-from copilot_conductor.engine.workflow import (
+from conductor.engine.workflow import (
     ParallelAgentError,
     ParallelGroupOutput,
     WorkflowEngine,
 )
-from copilot_conductor.exceptions import ExecutionError
-from copilot_conductor.providers.base import AgentOutput
+from conductor.exceptions import ExecutionError
+from conductor.providers.base import AgentOutput
 
 
 @pytest.fixture

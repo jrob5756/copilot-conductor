@@ -2,9 +2,9 @@
 
 import pytest
 
-from copilot_conductor.engine.pricing import ModelPricing
-from copilot_conductor.engine.usage import AgentUsage, UsageTracker, WorkflowUsage
-from copilot_conductor.providers.base import AgentOutput
+from conductor.engine.pricing import ModelPricing
+from conductor.engine.usage import AgentUsage, UsageTracker, WorkflowUsage
+from conductor.providers.base import AgentOutput
 
 
 class TestAgentUsage:

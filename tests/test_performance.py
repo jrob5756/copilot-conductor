@@ -1,4 +1,4 @@
-"""Performance tests for Copilot Conductor.
+"""Performance tests for Conductor.
 
 Tests cover:
 - Startup time: CLI app initialization should be <500ms
@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from copilot_conductor.config.schema import (
+from conductor.config.schema import (
     AgentDef,
     ContextConfig,
     LimitsConfig,
@@ -27,9 +27,9 @@ from copilot_conductor.config.schema import (
     WorkflowConfig,
     WorkflowDef,
 )
-from copilot_conductor.engine.workflow import WorkflowEngine
-from copilot_conductor.providers.base import AgentOutput
-from copilot_conductor.providers.copilot import CopilotProvider
+from conductor.engine.workflow import WorkflowEngine
+from conductor.providers.base import AgentOutput
+from conductor.providers.copilot import CopilotProvider
 
 # Mark all tests in this module as performance tests
 pytestmark = pytest.mark.performance
@@ -47,7 +47,7 @@ class TestStartupTime:
         code = """
 import time
 start = time.perf_counter()
-from copilot_conductor.cli.app import app
+from conductor.cli.app import app
 elapsed = time.perf_counter() - start
 print(elapsed)
 """
@@ -65,7 +65,7 @@ print(elapsed)
 
     def test_config_load_time(self, fixtures_dir) -> None:
         """Test that loading and validating a config is fast."""
-        from copilot_conductor.config.loader import load_config
+        from conductor.config.loader import load_config
 
         workflow_file = fixtures_dir / "valid_full.yaml"
 
@@ -92,7 +92,7 @@ print(elapsed)
 
     def test_template_renderer_init_time(self) -> None:
         """Test that TemplateRenderer initialization is fast."""
-        from copilot_conductor.executor.template import TemplateRenderer
+        from conductor.executor.template import TemplateRenderer
 
         start = time.perf_counter()
         renderer = TemplateRenderer()
@@ -348,7 +348,7 @@ class TestTemplatePerformance:
 
     def test_complex_template_rendering(self) -> None:
         """Test that complex templates render quickly."""
-        from copilot_conductor.executor.template import TemplateRenderer
+        from conductor.executor.template import TemplateRenderer
 
         renderer = TemplateRenderer()
 
@@ -384,7 +384,7 @@ Metadata: {{ metadata | json }}
 
     def test_json_filter_performance(self) -> None:
         """Test that json filter is fast with large objects."""
-        from copilot_conductor.executor.template import TemplateRenderer
+        from conductor.executor.template import TemplateRenderer
 
         renderer = TemplateRenderer()
 
@@ -411,7 +411,7 @@ class TestRouterPerformance:
 
     def test_many_routes_evaluation(self) -> None:
         """Test that evaluating many routes is fast."""
-        from copilot_conductor.engine.router import Router
+        from conductor.engine.router import Router
 
         router = Router()
 
@@ -434,7 +434,7 @@ class TestRouterPerformance:
 
     def test_arithmetic_conditions_performance(self) -> None:
         """Test that arithmetic conditions evaluate quickly."""
-        from copilot_conductor.engine.router import Router
+        from conductor.engine.router import Router
 
         router = Router()
 
@@ -464,7 +464,7 @@ class TestContextPerformance:
 
     def test_context_accumulation_performance(self) -> None:
         """Test that context accumulation is efficient."""
-        from copilot_conductor.engine.context import WorkflowContext
+        from conductor.engine.context import WorkflowContext
 
         context = WorkflowContext()
         context.set_workflow_inputs({"input": "test"})
@@ -492,7 +492,7 @@ class TestContextPerformance:
 
     def test_token_estimation_performance(self) -> None:
         """Test that token estimation is fast."""
-        from copilot_conductor.engine.context import WorkflowContext
+        from conductor.engine.context import WorkflowContext
 
         context = WorkflowContext()
         context.set_workflow_inputs({"input": "test input " * 100})
@@ -524,7 +524,7 @@ class TestParallelExecutionPerformance:
         """Test that parallel execution is faster than sequential execution."""
         import time
 
-        from copilot_conductor.config.schema import ParallelGroup
+        from conductor.config.schema import ParallelGroup
 
         # Track execution timing for each agent
         execution_times: dict[str, tuple[float, float]] = {}  # agent -> (start, end)
@@ -727,7 +727,7 @@ class TestForEachPerformance:
         With max_concurrent=10, we expect ~10 batches, so roughly 10x the time of
         a single execution, plus some overhead.
         """
-        from copilot_conductor.config.schema import ForEachDef
+        from conductor.config.schema import ForEachDef
 
         # First, measure single agent execution time with async mock
         single_workflow = WorkflowConfig(
@@ -853,7 +853,7 @@ class TestForEachPerformance:
 
         Acceptance: Should complete within reasonable time with proper batching.
         """
-        from copilot_conductor.config.schema import ForEachDef
+        from conductor.config.schema import ForEachDef
 
         for_each_workflow = WorkflowConfig(
             workflow=WorkflowDef(
@@ -934,7 +934,7 @@ class TestForEachPerformance:
         """
         import tracemalloc
 
-        from copilot_conductor.config.schema import ForEachDef
+        from conductor.config.schema import ForEachDef
 
         tracemalloc.start()
 
@@ -1004,7 +1004,7 @@ class TestForEachPerformance:
         Acceptance: For-each should perform similarly to static parallel
         for the same number of agents.
         """
-        from copilot_conductor.config.schema import ForEachDef
+        from conductor.config.schema import ForEachDef
 
         num_agents = 20
 
@@ -1128,7 +1128,7 @@ class TestForEachPerformance:
     @pytest.mark.asyncio
     async def test_empty_array_performance(self) -> None:
         """Test that empty arrays have minimal overhead."""
-        from copilot_conductor.config.schema import ForEachDef
+        from conductor.config.schema import ForEachDef
 
         for_each_workflow = WorkflowConfig(
             workflow=WorkflowDef(
@@ -1179,7 +1179,7 @@ class TestForEachPerformance:
     @pytest.mark.asyncio
     async def test_batching_scalability(self) -> None:
         """Test that execution time scales with batch count, not item count."""
-        from copilot_conductor.config.schema import ForEachDef
+        from conductor.config.schema import ForEachDef
 
         async def run_foreach_with_items(num_items: int, max_concurrent: int) -> float:
             """Helper to run for-each and return execution time."""

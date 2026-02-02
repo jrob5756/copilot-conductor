@@ -8,7 +8,7 @@ were Claude-specific parameters not supported by both providers.
 import pytest
 from pydantic import ValidationError
 
-from copilot_conductor.config.schema import RuntimeConfig
+from conductor.config.schema import RuntimeConfig
 
 
 def test_temperature_out_of_range_low():

@@ -1,9 +1,9 @@
-# Copilot Conductor
+# Conductor
 
 A CLI tool for defining and running multi-agent workflows with the GitHub Copilot SDK and Anthropic Claude.
 
-[![CI](https://github.com/your-org/copilot-conductor/actions/workflows/ci.yml/badge.svg)](https://github.com/your-org/copilot-conductor/actions/workflows/ci.yml)
-[![PyPI version](https://badge.fury.io/py/copilot-conductor.svg)](https://badge.fury.io/py/copilot-conductor)
+[![CI](https://github.com/your-org/conductor/actions/workflows/ci.yml/badge.svg)](https://github.com/your-org/conductor/actions/workflows/ci.yml)
+[![PyPI version](https://badge.fury.io/py/conductor.svg)](https://badge.fury.io/py/conductor)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 
 ## Features
@@ -26,20 +26,20 @@ A CLI tool for defining and running multi-agent workflows with the GitHub Copilo
 ### Using uvx (Recommended)
 
 ```bash
-uvx copilot-conductor run workflow.yaml
+uvx conductor run workflow.yaml
 ```
 
 ### Using pipx
 
 ```bash
-pipx install copilot-conductor
+pipx install conductor
 conductor run workflow.yaml
 ```
 
 ### Using pip
 
 ```bash
-pip install copilot-conductor
+pip install conductor
 conductor run workflow.yaml
 ```
 
@@ -86,7 +86,7 @@ conductor run my-workflow.yaml --input question="What is Python?"
 
 ## Using Claude Provider
 
-Copilot Conductor supports Anthropic Claude models via the official Anthropic SDK.
+Conductor supports Anthropic Claude models via the official Anthropic SDK.
 
 ### 1. Install the Claude SDK
 
@@ -383,8 +383,8 @@ See the [`examples/`](./examples/) directory for complete workflow examples:
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/copilot-conductor.git
-cd copilot-conductor
+git clone https://github.com/your-org/conductor.git
+cd conductor
 
 # Install dependencies
 uv sync

@@ -1,6 +1,6 @@
 # Architecture Decision Records
 
-This document tracks key architectural decisions made during the development of Copilot Conductor.
+This document tracks key architectural decisions made during the development of Conductor.
 
 ## ADR 001: Tool-Based Structured Output for Claude Provider
 
@@ -80,7 +80,7 @@ We will use **tool-based structured output** via a dynamically generated `emit_o
 
 - Anthropic SDK Documentation: https://github.com/anthropics/anthropic-sdk-python
 - Claude API Reference: https://docs.anthropic.com/en/api/messages
-- Implementation: `src/copilot_conductor/providers/claude.py`
+- Implementation: `src/conductor/providers/claude.py`
 - Related Tests: `tests/test_providers/test_claude_parse_recovery.py`
 
 ---
@@ -141,7 +141,7 @@ When MCP support is added in Phase 2:
 
 When Phase 2 is released:
 
-1. Update `copilot-conductor` to latest version
+1. Update `conductor` to latest version
 2. Add `mcp_servers` configuration to workflow YAML (same as Copilot provider)
 3. No code changes needed for existing workflows
 4. New workflows can leverage MCP tools immediately
@@ -149,5 +149,5 @@ When Phase 2 is released:
 ### References
 
 - MCP Protocol Specification: https://modelcontextprotocol.io/
-- Copilot Provider MCP Implementation: `src/copilot_conductor/providers/copilot.py`
+- Copilot Provider MCP Implementation: `src/conductor/providers/copilot.py`
 - Phase 2 Planning: `add-claude-sdk-support.plan.md` (Section 5)

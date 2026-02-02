@@ -10,7 +10,7 @@ Tests cover:
 
 import pytest
 
-from copilot_conductor.config.schema import (
+from conductor.config.schema import (
     AgentDef,
     ContextConfig,
     ForEachDef,
@@ -21,8 +21,8 @@ from copilot_conductor.config.schema import (
     WorkflowConfig,
     WorkflowDef,
 )
-from copilot_conductor.engine.workflow import WorkflowEngine
-from copilot_conductor.executor.template import TemplateRenderer
+from conductor.engine.workflow import WorkflowEngine
+from conductor.executor.template import TemplateRenderer
 
 
 class TestLoopVariableTemplateRendering:
@@ -315,7 +315,7 @@ class TestForEachExecution:
         """Test basic for-each execution with 3 items and max_concurrent=2."""
         from unittest.mock import AsyncMock, MagicMock
 
-        from copilot_conductor.providers.base import AgentOutput
+        from conductor.providers.base import AgentOutput
 
         # Create workflow with for-each group
         config = WorkflowConfig(
@@ -424,7 +424,7 @@ class TestForEachExecution:
         """Test for-each gracefully handles empty arrays."""
         from unittest.mock import AsyncMock, MagicMock
 
-        from copilot_conductor.providers.base import AgentOutput
+        from conductor.providers.base import AgentOutput
 
         config = WorkflowConfig(
             workflow=WorkflowDef(
@@ -488,8 +488,8 @@ class TestForEachExecution:
         """Test fail_fast mode stops on first error."""
         from unittest.mock import AsyncMock, MagicMock
 
-        from copilot_conductor.exceptions import ExecutionError
-        from copilot_conductor.providers.base import AgentOutput
+        from conductor.exceptions import ExecutionError
+        from conductor.providers.base import AgentOutput
 
         config = WorkflowConfig(
             workflow=WorkflowDef(
@@ -559,7 +559,7 @@ class TestForEachExecution:
         import asyncio
         from unittest.mock import AsyncMock, MagicMock
 
-        from copilot_conductor.providers.base import AgentOutput
+        from conductor.providers.base import AgentOutput
 
         config = WorkflowConfig(
             workflow=WorkflowDef(
@@ -635,8 +635,8 @@ class TestForEachExecution:
         """Test continue_on_error mode with partial successes - workflow should continue."""
         from unittest.mock import AsyncMock, MagicMock
 
-        from copilot_conductor.exceptions import ExecutionError
-        from copilot_conductor.providers.base import AgentOutput
+        from conductor.exceptions import ExecutionError
+        from conductor.providers.base import AgentOutput
 
         config = WorkflowConfig(
             workflow=WorkflowDef(
@@ -712,8 +712,8 @@ class TestForEachExecution:
         """Test continue_on_error mode when all items fail - should raise error."""
         from unittest.mock import AsyncMock, MagicMock
 
-        from copilot_conductor.exceptions import ExecutionError
-        from copilot_conductor.providers.base import AgentOutput
+        from conductor.exceptions import ExecutionError
+        from conductor.providers.base import AgentOutput
 
         config = WorkflowConfig(
             workflow=WorkflowDef(
@@ -783,7 +783,7 @@ class TestForEachExecution:
         """Test all_or_nothing mode when all items succeed - should complete successfully."""
         from unittest.mock import AsyncMock, MagicMock
 
-        from copilot_conductor.providers.base import AgentOutput
+        from conductor.providers.base import AgentOutput
 
         config = WorkflowConfig(
             workflow=WorkflowDef(
@@ -855,8 +855,8 @@ class TestForEachExecution:
         """Test all_or_nothing mode when any item fails - should raise error."""
         from unittest.mock import AsyncMock, MagicMock
 
-        from copilot_conductor.exceptions import ExecutionError
-        from copilot_conductor.providers.base import AgentOutput
+        from conductor.exceptions import ExecutionError
+        from conductor.providers.base import AgentOutput
 
         config = WorkflowConfig(
             workflow=WorkflowDef(
@@ -939,7 +939,7 @@ class TestForEachOutputAccess:
         """Test accessing for-each outputs by index in downstream agent."""
         from unittest.mock import AsyncMock, MagicMock
 
-        from copilot_conductor.providers.base import AgentOutput
+        from conductor.providers.base import AgentOutput
 
         config = WorkflowConfig(
             workflow=WorkflowDef(
@@ -1027,7 +1027,7 @@ class TestForEachOutputAccess:
         """Test accessing for-each outputs by key when key_by is specified."""
         from unittest.mock import AsyncMock, MagicMock
 
-        from copilot_conductor.providers.base import AgentOutput
+        from conductor.providers.base import AgentOutput
 
         config = WorkflowConfig(
             workflow=WorkflowDef(
@@ -1116,7 +1116,7 @@ class TestForEachOutputAccess:
         """Test iterating over for-each outputs in downstream agent template."""
         from unittest.mock import AsyncMock, MagicMock
 
-        from copilot_conductor.providers.base import AgentOutput
+        from conductor.providers.base import AgentOutput
 
         config = WorkflowConfig(
             workflow=WorkflowDef(
@@ -1199,7 +1199,7 @@ class TestForEachOutputAccess:
         """Test that empty arrays produce correct empty output structures."""
         from unittest.mock import AsyncMock, MagicMock
 
-        from copilot_conductor.providers.base import AgentOutput
+        from conductor.providers.base import AgentOutput
 
         # Test both list and dict outputs with empty arrays
         for key_by in [None, "item_id"]:
@@ -1278,8 +1278,8 @@ class TestForEachOutputAccess:
         """Test accessing for-each errors in downstream agent with continue_on_error."""
         from unittest.mock import AsyncMock, MagicMock
 
-        from copilot_conductor.exceptions import ExecutionError as ExecError
-        from copilot_conductor.providers.base import AgentOutput
+        from conductor.exceptions import ExecutionError as ExecError
+        from conductor.providers.base import AgentOutput
 
         config = WorkflowConfig(
             workflow=WorkflowDef(
@@ -1357,7 +1357,7 @@ class TestForEachOutputAccess:
         """Test accessing for-each outputs with explicit context mode."""
         from unittest.mock import AsyncMock, MagicMock
 
-        from copilot_conductor.providers.base import AgentOutput
+        from conductor.providers.base import AgentOutput
 
         config = WorkflowConfig(
             workflow=WorkflowDef(
@@ -1439,7 +1439,7 @@ class TestForEachOutputAccess:
         """Test accessing keyed for-each outputs with explicit context mode."""
         from unittest.mock import AsyncMock, MagicMock
 
-        from copilot_conductor.providers.base import AgentOutput
+        from conductor.providers.base import AgentOutput
 
         config = WorkflowConfig(
             workflow=WorkflowDef(
@@ -1523,8 +1523,8 @@ class TestForEachOutputAccess:
         """Test accessing for-each errors with explicit context mode."""
         from unittest.mock import AsyncMock, MagicMock
 
-        from copilot_conductor.exceptions import ExecutionError as ExecError
-        from copilot_conductor.providers.base import AgentOutput
+        from conductor.exceptions import ExecutionError as ExecError
+        from conductor.providers.base import AgentOutput
 
         config = WorkflowConfig(
             workflow=WorkflowDef(
@@ -1602,7 +1602,7 @@ class TestForEachOutputAccess:
         """Test E7-T5: Empty outputs in explicit mode produce correct structures."""
         from unittest.mock import AsyncMock, MagicMock
 
-        from copilot_conductor.providers.base import AgentOutput
+        from conductor.providers.base import AgentOutput
 
         # Test both list outputs (no key_by) and dict outputs (with key_by)
         for key_by in [None, "item_id"]:

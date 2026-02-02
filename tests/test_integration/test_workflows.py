@@ -11,9 +11,9 @@ from typing import Any
 
 import pytest
 
-from copilot_conductor.config.loader import load_config
-from copilot_conductor.engine.workflow import WorkflowEngine
-from copilot_conductor.providers.copilot import CopilotProvider
+from conductor.config.loader import load_config
+from conductor.engine.workflow import WorkflowEngine
+from conductor.providers.copilot import CopilotProvider
 
 
 class TestSimpleWorkflowIntegration:
@@ -153,7 +153,7 @@ class TestLoopBackIntegration:
 
     def test_loop_until_quality_threshold(self) -> None:
         """Test workflow loops until quality threshold is met."""
-        from copilot_conductor.config.schema import (
+        from conductor.config.schema import (
             AgentDef,
             ContextConfig,
             LimitsConfig,
@@ -217,7 +217,7 @@ class TestLoopBackIntegration:
 
     def test_loop_with_feedback_accumulation(self) -> None:
         """Test that loop iterations accumulate context correctly."""
-        from copilot_conductor.config.schema import (
+        from conductor.config.schema import (
             AgentDef,
             ContextConfig,
             OutputField,
@@ -290,7 +290,7 @@ class TestHumanGateIntegration:
 
     def test_human_gate_with_skip_gates(self) -> None:
         """Test human gate auto-selects first option with skip_gates."""
-        from copilot_conductor.config.schema import (
+        from conductor.config.schema import (
             AgentDef,
             GateOption,
             OutputField,
@@ -356,7 +356,7 @@ class TestHumanGateIntegration:
 
     def test_human_gate_routes_to_end(self) -> None:
         """Test human gate that routes directly to $end."""
-        from copilot_conductor.config.schema import (
+        from conductor.config.schema import (
             AgentDef,
             GateOption,
             OutputField,
@@ -406,7 +406,7 @@ class TestToolWorkflowIntegration:
 
     def test_workflow_with_tools(self) -> None:
         """Test that tools are passed to provider correctly."""
-        from copilot_conductor.config.schema import (
+        from conductor.config.schema import (
             AgentDef,
             OutputField,
             RouteDef,
@@ -456,7 +456,7 @@ class TestContextModeIntegration:
 
     def test_accumulate_mode_preserves_all_outputs(self) -> None:
         """Test that accumulate mode keeps all prior agent outputs."""
-        from copilot_conductor.config.schema import (
+        from conductor.config.schema import (
             AgentDef,
             ContextConfig,
             OutputField,
@@ -517,7 +517,7 @@ class TestContextModeIntegration:
 
     def test_last_only_mode_has_previous_only(self) -> None:
         """Test that last_only mode only keeps previous agent output."""
-        from copilot_conductor.config.schema import (
+        from conductor.config.schema import (
             AgentDef,
             ContextConfig,
             OutputField,
@@ -629,7 +629,7 @@ class TestDryRunIntegration:
 
     def test_dry_run_detects_loops(self) -> None:
         """Test that dry-run identifies loop patterns."""
-        from copilot_conductor.config.schema import (
+        from conductor.config.schema import (
             AgentDef,
             OutputField,
             RouteDef,
@@ -679,7 +679,7 @@ class TestErrorHandlingIntegration:
 
     def test_invalid_route_target_error(self, fixtures_dir: Path) -> None:
         """Test that invalid route target raises clear error during validation."""
-        from copilot_conductor.exceptions import ConfigurationError
+        from conductor.exceptions import ConfigurationError
 
         workflow_file = fixtures_dir / "invalid_bad_route.yaml"
 
@@ -690,7 +690,7 @@ class TestErrorHandlingIntegration:
 
     def test_missing_entry_point_error(self, fixtures_dir: Path) -> None:
         """Test that missing entry point raises validation error."""
-        from copilot_conductor.exceptions import ConfigurationError
+        from conductor.exceptions import ConfigurationError
 
         workflow_file = fixtures_dir / "invalid_missing_entry.yaml"
 
@@ -761,7 +761,7 @@ class TestBackwardCompatibility:
 
     def test_loop_workflows_still_work(self) -> None:
         """Test that loop patterns continue to work without parallel."""
-        from copilot_conductor.config.schema import (
+        from conductor.config.schema import (
             AgentDef,
             LimitsConfig,
             OutputField,
@@ -810,7 +810,7 @@ class TestBackwardCompatibility:
 
     def test_routing_workflows_still_work(self) -> None:
         """Test that conditional routing still works without parallel."""
-        from copilot_conductor.config.schema import (
+        from conductor.config.schema import (
             AgentDef,
             OutputField,
             RouteDef,

@@ -8,13 +8,13 @@ from unittest.mock import patch
 
 import pytest
 
-from copilot_conductor.config.loader import (
+from conductor.config.loader import (
     ConfigLoader,
     load_config,
     load_config_string,
     resolve_env_vars,
 )
-from copilot_conductor.exceptions import ConfigurationError
+from conductor.exceptions import ConfigurationError
 
 
 class TestResolveEnvVars:

@@ -14,15 +14,15 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from copilot_conductor.config.schema import AgentDef
-from copilot_conductor.providers.factory import create_provider
+from conductor.config.schema import AgentDef
+from conductor.providers.factory import create_provider
 
 
 class TestClaudeParameterPassing:
     """Tests for end-to-end parameter passing through factory."""
 
     @pytest.mark.asyncio
-    @patch("copilot_conductor.providers.factory.ClaudeProvider")
+    @patch("conductor.providers.factory.ClaudeProvider")
     async def test_common_parameters_passed_from_factory(
         self, mock_claude_class: Mock
     ) -> None:
@@ -48,9 +48,9 @@ class TestClaudeParameterPassing:
             timeout=120.0,
         )
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_common_parameters_passed_to_sdk(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -70,7 +70,7 @@ class TestClaudeParameterPassing:
         mock_anthropic_class.return_value = mock_client
 
         # Import after patching
-        from copilot_conductor.providers.claude import ClaudeProvider
+        from conductor.providers.claude import ClaudeProvider
 
         # Create provider with common parameters
         provider = ClaudeProvider(
@@ -94,9 +94,9 @@ class TestClaudeParameterPassing:
         assert call_kwargs["temperature"] == 0.7
         assert call_kwargs["messages"] == [{"role": "user", "content": "Test prompt"}]
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_optional_parameters_not_passed_when_none(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -116,7 +116,7 @@ class TestClaudeParameterPassing:
         mock_anthropic_class.return_value = mock_client
 
         # Import after patching
-        from copilot_conductor.providers.claude import ClaudeProvider
+        from conductor.providers.claude import ClaudeProvider
 
         # Create provider with minimal parameters (all optional params are None)
         provider = ClaudeProvider()
@@ -136,9 +136,9 @@ class TestClaudeParameterPassing:
         assert "max_tokens" in call_kwargs
         assert "messages" in call_kwargs
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_agent_model_overrides_provider_model(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -156,7 +156,7 @@ class TestClaudeParameterPassing:
         mock_anthropic_class.return_value = mock_client
 
         # Import after patching
-        from copilot_conductor.providers.claude import ClaudeProvider
+        from conductor.providers.claude import ClaudeProvider
 
         # Create provider with default model
         provider = ClaudeProvider(model="claude-3-5-sonnet-latest")

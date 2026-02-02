@@ -1,6 +1,6 @@
 """Unit tests for the AgentProvider ABC and AgentOutput dataclass."""
 
-from copilot_conductor.providers.base import AgentOutput
+from conductor.providers.base import AgentOutput
 
 
 class TestAgentOutput:

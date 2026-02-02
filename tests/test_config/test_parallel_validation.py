@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from copilot_conductor.config.schema import (
+from conductor.config.schema import (
     AgentDef,
     ParallelGroup,
     WorkflowConfig,
     WorkflowDef,
 )
-from copilot_conductor.config.validator import validate_workflow_config
-from copilot_conductor.exceptions import ConfigurationError
+from conductor.config.validator import validate_workflow_config
+from conductor.exceptions import ConfigurationError
 
 
 class TestParallelGroupBasicValidation:
@@ -97,7 +97,7 @@ class TestParallelAgentRoutes:
 
     def test_parallel_agent_with_routes_rejected(self) -> None:
         """Test that agents in parallel groups cannot have routes."""
-        from copilot_conductor.config.schema import RouteDef
+        from conductor.config.schema import RouteDef
 
         config = WorkflowConfig(
             workflow=WorkflowDef(name="test", entry_point="parallel1"),
@@ -119,7 +119,7 @@ class TestParallelAgentRoutes:
 
     def test_all_parallel_agents_with_routes_rejected(self) -> None:
         """Test that all agents with routes are reported."""
-        from copilot_conductor.config.schema import RouteDef
+        from conductor.config.schema import RouteDef
 
         config = WorkflowConfig(
             workflow=WorkflowDef(name="test", entry_point="parallel1"),
@@ -172,7 +172,7 @@ class TestCrossAgentDependencies:
 
     def test_reference_to_agent_outside_parallel_group_allowed(self) -> None:
         """Test that agents in parallel group can reference agents outside it."""
-        from copilot_conductor.config.schema import RouteDef
+        from conductor.config.schema import RouteDef
 
         config = WorkflowConfig(
             workflow=WorkflowDef(name="test", entry_point="agent0"),
@@ -300,7 +300,7 @@ class TestHumanGatesInParallel:
 
     def test_human_gate_in_parallel_group_rejected(self) -> None:
         """Test that human gates cannot be in parallel groups."""
-        from copilot_conductor.config.schema import GateOption
+        from conductor.config.schema import GateOption
 
         config = WorkflowConfig(
             workflow=WorkflowDef(name="test", entry_point="parallel1"),
@@ -330,7 +330,7 @@ class TestRoutingWithParallelGroups:
 
     def test_route_to_parallel_group(self) -> None:
         """Test that agents can route to parallel groups."""
-        from copilot_conductor.config.schema import RouteDef
+        from conductor.config.schema import RouteDef
 
         config = WorkflowConfig(
             workflow=WorkflowDef(name="test", entry_point="agent0"),
@@ -366,7 +366,7 @@ class TestRoutingWithParallelGroups:
 
     def test_human_gate_route_to_parallel_group(self) -> None:
         """Test that human gates can route to parallel groups."""
-        from copilot_conductor.config.schema import GateOption
+        from conductor.config.schema import GateOption
 
         config = WorkflowConfig(
             workflow=WorkflowDef(name="test", entry_point="gate1"),
@@ -396,7 +396,7 @@ class TestParallelGroupInputReferences:
 
     def test_reference_to_parallel_group_output(self) -> None:
         """Test that agents can reference parallel group outputs."""
-        from copilot_conductor.config.schema import RouteDef
+        from conductor.config.schema import RouteDef
 
         config = WorkflowConfig(
             workflow=WorkflowDef(name="test", entry_point="parallel1"),
@@ -424,7 +424,7 @@ class TestParallelGroupInputReferences:
 
     def test_unknown_parallel_group_reference(self) -> None:
         """Test that referencing unknown parallel group is rejected."""
-        from copilot_conductor.config.schema import RouteDef
+        from conductor.config.schema import RouteDef
 
         config = WorkflowConfig(
             workflow=WorkflowDef(name="test", entry_point="agent1"),
@@ -448,7 +448,7 @@ class TestErrorMessages:
 
     def test_error_messages_are_clear(self) -> None:
         """Test that error messages provide clear guidance."""
-        from copilot_conductor.config.schema import RouteDef
+        from conductor.config.schema import RouteDef
 
         # Test with multiple errors to ensure all are clear
         # Note: Unknown agent will be caught by Pydantic first, so test other errors

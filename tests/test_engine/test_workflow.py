@@ -10,7 +10,7 @@ Tests cover:
 
 import pytest
 
-from copilot_conductor.config.schema import (
+from conductor.config.schema import (
     AgentDef,
     ContextConfig,
     GateOption,
@@ -22,9 +22,9 @@ from copilot_conductor.config.schema import (
     WorkflowConfig,
     WorkflowDef,
 )
-from copilot_conductor.engine.workflow import WorkflowEngine
-from copilot_conductor.exceptions import ExecutionError
-from copilot_conductor.providers.copilot import CopilotProvider
+from conductor.engine.workflow import WorkflowEngine
+from conductor.exceptions import ExecutionError
+from conductor.providers.copilot import CopilotProvider
 
 
 @pytest.fixture
@@ -417,7 +417,7 @@ class TestWorkflowEngineErrors:
     @pytest.mark.asyncio
     async def test_execution_summary_with_parallel_groups(self) -> None:
         """Test execution summary includes parallel group statistics."""
-        from copilot_conductor.config.schema import ParallelGroup
+        from conductor.config.schema import ParallelGroup
 
         config = WorkflowConfig(
             workflow=WorkflowDef(
@@ -1061,7 +1061,7 @@ class TestWorkflowEngineLifecycleHooks:
     @pytest.mark.asyncio
     async def test_on_start_hook_executed(self) -> None:
         """Test that on_start hook is executed at workflow start."""
-        from copilot_conductor.config.schema import HooksConfig
+        from conductor.config.schema import HooksConfig
 
         config = WorkflowConfig(
             workflow=WorkflowDef(
@@ -1096,7 +1096,7 @@ class TestWorkflowEngineLifecycleHooks:
     @pytest.mark.asyncio
     async def test_on_complete_hook_executed(self) -> None:
         """Test that on_complete hook is executed on success."""
-        from copilot_conductor.config.schema import HooksConfig
+        from conductor.config.schema import HooksConfig
 
         config = WorkflowConfig(
             workflow=WorkflowDef(
@@ -1131,8 +1131,8 @@ class TestWorkflowEngineLifecycleHooks:
     @pytest.mark.asyncio
     async def test_on_error_hook_executed(self) -> None:
         """Test that on_error hook is executed on failure."""
-        from copilot_conductor.config.schema import HooksConfig
-        from copilot_conductor.exceptions import ProviderError
+        from conductor.config.schema import HooksConfig
+        from conductor.exceptions import ProviderError
 
         config = WorkflowConfig(
             workflow=WorkflowDef(

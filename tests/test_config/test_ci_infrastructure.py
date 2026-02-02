@@ -26,10 +26,10 @@ class TestCIInfrastructure:
         # Set the fake API key
         with patch.dict(os.environ, {"ANTHROPIC_API_KEY": fake_key}):
             # Import provider after setting env var
-            from copilot_conductor.providers.claude import ClaudeProvider
+            from conductor.providers.claude import ClaudeProvider
 
             # Mock the AsyncAnthropic client to prevent real initialization
-            with patch("copilot_conductor.providers.claude.AsyncAnthropic") as mock_anthropic:
+            with patch("conductor.providers.claude.AsyncAnthropic") as mock_anthropic:
                 mock_client = MagicMock()
                 mock_anthropic.return_value = mock_client
 
@@ -120,9 +120,9 @@ class TestMockVerification:
 
         Task: EPIC-010-T8 (mock verification)
         """
-        from copilot_conductor.providers.claude import ClaudeProvider
+        from conductor.providers.claude import ClaudeProvider
 
-        with patch("copilot_conductor.providers.claude.AsyncAnthropic") as mock_anthropic:
+        with patch("conductor.providers.claude.AsyncAnthropic") as mock_anthropic:
             mock_client = MagicMock()
             mock_anthropic.return_value = mock_client
 

@@ -1,6 +1,6 @@
 # Workflow Syntax Reference
 
-This document provides a comprehensive reference for the Copilot Conductor workflow YAML syntax.
+This document provides a comprehensive reference for the Conductor workflow YAML syntax.
 
 ## Table of Contents
 

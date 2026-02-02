@@ -1,6 +1,6 @@
 # Parallel Agent Execution
 
-Copilot Conductor supports parallel execution of independent agents, allowing workflows to run multiple agents concurrently when they don't depend on each other's outputs. This can significantly reduce workflow execution time for tasks like parallel research, validation, or data gathering.
+Conductor supports parallel execution of independent agents, allowing workflows to run multiple agents concurrently when they don't depend on each other's outputs. This can significantly reduce workflow execution time for tasks like parallel research, validation, or data gathering.
 
 ## Overview
 

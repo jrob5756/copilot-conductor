@@ -2,7 +2,7 @@
 
 import pytest
 
-from copilot_conductor.engine.pricing import (
+from conductor.engine.pricing import (
     DEFAULT_PRICING,
     ModelPricing,
     calculate_cost,

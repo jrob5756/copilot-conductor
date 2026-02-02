@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 from typer.testing import CliRunner
 
-from copilot_conductor.cli.app import app
+from conductor.cli.app import app
 
 runner = CliRunner()
 
@@ -50,7 +50,7 @@ output:
   result: "done"
 """)
 
-        with patch("copilot_conductor.cli.run.run_workflow_async") as mock_run:
+        with patch("conductor.cli.run.run_workflow_async") as mock_run:
             mock_run.return_value = {"result": "done"}
 
             # Should not raise an error about unknown option
@@ -76,7 +76,7 @@ output:
   result: "done"
 """)
 
-        with patch("copilot_conductor.cli.run.run_workflow_async") as mock_run:
+        with patch("conductor.cli.run.run_workflow_async") as mock_run:
             mock_run.return_value = {"result": "done"}
 
             result = runner.invoke(app, ["-V", "run", str(workflow_file)])
@@ -88,7 +88,7 @@ class TestVerboseLogging:
 
     def test_is_verbose_default_true(self) -> None:
         """Test that is_verbose returns True by default."""
-        from copilot_conductor.cli.app import is_verbose, verbose_mode
+        from conductor.cli.app import is_verbose, verbose_mode
 
         # Reset to default state first (which is now True)
         token = verbose_mode.set(True)
@@ -99,7 +99,7 @@ class TestVerboseLogging:
 
     def test_verbose_mode_can_be_set(self) -> None:
         """Test that verbose mode can be set via context var."""
-        from copilot_conductor.cli.app import is_verbose, verbose_mode
+        from conductor.cli.app import is_verbose, verbose_mode
 
         # First set to False explicitly
         token1 = verbose_mode.set(False)
@@ -124,8 +124,8 @@ class TestVerboseLogging:
 
         from rich.console import Console
 
-        from copilot_conductor.cli.app import verbose_mode
-        from copilot_conductor.cli.run import verbose_log
+        from conductor.cli.app import verbose_mode
+        from conductor.cli.run import verbose_log
 
         # Capture output - we need to patch the console
         output = StringIO()
@@ -135,7 +135,7 @@ class TestVerboseLogging:
         try:
             # verbose_log uses _verbose_console, so we need to patch it
             with patch(
-                "copilot_conductor.cli.run._verbose_console",
+                "conductor.cli.run._verbose_console",
                 Console(file=output, force_terminal=True),
             ):
                 verbose_log("test message")
@@ -148,7 +148,7 @@ class TestVerboseLogging:
         token = verbose_mode.set(True)
         try:
             with patch(
-                "copilot_conductor.cli.run._verbose_console",
+                "conductor.cli.run._verbose_console",
                 Console(file=output, force_terminal=True),
             ):
                 verbose_log("test message")
@@ -163,14 +163,14 @@ class TestVerboseLogging:
 
         from rich.console import Console
 
-        from copilot_conductor.cli.app import verbose_mode
-        from copilot_conductor.cli.run import verbose_log_timing
+        from conductor.cli.app import verbose_mode
+        from conductor.cli.run import verbose_log_timing
 
         output = StringIO()
         token = verbose_mode.set(True)
         try:
             with patch(
-                "copilot_conductor.cli.run._verbose_console",
+                "conductor.cli.run._verbose_console",
                 Console(file=output, force_terminal=True, no_color=True),
             ):
                 verbose_log_timing("Test operation", 1.234)
@@ -188,14 +188,14 @@ class TestVerboseLogging:
 
         from rich.console import Console
 
-        from copilot_conductor.cli.app import verbose_mode
-        from copilot_conductor.cli.run import verbose_log_section
+        from conductor.cli.app import verbose_mode
+        from conductor.cli.run import verbose_log_section
 
         output = StringIO()
         token = verbose_mode.set(True)
         try:
             with patch(
-                "copilot_conductor.cli.run._verbose_console",
+                "conductor.cli.run._verbose_console",
                 Console(file=output, force_terminal=True),
             ):
                 verbose_log_section("Test Section", "Test content here")
@@ -211,15 +211,15 @@ class TestVerboseLogging:
 
         from rich.console import Console
 
-        from copilot_conductor.cli.app import full_mode, verbose_mode
-        from copilot_conductor.cli.run import verbose_log_section
+        from conductor.cli.app import full_mode, verbose_mode
+        from conductor.cli.run import verbose_log_section
 
         output = StringIO()
         token_verbose = verbose_mode.set(True)
         token_full = full_mode.set(False)  # Explicitly set full mode to False
         try:
             with patch(
-                "copilot_conductor.cli.run._verbose_console",
+                "conductor.cli.run._verbose_console",
                 Console(file=output, force_terminal=True, width=200),
             ):
                 long_content = "x" * 1000
@@ -240,15 +240,15 @@ class TestVerboseLogging:
 
         from rich.console import Console
 
-        from copilot_conductor.cli.app import full_mode, verbose_mode
-        from copilot_conductor.cli.run import verbose_log_section
+        from conductor.cli.app import full_mode, verbose_mode
+        from conductor.cli.run import verbose_log_section
 
         output = StringIO()
         token_verbose = verbose_mode.set(True)
         token_full = full_mode.set(True)  # Enable full mode (--verbose flag)
         try:
             with patch(
-                "copilot_conductor.cli.run._verbose_console",
+                "conductor.cli.run._verbose_console",
                 Console(file=output, force_terminal=True),
             ):
                 long_content = "x" * 1000
@@ -265,7 +265,7 @@ class TestVerboseLogging:
 
     def test_is_full_default_false(self) -> None:
         """Test that is_full returns False by default."""
-        from copilot_conductor.cli.app import full_mode, is_full
+        from conductor.cli.app import full_mode, is_full
 
         # Reset to default state first
         token = full_mode.set(False)
@@ -276,7 +276,7 @@ class TestVerboseLogging:
 
     def test_full_mode_can_be_set(self) -> None:
         """Test that full mode can be set via context var."""
-        from copilot_conductor.cli.app import full_mode, is_full
+        from conductor.cli.app import full_mode, is_full
 
         # First set to False explicitly
         token1 = full_mode.set(False)
@@ -301,14 +301,14 @@ class TestVerboseLogging:
 
         from rich.console import Console
 
-        from copilot_conductor.cli.app import verbose_mode
-        from copilot_conductor.cli.run import verbose_log_parallel_start
+        from conductor.cli.app import verbose_mode
+        from conductor.cli.run import verbose_log_parallel_start
 
         output = StringIO()
         token = verbose_mode.set(True)
         try:
             with patch(
-                "copilot_conductor.cli.run._verbose_console",
+                "conductor.cli.run._verbose_console",
                 Console(file=output, force_terminal=True, no_color=True),
             ):
                 verbose_log_parallel_start("test_group", 3)
@@ -325,14 +325,14 @@ class TestVerboseLogging:
 
         from rich.console import Console
 
-        from copilot_conductor.cli.app import verbose_mode
-        from copilot_conductor.cli.run import verbose_log_parallel_agent_complete
+        from conductor.cli.app import verbose_mode
+        from conductor.cli.run import verbose_log_parallel_agent_complete
 
         output = StringIO()
         token = verbose_mode.set(True)
         try:
             with patch(
-                "copilot_conductor.cli.run._verbose_console",
+                "conductor.cli.run._verbose_console",
                 Console(file=output, force_terminal=True, no_color=True),
             ):
                 verbose_log_parallel_agent_complete("test_agent", 1.234, model="gpt-4", tokens=100)
@@ -350,14 +350,14 @@ class TestVerboseLogging:
 
         from rich.console import Console
 
-        from copilot_conductor.cli.app import verbose_mode
-        from copilot_conductor.cli.run import verbose_log_parallel_agent_failed
+        from conductor.cli.app import verbose_mode
+        from conductor.cli.run import verbose_log_parallel_agent_failed
 
         output = StringIO()
         token = verbose_mode.set(True)
         try:
             with patch(
-                "copilot_conductor.cli.run._verbose_console",
+                "conductor.cli.run._verbose_console",
                 Console(file=output, force_terminal=True, no_color=True),
             ):
                 verbose_log_parallel_agent_failed(
@@ -377,14 +377,14 @@ class TestVerboseLogging:
 
         from rich.console import Console
 
-        from copilot_conductor.cli.app import verbose_mode
-        from copilot_conductor.cli.run import verbose_log_parallel_summary
+        from conductor.cli.app import verbose_mode
+        from conductor.cli.run import verbose_log_parallel_summary
 
         output = StringIO()
         token = verbose_mode.set(True)
         try:
             with patch(
-                "copilot_conductor.cli.run._verbose_console",
+                "conductor.cli.run._verbose_console",
                 Console(file=output, force_terminal=True, no_color=True),
             ):
                 verbose_log_parallel_summary("test_group", 3, 0, 2.5)
@@ -401,14 +401,14 @@ class TestVerboseLogging:
 
         from rich.console import Console
 
-        from copilot_conductor.cli.app import verbose_mode
-        from copilot_conductor.cli.run import verbose_log_parallel_summary
+        from conductor.cli.app import verbose_mode
+        from conductor.cli.run import verbose_log_parallel_summary
 
         output = StringIO()
         token = verbose_mode.set(True)
         try:
             with patch(
-                "copilot_conductor.cli.run._verbose_console",
+                "conductor.cli.run._verbose_console",
                 Console(file=output, force_terminal=True, no_color=True),
             ):
                 verbose_log_parallel_summary("test_group", 2, 1, 3.0)
@@ -426,14 +426,14 @@ class TestVerboseLogging:
 
         from rich.console import Console
 
-        from copilot_conductor.cli.app import verbose_mode
-        from copilot_conductor.cli.run import verbose_log_parallel_summary
+        from conductor.cli.app import verbose_mode
+        from conductor.cli.run import verbose_log_parallel_summary
 
         output = StringIO()
         token = verbose_mode.set(True)
         try:
             with patch(
-                "copilot_conductor.cli.run._verbose_console",
+                "conductor.cli.run._verbose_console",
                 Console(file=output, force_terminal=True, no_color=True),
             ):
                 verbose_log_parallel_summary("test_group", 0, 3, 1.5)

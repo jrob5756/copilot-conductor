@@ -15,9 +15,9 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from copilot_conductor.config.schema import AgentDef, OutputField
-from copilot_conductor.exceptions import ExecutionError
-from copilot_conductor.providers.claude import ClaudeProvider
+from conductor.config.schema import AgentDef, OutputField
+from conductor.exceptions import ExecutionError
+from conductor.providers.claude import ClaudeProvider
 
 
 def create_tool_use_block(input_dict: dict) -> Mock:
@@ -56,9 +56,9 @@ def create_response(content_blocks: list, msg_id: str = "msg_123") -> Mock:
 class TestClaudeParseRecovery:
     """Tests for parse recovery with malformed responses."""
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_recovery_from_malformed_json_in_tool(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -104,9 +104,9 @@ class TestClaudeParseRecovery:
 
         await provider.close()
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_recovery_from_missing_required_fields(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -158,9 +158,9 @@ class TestClaudeParseRecovery:
 
         await provider.close()
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_recovery_from_invalid_json_syntax(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -202,9 +202,9 @@ class TestClaudeParseRecovery:
 
         await provider.close()
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_recovery_failure_after_max_retries(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -238,7 +238,7 @@ class TestClaudeParseRecovery:
         )
 
         # Should raise an error after retries exhausted (ProviderError wraps the failure)
-        from copilot_conductor.exceptions import ProviderError
+        from conductor.exceptions import ProviderError
         with pytest.raises((ExecutionError, ProviderError)):
             await provider.execute(agent, {"workflow": {"input": {}}}, "Test prompt")
 
@@ -247,9 +247,9 @@ class TestClaudeParseRecovery:
 
         await provider.close()
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_recovery_from_empty_response(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -289,9 +289,9 @@ class TestClaudeParseRecovery:
 
         await provider.close()
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_fallback_to_text_content_parsing(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock

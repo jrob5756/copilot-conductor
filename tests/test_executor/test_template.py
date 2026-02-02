@@ -13,8 +13,8 @@ Tests cover:
 
 import pytest
 
-from copilot_conductor.exceptions import TemplateError
-from copilot_conductor.executor.template import TemplateRenderer
+from conductor.exceptions import TemplateError
+from conductor.executor.template import TemplateRenderer
 
 
 class TestTemplateRendererBasics:

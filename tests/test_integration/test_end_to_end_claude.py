@@ -7,9 +7,9 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
-from copilot_conductor.config.loader import load_workflow
-from copilot_conductor.engine.workflow import WorkflowEngine
-from copilot_conductor.providers.factory import create_provider
+from conductor.config.loader import load_workflow
+from conductor.engine.workflow import WorkflowEngine
+from conductor.providers.factory import create_provider
 
 
 @pytest.fixture
@@ -71,9 +71,9 @@ output:
 
         # Execute workflow with mocked Anthropic SDK
         with (
-            patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True),
-            patch("copilot_conductor.providers.claude.AsyncAnthropic") as mock_anthropic,
-            patch("copilot_conductor.providers.claude.anthropic") as mock_module,
+            patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True),
+            patch("conductor.providers.claude.AsyncAnthropic") as mock_anthropic,
+            patch("conductor.providers.claude.anthropic") as mock_module,
         ):
             mock_module.__version__ = "0.77.0"
             mock_client = MagicMock()
@@ -126,9 +126,9 @@ agents:
         config = load_workflow(str(workflow_yaml))
 
         with (
-            patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True),
-            patch("copilot_conductor.providers.claude.AsyncAnthropic") as mock_anthropic,
-            patch("copilot_conductor.providers.claude.anthropic") as mock_module,
+            patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True),
+            patch("conductor.providers.claude.AsyncAnthropic") as mock_anthropic,
+            patch("conductor.providers.claude.anthropic") as mock_module,
         ):
             mock_module.__version__ = "0.77.0"
             mock_client = MagicMock()
@@ -239,7 +239,7 @@ agents:
     @pytest.mark.asyncio
     async def test_backward_compatibility_in_workflow(self, tmp_path, mock_anthropic_response):
         """Test that Copilot workflows still work after Claude addition."""
-        from copilot_conductor.providers.copilot import CopilotProvider
+        from conductor.providers.copilot import CopilotProvider
 
         # Create pure Copilot workflow (no Claude fields)
         workflow_yaml = tmp_path / "copilot_only.yaml"
@@ -337,9 +337,9 @@ agents:
         config = load_workflow(str(workflow_yaml))
 
         with (
-            patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True),
-            patch("copilot_conductor.providers.claude.AsyncAnthropic") as mock_anthropic,
-            patch("copilot_conductor.providers.claude.anthropic") as mock_module,
+            patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True),
+            patch("conductor.providers.claude.AsyncAnthropic") as mock_anthropic,
+            patch("conductor.providers.claude.anthropic") as mock_module,
         ):
             mock_module.__version__ = "0.77.0"
             mock_client = MagicMock()

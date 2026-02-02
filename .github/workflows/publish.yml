@@ -1,13 +1,13 @@
-# PyPI Publishing workflow for Copilot Conductor
+# PyPI Publishing workflow for Conductor
 #
 # Publishes the package to PyPI when a release is created.
 # Uses trusted publishing (OIDC) for secure authentication.
 #
 # Prerequisites:
 # 1. Configure trusted publisher on PyPI:
-#    - Go to https://pypi.org/manage/project/copilot-conductor/settings/publishing/
+#    - Go to https://pypi.org/manage/project/conductor/settings/publishing/
 #    - Add GitHub as trusted publisher
-#    - Repository: your-org/copilot-conductor
+#    - Repository: your-org/conductor
 #    - Workflow: publish.yml
 #    - Environment: pypi
 #
@@ -59,7 +59,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/p/copilot-conductor
+      url: https://pypi.org/p/conductor
     permissions:
       id-token: write  # Required for trusted publishing
 
@@ -80,7 +80,7 @@ jobs:
     if: github.event.release.prerelease
     environment:
       name: testpypi
-      url: https://test.pypi.org/p/copilot-conductor
+      url: https://test.pypi.org/p/conductor
     permissions:
       id-token: write  # Required for trusted publishing
 

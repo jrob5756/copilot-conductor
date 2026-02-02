@@ -21,7 +21,7 @@ test:
 
 # Run tests with coverage
 test-cov:
-	uv run pytest --cov=copilot_conductor --cov-report=term-missing
+	uv run pytest --cov=conductor --cov-report=term-missing
 
 # Run linter
 lint:

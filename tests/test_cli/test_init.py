@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from copilot_conductor.cli.app import app
+from conductor.cli.app import app
 
 runner = CliRunner()
 
@@ -198,7 +198,7 @@ class TestInitHelperFunctions:
 
     def test_list_templates_returns_all(self) -> None:
         """Test that list_templates returns all templates."""
-        from copilot_conductor.cli.init import list_templates
+        from conductor.cli.init import list_templates
 
         templates = list_templates()
         template_names = [t.name for t in templates]
@@ -209,7 +209,7 @@ class TestInitHelperFunctions:
 
     def test_get_template_existing(self) -> None:
         """Test get_template with existing template."""
-        from copilot_conductor.cli.init import get_template
+        from conductor.cli.init import get_template
 
         template = get_template("simple")
         assert template is not None
@@ -218,28 +218,28 @@ class TestInitHelperFunctions:
 
     def test_get_template_nonexistent(self) -> None:
         """Test get_template with nonexistent template."""
-        from copilot_conductor.cli.init import get_template
+        from conductor.cli.init import get_template
 
         template = get_template("nonexistent")
         assert template is None
 
     def test_render_template_substitutes_name(self) -> None:
         """Test that render_template substitutes the workflow name."""
-        from copilot_conductor.cli.init import render_template
+        from conductor.cli.init import render_template
 
         content = render_template("simple", "my-awesome-workflow")
         assert "my-awesome-workflow" in content
 
     def test_render_template_invalid_raises(self) -> None:
         """Test that render_template raises for invalid template."""
-        from copilot_conductor.cli.init import render_template
+        from conductor.cli.init import render_template
 
         with pytest.raises(ValueError, match="not found"):
             render_template("nonexistent", "test")
 
     def test_get_template_dir_exists(self) -> None:
         """Test that template directory exists."""
-        from copilot_conductor.cli.init import get_template_dir
+        from conductor.cli.init import get_template_dir
 
         template_dir = get_template_dir()
         assert template_dir.exists()
@@ -247,7 +247,7 @@ class TestInitHelperFunctions:
 
     def test_template_files_exist(self) -> None:
         """Test that all template files exist."""
-        from copilot_conductor.cli.init import TEMPLATES, get_template_dir
+        from conductor.cli.init import TEMPLATES, get_template_dir
 
         template_dir = get_template_dir()
         for template in TEMPLATES.values():

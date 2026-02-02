@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Copilot Conductor is a CLI tool for defining and running multi-agent workflows with the GitHub Copilot SDK. Workflows are defined in YAML and support parallel execution, conditional routing, loop-back patterns, and human-in-the-loop gates.
+Conductor is a CLI tool for defining and running multi-agent workflows with the GitHub Copilot SDK. Workflows are defined in YAML and support parallel execution, conditional routing, loop-back patterns, and human-in-the-loop gates.
 
 ## Common Commands
 
@@ -39,7 +39,7 @@ make validate-examples    # validate all examples
 
 ## Architecture
 
-### Core Package Structure (`src/copilot_conductor/`)
+### Core Package Structure (`src/conductor/`)
 
 - **cli/**: Typer-based CLI with commands `run`, `validate`, `init`, `templates`
   - `app.py` - Main entry point, defines the Typer application

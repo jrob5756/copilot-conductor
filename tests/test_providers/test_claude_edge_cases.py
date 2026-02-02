@@ -13,17 +13,17 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from copilot_conductor.config.schema import AgentDef
-from copilot_conductor.exceptions import ValidationError
-from copilot_conductor.providers.claude import ClaudeProvider
+from conductor.config.schema import AgentDef
+from conductor.exceptions import ValidationError
+from conductor.providers.claude import ClaudeProvider
 
 
 class TestClaudeEdgeCases:
     """Tests for edge cases in Claude provider."""
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     def test_temperature_validation_edge_cases(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
     ) -> None:
@@ -48,9 +48,9 @@ class TestClaudeEdgeCases:
         with pytest.raises(ValidationError, match="Temperature must be between 0.0 and 1.0"):
             ClaudeProvider(temperature=1.1)
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_empty_response_handling(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -77,9 +77,9 @@ class TestClaudeEdgeCases:
         result = await provider.execute(agent, context, rendered_prompt)
         assert result.content == {"text": ""}
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     def test_retry_history_exposure(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
     ) -> None:

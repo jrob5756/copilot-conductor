@@ -5,9 +5,9 @@ from typing import Any
 
 import pytest
 
-from copilot_conductor.config.schema import AgentDef
-from copilot_conductor.exceptions import ProviderError
-from copilot_conductor.providers.copilot import CopilotProvider, RetryConfig
+from conductor.config.schema import AgentDef
+from conductor.exceptions import ProviderError
+from conductor.providers.copilot import CopilotProvider, RetryConfig
 
 
 def stub_handler(agent: AgentDef, prompt: str, context: dict[str, Any]) -> dict[str, Any]:

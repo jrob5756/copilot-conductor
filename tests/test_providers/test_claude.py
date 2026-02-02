@@ -13,23 +13,23 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from copilot_conductor.config.schema import AgentDef, OutputField
-from copilot_conductor.exceptions import ProviderError, ValidationError
-from copilot_conductor.providers.claude import ClaudeProvider
+from conductor.config.schema import AgentDef, OutputField
+from conductor.exceptions import ProviderError, ValidationError
+from conductor.providers.claude import ClaudeProvider
 
 
 class TestClaudeProviderInitialization:
     """Tests for ClaudeProvider initialization."""
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", False)
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", False)
     def test_init_raises_when_sdk_not_installed(self) -> None:
         """Test that initialization raises ProviderError when SDK not available."""
         with pytest.raises(ProviderError, match="Anthropic SDK not installed"):
             ClaudeProvider()
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     def test_init_with_default_parameters(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
     ) -> None:
@@ -47,9 +47,9 @@ class TestClaudeProviderInitialization:
         assert provider._sdk_version == "0.77.0"
         mock_anthropic_class.assert_called_once()
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     def test_init_with_custom_parameters(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
     ) -> None:
@@ -73,10 +73,10 @@ class TestClaudeProviderInitialization:
         assert provider._default_max_tokens == 4096
         assert provider._timeout == 300.0
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
-    @patch("copilot_conductor.providers.claude.logger")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.logger")
     def test_sdk_version_warning_old_version(
         self,
         mock_logger: Mock,
@@ -96,10 +96,10 @@ class TestClaudeProviderInitialization:
         warning_calls = [call[0][0] for call in mock_logger.warning.call_args_list]
         assert any("0.76.0" in call and "older than 0.77.0" in call for call in warning_calls)
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
-    @patch("copilot_conductor.providers.claude.logger")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.logger")
     def test_sdk_version_warning_future_version(
         self,
         mock_logger: Mock,
@@ -123,10 +123,10 @@ class TestClaudeProviderInitialization:
 class TestModelVerification:
     """Tests for model availability verification."""
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
-    @patch("copilot_conductor.providers.claude.logger")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.logger")
     @pytest.mark.asyncio
     async def test_model_verification_lists_available_models(
         self,
@@ -157,10 +157,10 @@ class TestModelVerification:
         info_calls = [call[0][0] for call in mock_logger.info.call_args_list]
         assert any("Available Claude models" in call for call in info_calls)
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
-    @patch("copilot_conductor.providers.claude.logger")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.logger")
     @pytest.mark.asyncio
     async def test_model_verification_warns_unavailable_model(
         self,
@@ -191,9 +191,9 @@ class TestModelVerification:
 class TestConnectionValidation:
     """Tests for connection validation."""
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_validate_connection_success(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -210,9 +210,9 @@ class TestConnectionValidation:
 
         assert result is True
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_validate_connection_failure(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -232,9 +232,9 @@ class TestConnectionValidation:
 class TestCloseMethod:
     """Tests for resource cleanup."""
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_close_clears_client(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -257,9 +257,9 @@ class TestCloseMethod:
 class TestBasicExecution:
     """Tests for basic message execution without structured output."""
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_execute_simple_message(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -294,9 +294,9 @@ class TestBasicExecution:
         assert result.tokens_used == 15
         assert result.model == "claude-3-5-sonnet-latest"
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_execute_with_agent_model(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -336,9 +336,9 @@ class TestBasicExecution:
         call_kwargs = mock_client.messages.create.call_args[1]
         assert call_kwargs["model"] == "claude-3-opus-20240229"
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_execute_with_temperature(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -381,9 +381,9 @@ class TestStructuredOutput:
     structured data.
     """
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_execute_with_structured_output_via_tool(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -431,9 +431,9 @@ class TestStructuredOutput:
         assert len(call_kwargs["tools"]) == 1
         assert call_kwargs["tools"][0]["name"] == "emit_output"
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_execute_with_json_fallback(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -487,9 +487,9 @@ class TestTemperatureValidation:
     provider-side validation logic.
     """
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_temperature_above_1_0_raises_validation_error(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -514,9 +514,9 @@ class TestTemperatureValidation:
 class TestErrorHandling:
     """Tests for error handling and wrapping."""
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_api_error_wrapped_as_provider_error(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -542,9 +542,9 @@ class TestErrorHandling:
         # Generic exceptions are not retryable (only specific transient errors are)
         assert exc_info.value.is_retryable is False
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_execute_with_no_client_raises_error(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -567,9 +567,9 @@ class TestErrorHandling:
                 rendered_prompt="Test",
             )
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_validation_error_for_missing_output_fields(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -615,9 +615,9 @@ class TestErrorHandling:
 class TestToolSchemaGeneration:
     """Tests for tool schema generation from output schemas."""
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     def test_build_tools_for_simple_schema(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
     ) -> None:
@@ -650,9 +650,9 @@ class TestToolSchemaGeneration:
 class TestConcurrentExecution:
     """Tests for concurrent execution scenarios."""
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_concurrent_execute_calls(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -705,9 +705,9 @@ class TestConcurrentExecution:
 class TestTextContentExtraction:
     """Tests for text content extraction with multiple blocks."""
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_extract_text_content_multiple_blocks(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -749,9 +749,9 @@ class TestTextContentExtraction:
 class TestParseRecovery:
     """Tests for parse recovery mechanism when JSON is malformed."""
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_parse_recovery_success_on_first_retry(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -800,9 +800,9 @@ class TestParseRecovery:
         assert result.content == {"answer": "42"}
         assert mock_client.messages.create.call_count == 2
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_parse_recovery_success_with_json_fallback(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -849,9 +849,9 @@ class TestParseRecovery:
         assert result.content == {"answer": "42"}
         assert mock_client.messages.create.call_count == 2
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_parse_recovery_exhausted_raises_error(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -897,9 +897,9 @@ class TestParseRecovery:
         # Should have made 3 attempts total (initial + 2 retries)
         assert mock_client.messages.create.call_count == 3
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_no_parse_recovery_when_no_output_schema(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -938,9 +938,9 @@ class TestParseRecovery:
 class TestNestedSchemas:
     """Tests for nested object and array schemas."""
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_nested_object_schema(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -1004,9 +1004,9 @@ class TestNestedSchemas:
         assert "name" in person_schema["properties"]
         assert "age" in person_schema["properties"]
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_array_schema_with_items(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -1060,9 +1060,9 @@ class TestNestedSchemas:
         assert "items" in tags_schema
         assert tags_schema["items"]["type"] == "string"
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_array_of_objects_schema(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -1134,9 +1134,9 @@ class TestNestedSchemas:
         assert "name" in users_schema["items"]["properties"]
         assert "score" in users_schema["items"]["properties"]
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_deeply_nested_schema(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -1224,9 +1224,9 @@ class TestNestedSchemas:
             }
         }
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_schema_depth_limit_exceeded(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -1264,9 +1264,9 @@ class TestNestedSchemas:
                 rendered_prompt="Test",
             )
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_nested_array_with_object_items(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -1339,9 +1339,9 @@ class TestNestedSchemas:
         assert "value" in items_schema["properties"]
         assert items_schema["required"] == ["name", "value"]
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_tool_use_success_without_fallback(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -1392,9 +1392,9 @@ class TestNestedSchemas:
 class TestNonStreamingExecution:
     """Tests for EPIC-003: Non-streaming message execution."""
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_execute_api_call_basic(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -1434,9 +1434,9 @@ class TestNonStreamingExecution:
         assert call_kwargs["max_tokens"] == 100
         assert "tools" not in call_kwargs
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_execute_api_call_with_tools(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -1468,9 +1468,9 @@ class TestNonStreamingExecution:
         # Temperature should not be in kwargs when None
         assert "temperature" not in call_kwargs
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     def test_process_response_content_blocks_text_only(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
     ) -> None:
@@ -1495,9 +1495,9 @@ class TestNonStreamingExecution:
         assert blocks[1] == {"type": "text", "text": "Second part"}
         assert tool_data is None
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     def test_process_response_content_blocks_with_tool_use(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
     ) -> None:
@@ -1524,9 +1524,9 @@ class TestNonStreamingExecution:
         assert blocks[0] == {"type": "tool_use", "name": "emit_output", "id": "tool_123"}
         assert tool_data == {"answer": "42", "confidence": 0.95}
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     def test_process_response_content_blocks_mixed(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
     ) -> None:
@@ -1557,9 +1557,9 @@ class TestNonStreamingExecution:
         assert blocks[1]["type"] == "tool_use"
         assert tool_data == {"result": "success"}
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     def test_extract_token_usage_with_usage_data(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
     ) -> None:
@@ -1579,9 +1579,9 @@ class TestNonStreamingExecution:
 
         assert tokens == 500  # 150 + 350
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     def test_extract_token_usage_without_usage_data(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
     ) -> None:
@@ -1600,9 +1600,9 @@ class TestNonStreamingExecution:
 
         assert tokens is None
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     def test_timeout_configuration_passed_to_client(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
     ) -> None:
@@ -1621,9 +1621,9 @@ class TestNonStreamingExecution:
         call_kwargs = mock_anthropic_class.call_args[1]
         assert call_kwargs["timeout"] == 300.0
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     def test_timeout_default_value(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
     ) -> None:
@@ -1637,9 +1637,9 @@ class TestNonStreamingExecution:
 
         assert provider._timeout == 600.0
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     async def test_execute_returns_token_usage(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
     ) -> None:
@@ -1673,9 +1673,9 @@ class TestNonStreamingExecution:
         assert result.tokens_used == 300  # 100 + 200
         assert result.model == "claude-3-5-sonnet-latest"
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_execute_api_call_raises_when_client_not_initialized(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -1697,10 +1697,10 @@ class TestNonStreamingExecution:
                 max_tokens=100,
             )
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
-    @patch("copilot_conductor.providers.claude.logger")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.logger")
     @pytest.mark.asyncio
     async def test_execute_api_call_logs_non_streaming_mode(
         self, mock_logger: Mock, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -1734,9 +1734,9 @@ class TestNonStreamingExecution:
 class TestClaudeProviderRetryLogic:
     """Tests for retry logic and error handling."""
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_is_retryable_error_rate_limit(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -1753,9 +1753,9 @@ class TestClaudeProviderRetryLogic:
         error = mock_anthropic_module.RateLimitError("Rate limit exceeded")
         assert provider._is_retryable_error(error) is True
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_is_retryable_error_timeout(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -1772,9 +1772,9 @@ class TestClaudeProviderRetryLogic:
         error = mock_anthropic_module.APITimeoutError("Request timed out")
         assert provider._is_retryable_error(error) is True
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_is_retryable_error_connection(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -1791,9 +1791,9 @@ class TestClaudeProviderRetryLogic:
         error = mock_anthropic_module.APIConnectionError("Connection failed")
         assert provider._is_retryable_error(error) is True
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_is_retryable_error_5xx_status(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -1821,9 +1821,9 @@ class TestClaudeProviderRetryLogic:
         error_503 = MockAPIStatusError(503)
         assert provider._is_retryable_error(error_503) is True
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_is_retryable_error_4xx_non_retryable(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -1855,9 +1855,9 @@ class TestClaudeProviderRetryLogic:
         error_404 = MockAPIStatusError(404)
         assert provider._is_retryable_error(error_404) is False
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_is_retryable_error_429_retryable(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -1880,9 +1880,9 @@ class TestClaudeProviderRetryLogic:
         error_429 = MockAPIStatusError(429)
         assert provider._is_retryable_error(error_429) is True
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_calculate_delay_exponential_backoff(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -1893,7 +1893,7 @@ class TestClaudeProviderRetryLogic:
         mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
         mock_anthropic_class.return_value = mock_client
 
-        from copilot_conductor.providers.claude import RetryConfig
+        from conductor.providers.claude import RetryConfig
 
         provider = ClaudeProvider()
         config = RetryConfig(base_delay=1.0, max_delay=30.0, jitter=0.0)  # No jitter for testing
@@ -1914,9 +1914,9 @@ class TestClaudeProviderRetryLogic:
         delay_5 = provider._calculate_delay(5, config)
         assert delay_5 == 16.0
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_calculate_delay_max_cap(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -1927,7 +1927,7 @@ class TestClaudeProviderRetryLogic:
         mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
         mock_anthropic_class.return_value = mock_client
 
-        from copilot_conductor.providers.claude import RetryConfig
+        from conductor.providers.claude import RetryConfig
 
         provider = ClaudeProvider()
         config = RetryConfig(base_delay=1.0, max_delay=10.0, jitter=0.0)
@@ -1936,9 +1936,9 @@ class TestClaudeProviderRetryLogic:
         delay = provider._calculate_delay(10, config)
         assert delay == 10.0
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_calculate_delay_with_jitter(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -1949,7 +1949,7 @@ class TestClaudeProviderRetryLogic:
         mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
         mock_anthropic_class.return_value = mock_client
 
-        from copilot_conductor.providers.claude import RetryConfig
+        from conductor.providers.claude import RetryConfig
 
         provider = ClaudeProvider()
         config = RetryConfig(base_delay=1.0, max_delay=30.0, jitter=0.25)
@@ -1959,9 +1959,9 @@ class TestClaudeProviderRetryLogic:
         # Base delay is 1.0, jitter can add up to 0.25
         assert 1.0 <= delay <= 1.25
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_get_retry_after_header(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -1986,9 +1986,9 @@ class TestClaudeProviderRetryLogic:
         retry_after = provider._get_retry_after(error)
         assert retry_after == 5.0
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_get_retry_after_capitalized_header(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -2013,9 +2013,9 @@ class TestClaudeProviderRetryLogic:
         retry_after = provider._get_retry_after(error)
         assert retry_after == 10.0
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_get_retry_after_no_header(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -2040,9 +2040,9 @@ class TestClaudeProviderRetryLogic:
         retry_after = provider._get_retry_after(error)
         assert retry_after is None
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_retry_on_rate_limit_error(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -2074,7 +2074,7 @@ class TestClaudeProviderRetryLogic:
 
         mock_anthropic_class.return_value = mock_client
 
-        from copilot_conductor.providers.claude import RetryConfig
+        from conductor.providers.claude import RetryConfig
 
         provider = ClaudeProvider(retry_config=RetryConfig(base_delay=0.01, max_delay=0.1))
 
@@ -2088,9 +2088,9 @@ class TestClaudeProviderRetryLogic:
         assert len(provider._retry_history) == 1
         assert provider._retry_history[0]["is_retryable"] is True
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_retry_on_timeout_error(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -2119,7 +2119,7 @@ class TestClaudeProviderRetryLogic:
 
         mock_anthropic_class.return_value = mock_client
 
-        from copilot_conductor.providers.claude import RetryConfig
+        from conductor.providers.claude import RetryConfig
 
         provider = ClaudeProvider(retry_config=RetryConfig(base_delay=0.01, max_delay=0.1))
 
@@ -2131,9 +2131,9 @@ class TestClaudeProviderRetryLogic:
         assert len(provider._retry_history) == 1
         assert provider._retry_history[0]["is_retryable"] is True
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_no_retry_on_auth_error(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -2167,9 +2167,9 @@ class TestClaudeProviderRetryLogic:
         assert provider._retry_history[0]["is_retryable"] is False
         assert exc_info.value.status_code == 401
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_retry_exhaustion(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -2193,7 +2193,7 @@ class TestClaudeProviderRetryLogic:
 
         mock_anthropic_class.return_value = mock_client
 
-        from copilot_conductor.providers.claude import RetryConfig
+        from conductor.providers.claude import RetryConfig
 
         provider = ClaudeProvider(
             retry_config=RetryConfig(max_attempts=3, base_delay=0.01, max_delay=0.1)
@@ -2208,9 +2208,9 @@ class TestClaudeProviderRetryLogic:
         assert len(provider._retry_history) == 3
         assert all(h["is_retryable"] for h in provider._retry_history)
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_retry_history_tracking(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -2242,7 +2242,7 @@ class TestClaudeProviderRetryLogic:
 
         mock_anthropic_class.return_value = mock_client
 
-        from copilot_conductor.providers.claude import RetryConfig
+        from conductor.providers.claude import RetryConfig
 
         provider = ClaudeProvider(retry_config=RetryConfig(base_delay=0.01, max_delay=0.1))
 
@@ -2260,9 +2260,9 @@ class TestClaudeProviderRetryLogic:
         assert provider._retry_history[1]["attempt"] == 2
         assert provider._retry_history[1]["is_retryable"] is True
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_retry_respects_retry_after_header(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -2293,7 +2293,7 @@ class TestClaudeProviderRetryLogic:
 
         mock_anthropic_class.return_value = mock_client
 
-        from copilot_conductor.providers.claude import RetryConfig
+        from conductor.providers.claude import RetryConfig
 
         provider = ClaudeProvider(
             retry_config=RetryConfig(base_delay=1.0, max_delay=10.0, jitter=0.0)

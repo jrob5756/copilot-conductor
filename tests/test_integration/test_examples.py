@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from copilot_conductor.config.loader import load_config
-from copilot_conductor.engine.workflow import WorkflowEngine
+from conductor.config.loader import load_config
+from conductor.engine.workflow import WorkflowEngine
 
 
 class TestParallelExamples:
@@ -120,7 +120,7 @@ class TestParallelExamples:
             return agent_outputs.get(agent.name, {"result": "default"})
 
         # Use a mock provider
-        from copilot_conductor.providers.copilot import CopilotProvider
+        from conductor.providers.copilot import CopilotProvider
 
         provider = CopilotProvider(mock_handler=mock_handler)
 
@@ -194,7 +194,7 @@ class TestParallelExamples:
             return agent_outputs.get(agent.name, {"result": "default"})
 
         # Use a mock provider
-        from copilot_conductor.providers.copilot import CopilotProvider
+        from conductor.providers.copilot import CopilotProvider
 
         provider = CopilotProvider(mock_handler=mock_handler)
 

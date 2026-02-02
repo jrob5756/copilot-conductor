@@ -1,12 +1,12 @@
 [project]
-name = "copilot-conductor"
+name = "conductor"
 version = "0.1.0"
 description = "A CLI tool for defining and running multi-agent workflows with the GitHub Copilot SDK"
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
 authors = [
-    { name = "Copilot Conductor Team" }
+    { name = "Conductor Team" }
 ]
 keywords = [
     "cli",
@@ -42,14 +42,14 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/your-org/copilot-conductor"
-Documentation = "https://github.com/your-org/copilot-conductor#readme"
-Repository = "https://github.com/your-org/copilot-conductor"
-Issues = "https://github.com/your-org/copilot-conductor/issues"
-Changelog = "https://github.com/your-org/copilot-conductor/releases"
+Homepage = "https://github.com/your-org/conductor"
+Documentation = "https://github.com/your-org/conductor#readme"
+Repository = "https://github.com/your-org/conductor"
+Issues = "https://github.com/your-org/conductor/issues"
+Changelog = "https://github.com/your-org/conductor/releases"
 
 [project.scripts]
-conductor = "copilot_conductor.cli.app:app"
+conductor = "conductor.cli.app:app"
 
 [build-system]
 requires = ["hatchling"]

@@ -1,6 +1,6 @@
 # Configuration Documentation
 
-This document describes the runtime configuration options available in Copilot Conductor workflows.
+This document describes the runtime configuration options available in Conductor workflows.
 
 ## Runtime Configuration
 

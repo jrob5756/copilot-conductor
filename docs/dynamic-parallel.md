@@ -1,6 +1,6 @@
 # Dynamic Parallel Execution (For-Each)
 
-Copilot Conductor supports **dynamic parallel execution** via for-each groups, which allow workflows to process arrays of items with parallel agent instances spawned at runtime. This is perfect for tasks like analyzing multiple KPIs, processing datasets, or performing batch operations.
+Conductor supports **dynamic parallel execution** via for-each groups, which allow workflows to process arrays of items with parallel agent instances spawned at runtime. This is perfect for tasks like analyzing multiple KPIs, processing datasets, or performing batch operations.
 
 ## Overview
 

@@ -11,16 +11,16 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from copilot_conductor.config.schema import AgentDef, OutputField
-from copilot_conductor.providers.claude import ClaudeProvider, RetryConfig
+from conductor.config.schema import AgentDef, OutputField
+from conductor.providers.claude import ClaudeProvider, RetryConfig
 
 
 class TestClaudeRetryBackoff:
     """Tests for retry backoff and jitter calculations."""
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     def test_calculate_delay_exponential_backoff(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
     ) -> None:
@@ -50,9 +50,9 @@ class TestClaudeRetryBackoff:
         delay4 = provider._calculate_delay(4, config)
         assert delay4 == 8.0
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     def test_calculate_delay_max_cap(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
     ) -> None:
@@ -81,10 +81,10 @@ class TestClaudeRetryBackoff:
         delay4 = provider._calculate_delay(4, config)
         assert delay4 == 30.0
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
-    @patch("copilot_conductor.providers.claude.random.random")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.random.random")
     def test_calculate_delay_with_jitter(
         self,
         mock_random: Mock,
@@ -113,10 +113,10 @@ class TestClaudeRetryBackoff:
         delay2 = provider._calculate_delay(2, config)
         assert delay2 == 22.5
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
-    @patch("copilot_conductor.providers.claude.random.random")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.random.random")
     def test_jitter_randomization_range(
         self,
         mock_random: Mock,
@@ -146,9 +146,9 @@ class TestClaudeRetryBackoff:
         # Verify range: [base, base + base*jitter]
         assert 10.0 <= delay_min <= delay_max <= 12.5
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_retry_respects_retry_after_header(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -186,7 +186,7 @@ class TestClaudeRetryBackoff:
         mock_anthropic_class.return_value = mock_client
 
         # Import after patching
-        from copilot_conductor.providers.claude import ClaudeProvider
+        from conductor.providers.claude import ClaudeProvider
 
         provider = ClaudeProvider(retry_config=RetryConfig(max_attempts=2))
 
@@ -196,7 +196,7 @@ class TestClaudeRetryBackoff:
             prompt="Test",
             output={"result": OutputField(type="string")},
         )
-        with patch("copilot_conductor.providers.claude.asyncio.sleep") as mock_sleep:
+        with patch("conductor.providers.claude.asyncio.sleep") as mock_sleep:
             await provider.execute(agent, {}, "Test")
 
             # Verify sleep was called with retry-after value (60s), not calculated delay
@@ -204,9 +204,9 @@ class TestClaudeRetryBackoff:
             # Should be approximately 60 (from header), not exponential backoff
             assert mock_sleep.call_args[0][0] == 60.0
 
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     @pytest.mark.asyncio
     async def test_retry_history_includes_delay(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
@@ -243,7 +243,7 @@ class TestClaudeRetryBackoff:
         mock_anthropic_class.return_value = mock_client
 
         # Import after patching
-        from copilot_conductor.providers.claude import ClaudeProvider
+        from conductor.providers.claude import ClaudeProvider
 
         retry_cfg = RetryConfig(max_attempts=2, base_delay=2.0, jitter=0.0)
         provider = ClaudeProvider(retry_config=retry_cfg)
@@ -254,7 +254,7 @@ class TestClaudeRetryBackoff:
             prompt="Test",
             output={"result": OutputField(type="string")},
         )
-        with patch("copilot_conductor.providers.claude.asyncio.sleep"):
+        with patch("conductor.providers.claude.asyncio.sleep"):
             await provider.execute(agent, {}, "Test")
 
         # Check retry history

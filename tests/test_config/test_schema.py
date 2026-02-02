@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from copilot_conductor.config.schema import (
+from conductor.config.schema import (
     AgentDef,
     ContextConfig,
     ForEachDef,
@@ -610,7 +610,7 @@ class TestParallelGroup:
 
     def test_valid_parallel_group(self) -> None:
         """Test creating a valid parallel group."""
-        from copilot_conductor.config.schema import ParallelGroup
+        from conductor.config.schema import ParallelGroup
 
         group = ParallelGroup(
             name="research_group",
@@ -624,14 +624,14 @@ class TestParallelGroup:
 
     def test_parallel_group_default_failure_mode(self) -> None:
         """Test that failure_mode defaults to fail_fast."""
-        from copilot_conductor.config.schema import ParallelGroup
+        from conductor.config.schema import ParallelGroup
 
         group = ParallelGroup(name="test", agents=["a1", "a2"])
         assert group.failure_mode == "fail_fast"
 
     def test_parallel_group_all_failure_modes(self) -> None:
         """Test all valid failure modes."""
-        from copilot_conductor.config.schema import ParallelGroup
+        from conductor.config.schema import ParallelGroup
 
         for mode in ["fail_fast", "continue_on_error", "all_or_nothing"]:
             group = ParallelGroup(name="test", agents=["a1", "a2"], failure_mode=mode)
@@ -639,7 +639,7 @@ class TestParallelGroup:
 
     def test_parallel_group_invalid_failure_mode(self) -> None:
         """Test that invalid failure mode raises error."""
-        from copilot_conductor.config.schema import ParallelGroup
+        from conductor.config.schema import ParallelGroup
 
         with pytest.raises(ValidationError) as exc_info:
             ParallelGroup(name="test", agents=["a1", "a2"], failure_mode="invalid")
@@ -647,7 +647,7 @@ class TestParallelGroup:
 
     def test_parallel_group_minimum_agents_validation(self) -> None:
         """Test that parallel groups require at least 2 agents."""
-        from copilot_conductor.config.schema import ParallelGroup
+        from conductor.config.schema import ParallelGroup
 
         with pytest.raises(ValidationError) as exc_info:
             ParallelGroup(name="test", agents=["only_one"])
@@ -655,7 +655,7 @@ class TestParallelGroup:
 
     def test_parallel_group_empty_agents(self) -> None:
         """Test that parallel groups cannot have empty agents list."""
-        from copilot_conductor.config.schema import ParallelGroup
+        from conductor.config.schema import ParallelGroup
 
         with pytest.raises(ValidationError) as exc_info:
             ParallelGroup(name="test", agents=[])
@@ -663,7 +663,7 @@ class TestParallelGroup:
 
     def test_parallel_group_many_agents(self) -> None:
         """Test parallel group with many agents."""
-        from copilot_conductor.config.schema import ParallelGroup
+        from conductor.config.schema import ParallelGroup
 
         agents = [f"agent{i}" for i in range(10)]
         group = ParallelGroup(name="big_group", agents=agents)
@@ -675,7 +675,7 @@ class TestWorkflowConfigWithParallel:
 
     def test_workflow_with_parallel_group(self) -> None:
         """Test workflow configuration with parallel group."""
-        from copilot_conductor.config.schema import ParallelGroup
+        from conductor.config.schema import ParallelGroup
 
         config = WorkflowConfig(
             workflow=WorkflowDef(name="test", entry_point="parallel_group"),
@@ -690,7 +690,7 @@ class TestWorkflowConfigWithParallel:
 
     def test_workflow_parallel_group_agent_validation(self) -> None:
         """Test that parallel groups must reference existing agents."""
-        from copilot_conductor.config.schema import ParallelGroup
+        from conductor.config.schema import ParallelGroup
 
         with pytest.raises(ValidationError) as exc_info:
             WorkflowConfig(
@@ -704,7 +704,7 @@ class TestWorkflowConfigWithParallel:
 
     def test_workflow_route_to_parallel_group(self) -> None:
         """Test routing from agent to parallel group."""
-        from copilot_conductor.config.schema import ParallelGroup
+        from conductor.config.schema import ParallelGroup
 
         config = WorkflowConfig(
             workflow=WorkflowDef(name="test", entry_point="starter"),
@@ -719,7 +719,7 @@ class TestWorkflowConfigWithParallel:
 
     def test_workflow_entry_point_can_be_parallel_group(self) -> None:
         """Test that entry_point can be a parallel group."""
-        from copilot_conductor.config.schema import ParallelGroup
+        from conductor.config.schema import ParallelGroup
 
         config = WorkflowConfig(
             workflow=WorkflowDef(name="test", entry_point="pg"),

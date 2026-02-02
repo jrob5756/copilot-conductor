@@ -15,7 +15,7 @@ import os
 
 import pytest
 
-from copilot_conductor.config.schema import (
+from conductor.config.schema import (
     AgentDef,
     OutputField,
     RouteDef,
@@ -23,8 +23,8 @@ from copilot_conductor.config.schema import (
     WorkflowConfig,
     WorkflowDef,
 )
-from copilot_conductor.engine.workflow import WorkflowEngine
-from copilot_conductor.providers.claude import ClaudeProvider
+from conductor.engine.workflow import WorkflowEngine
+from conductor.providers.claude import ClaudeProvider
 
 
 @pytest.mark.real_api

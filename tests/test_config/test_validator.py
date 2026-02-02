@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from copilot_conductor.config.schema import (
+from conductor.config.schema import (
     AgentDef,
     GateOption,
     InputDef,
@@ -12,8 +12,8 @@ from copilot_conductor.config.schema import (
     WorkflowConfig,
     WorkflowDef,
 )
-from copilot_conductor.config.validator import validate_workflow_config
-from copilot_conductor.exceptions import ConfigurationError
+from conductor.config.validator import validate_workflow_config
+from conductor.exceptions import ConfigurationError
 
 
 class TestValidateWorkflowConfig:

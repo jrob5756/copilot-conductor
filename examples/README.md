@@ -1,6 +1,6 @@
-# Copilot Conductor Examples
+# Conductor Examples
 
-This directory contains example workflow files demonstrating various features of Copilot Conductor.
+This directory contains example workflow files demonstrating various features of Conductor.
 
 ## Examples
 
@@ -85,9 +85,9 @@ conductor -V run examples/plan.yaml --input design="./docs/my-feature.design.md"
 
 ### Prerequisites
 
-1. Install Copilot Conductor:
+1. Install Conductor:
    ```bash
-   uvx copilot-conductor
+   uvx conductor
    ```
 
 2. Ensure you have valid credentials for the Copilot SDK (or the provider you're using).

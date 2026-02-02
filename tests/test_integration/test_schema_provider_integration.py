@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from copilot_conductor.config.schema import (
+from conductor.config.schema import (
     AgentDef,
     OutputField,
     RouteDef,
@@ -19,18 +19,18 @@ from copilot_conductor.config.schema import (
     WorkflowConfig,
     WorkflowDef,
 )
-from copilot_conductor.engine.workflow import WorkflowEngine
-from copilot_conductor.providers.claude import ClaudeProvider
-from copilot_conductor.providers.factory import create_provider
+from conductor.engine.workflow import WorkflowEngine
+from conductor.providers.claude import ClaudeProvider
+from conductor.providers.factory import create_provider
 
 
 class TestSchemaToProviderIntegration:
     """Test that schema fields correctly integrate with provider implementations."""
 
     @pytest.mark.asyncio
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     async def test_claude_runtime_config_fields_passed_to_provider(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
     ):
@@ -107,9 +107,9 @@ class TestSchemaToProviderIntegration:
         await provider.close()
 
     @pytest.mark.asyncio
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     async def test_claude_provider_with_none_fields(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
     ):
@@ -184,9 +184,9 @@ class TestSchemaToProviderIntegration:
         await provider.close()
 
     @pytest.mark.asyncio
-    @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
-    @patch("copilot_conductor.providers.claude.AsyncAnthropic")
-    @patch("copilot_conductor.providers.claude.anthropic")
+    @patch("conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
+    @patch("conductor.providers.claude.AsyncAnthropic")
+    @patch("conductor.providers.claude.anthropic")
     async def test_agent_level_overrides_runtime_defaults(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
     ):

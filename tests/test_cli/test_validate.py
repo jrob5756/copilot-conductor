@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from copilot_conductor.cli.app import app
+from conductor.cli.app import app
 
 runner = CliRunner()
 
@@ -152,8 +152,8 @@ class TestValidateDisplayFunctions:
 
         from rich.console import Console
 
-        from copilot_conductor.cli.validate import display_validation_success
-        from copilot_conductor.config.loader import load_config
+        from conductor.cli.validate import display_validation_success
+        from conductor.config.loader import load_config
 
         # Create a simple valid workflow
         workflow_file = tmp_path / "test.yaml"
@@ -187,7 +187,7 @@ output:
 
     def test_validate_workflow_function_valid(self, tmp_path: Path) -> None:
         """Test validate_workflow function with valid file."""
-        from copilot_conductor.cli.validate import validate_workflow
+        from conductor.cli.validate import validate_workflow
 
         workflow_file = tmp_path / "test.yaml"
         workflow_file.write_text("""\
@@ -218,7 +218,7 @@ output:
 
         from rich.console import Console
 
-        from copilot_conductor.cli.validate import validate_workflow
+        from conductor.cli.validate import validate_workflow
 
         workflow_file = tmp_path / "invalid.yaml"
         workflow_file.write_text("""\

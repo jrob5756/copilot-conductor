@@ -10,9 +10,9 @@ Tests cover:
 
 import pytest
 
-from copilot_conductor.config.schema import OutputField
-from copilot_conductor.exceptions import ValidationError
-from copilot_conductor.executor.output import (
+from conductor.config.schema import OutputField
+from conductor.exceptions import ValidationError
+from conductor.executor.output import (
     _check_type,
     parse_json_output,
     validate_output,

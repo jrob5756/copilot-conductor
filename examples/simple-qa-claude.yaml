@@ -32,7 +32,7 @@ workflow:
 agents:
   - name: answerer
     description: Answers the user's question clearly and concisely using Claude
-    model: claude-3-5-sonnet-latest
+    model: claude-sonnet-4.5
     prompt: |
       You are a helpful assistant. Please answer the following question 
       clearly and concisely:

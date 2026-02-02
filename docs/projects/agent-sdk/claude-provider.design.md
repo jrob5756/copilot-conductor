@@ -9,7 +9,7 @@
 
 ## 1. Problem Statement
 
-Copilot Conductor currently supports only the GitHub Copilot SDK as a provider for executing agents. Users who require Anthropic's Claude models—particularly for advanced reasoning, extended context windows, or specific capabilities not available in GitHub Copilot—have no path to use Claude within the Conductor framework.
+Conductor currently supports only the GitHub Copilot SDK as a provider for executing agents. Users who require Anthropic's Claude models—particularly for advanced reasoning, extended context windows, or specific capabilities not available in GitHub Copilot—have no path to use Claude within the Conductor framework.
 
 ### Current Limitations
 - No support for Claude models (Opus, Sonnet, Haiku)
@@ -358,13 +358,13 @@ async def execute(
 ### 5.2 Internal Dependencies
 
 **Imports from Conductor:**
-- `copilot_conductor.providers.base.AgentProvider` (ABC)
-- `copilot_conductor.providers.base.AgentOutput` (dataclass)
-- `copilot_conductor.config.schema.AgentDef`
-- `copilot_conductor.config.schema.OutputField`
-- `copilot_conductor.exceptions.ProviderError`
-- `copilot_conductor.exceptions.ValidationError`
-- `copilot_conductor.providers.copilot.RetryConfig` (reuse)
+- `conductor.providers.base.AgentProvider` (ABC)
+- `conductor.providers.base.AgentOutput` (dataclass)
+- `conductor.config.schema.AgentDef`
+- `conductor.config.schema.OutputField`
+- `conductor.exceptions.ProviderError`
+- `conductor.exceptions.ValidationError`
+- `conductor.providers.copilot.RetryConfig` (reuse)
 
 ### 5.3 Environment Variables
 
@@ -424,9 +424,9 @@ class AgentDef(BaseModel):
 ### Phase 1: Core Integration (This Design) - **6-8 hours**
 
 **Deliverables:**
-1. `src/copilot_conductor/providers/claude.py` - ClaudeProvider implementation
-2. Update `src/copilot_conductor/providers/factory.py` - Add claude case
-3. Update `src/copilot_conductor/config/schema.py` - Add max_tokens field to AgentDef
+1. `src/conductor/providers/claude.py` - ClaudeProvider implementation
+2. Update `src/conductor/providers/factory.py` - Add claude case
+3. Update `src/conductor/config/schema.py` - Add max_tokens field to AgentDef
 4. `tests/test_providers/test_claude.py` - Comprehensive unit tests
 5. Update `pyproject.toml` - Add dependency-groups.claude
 6. `docs/providers/claude.md` - Usage documentation
@@ -720,7 +720,7 @@ agents:
 
 ## Summary
 
-This design provides a **complete, production-ready** integration of Anthropic Claude models into Copilot Conductor. It addresses all critical feedback from the previous review (88/100):
+This design provides a **complete, production-ready** integration of Anthropic Claude models into Conductor. It addresses all critical feedback from the previous review (88/100):
 
 **Critical Issues Fixed:**
 1. ✅ **Pricing updated** with current 2026-01-28 data (Appendix A)

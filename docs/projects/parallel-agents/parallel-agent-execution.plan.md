@@ -2,7 +2,7 @@
 
 ## 1. Problem Statement
 
-Copilot Conductor currently executes agents sequentially in workflows. When multiple independent agents could run concurrently without dependencies on each other's outputs, this sequential execution creates unnecessary latency and reduces workflow efficiency. For example, in a research workflow that needs to gather information from multiple sources, or a validation workflow that runs independent checks, agents must wait for previous agents to complete even when they have no data dependencies.
+Conductor currently executes agents sequentially in workflows. When multiple independent agents could run concurrently without dependencies on each other's outputs, this sequential execution creates unnecessary latency and reduces workflow efficiency. For example, in a research workflow that needs to gather information from multiple sources, or a validation workflow that runs independent checks, agents must wait for previous agents to complete even when they have no data dependencies.
 
 The goal is to introduce **parallel execution support** while maintaining:
 - Full backward compatibility with existing workflows
@@ -392,11 +392,11 @@ context.store("research_agents", {
 
 | File Path | Changes |
 |-----------|---------|
-| `src/copilot_conductor/config/schema.py` | Add `ParallelGroup` model; update `WorkflowConfig.parallel` field; add `AgentDef` validators to prevent routes in parallel agents |
-| `src/copilot_conductor/config/validator.py` | Add `_validate_parallel_groups()` function; add cross-reference validation; update cycle detection to handle parallel groups |
-| `src/copilot_conductor/engine/workflow.py` | Add `ParallelGroupOutput` and `ParallelAgentError` dataclasses; add `_execute_parallel_group()` method; update `run()` to handle parallel groups; add `_find_parallel_group()` helper |
-| `src/copilot_conductor/engine/context.py` | Minor: Update docstrings to clarify parallel output storage format (no code changes) |
-| `src/copilot_conductor/cli/run.py` | Add verbose logging for parallel group execution (start/completion messages) |
+| `src/conductor/config/schema.py` | Add `ParallelGroup` model; update `WorkflowConfig.parallel` field; add `AgentDef` validators to prevent routes in parallel agents |
+| `src/conductor/config/validator.py` | Add `_validate_parallel_groups()` function; add cross-reference validation; update cycle detection to handle parallel groups |
+| `src/conductor/engine/workflow.py` | Add `ParallelGroupOutput` and `ParallelAgentError` dataclasses; add `_execute_parallel_group()` method; update `run()` to handle parallel groups; add `_find_parallel_group()` helper |
+| `src/conductor/engine/context.py` | Minor: Update docstrings to clarify parallel output storage format (no code changes) |
+| `src/conductor/cli/run.py` | Add verbose logging for parallel group execution (start/completion messages) |
 | `README.md` | Add parallel execution to features list; add basic example |
 | `docs/workflow-syntax.md` | Add `parallel:` YAML syntax documentation with examples |
 

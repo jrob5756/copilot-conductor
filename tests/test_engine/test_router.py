@@ -12,8 +12,8 @@ Tests cover:
 
 import pytest
 
-from copilot_conductor.config.schema import RouteDef
-from copilot_conductor.engine.router import Router, RouteResult
+from conductor.config.schema import RouteDef
+from conductor.engine.router import Router, RouteResult
 
 
 class TestRouteResult:
