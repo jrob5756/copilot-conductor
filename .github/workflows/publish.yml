@@ -5,9 +5,9 @@
 #
 # Prerequisites:
 # 1. Configure trusted publisher on PyPI:
-#    - Go to https://pypi.org/manage/project/conductor/settings/publishing/
+#    - Go to https://pypi.org/manage/project/conductor-cli/settings/publishing/
 #    - Add GitHub as trusted publisher
-#    - Repository: your-org/conductor
+#    - Repository: microsoft/conductor
 #    - Workflow: publish.yml
 #    - Environment: pypi
 #
@@ -59,7 +59,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/p/conductor
+      url: https://pypi.org/p/conductor-cli
     permissions:
       id-token: write  # Required for trusted publishing
 
@@ -80,7 +80,7 @@ jobs:
     if: github.event.release.prerelease
     environment:
       name: testpypi
-      url: https://test.pypi.org/p/conductor
+      url: https://test.pypi.org/p/conductor-cli
     permissions:
       id-token: write  # Required for trusted publishing
 

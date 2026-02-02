@@ -1,5 +1,5 @@
 [project]
-name = "conductor"
+name = "conductor-cli"
 version = "0.1.0"
 description = "A CLI tool for defining and running multi-agent workflows with the GitHub Copilot SDK"
 readme = "README.md"
@@ -39,14 +39,15 @@ dependencies = [
     "simpleeval>=1.0.0",
     "github-copilot-sdk>=0.1.0",
     "anthropic>=0.77.0,<1.0.0",
+    "mcp>=1.0.0",
 ]
 
 [project.urls]
-Homepage = "https://github.com/your-org/conductor"
-Documentation = "https://github.com/your-org/conductor#readme"
-Repository = "https://github.com/your-org/conductor"
-Issues = "https://github.com/your-org/conductor/issues"
-Changelog = "https://github.com/your-org/conductor/releases"
+Homepage = "https://github.com/microsoft/conductor"
+Documentation = "https://github.com/microsoft/conductor#readme"
+Repository = "https://github.com/microsoft/conductor"
+Issues = "https://github.com/microsoft/conductor/issues"
+Changelog = "https://github.com/microsoft/conductor/releases"
 
 [project.scripts]
 conductor = "conductor.cli.app:app"
@@ -54,6 +55,9 @@ conductor = "conductor.cli.app:app"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/conductor"]
 
 [dependency-groups]
 dev = [
