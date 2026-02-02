@@ -135,8 +135,9 @@ def _validate_agent_routes(
     for i, route in enumerate(routes):
         if route.to != "$end" and route.to not in valid_targets:
             errors.append(
-                f"Agent '{agent_name}' route {i} targets unknown agent or parallel group '{route.to}'. "
-                f"Use '$end' to terminate or one of: {', '.join(sorted(valid_targets))}"
+                f"Agent '{agent_name}' route {i} targets unknown agent or "
+                f"parallel group '{route.to}'. Use '$end' to terminate or one of: "
+                f"{', '.join(sorted(valid_targets))}"
             )
 
     return errors
@@ -191,19 +192,19 @@ def _validate_input_references(
 
         # Check if referencing parallel group output
         ref_parallel = match.group("parallel")
-        if ref_parallel:
-            if ref_parallel not in parallel_names:
-                is_optional = match.group("optional") == "?"
-                if is_optional:
-                    warnings.append(
-                        f"Agent '{agent_name}' has optional reference to "
-                        f"unknown parallel group '{ref_parallel}'"
-                    )
-                else:
-                    errors.append(
-                        f"Agent '{agent_name}' references unknown parallel group '{ref_parallel}' in input"
-                    )
-            # Note: We cannot validate the specific agent within the parallel group here
+        if ref_parallel and ref_parallel not in parallel_names:
+            is_optional = match.group("optional") == "?"
+            if is_optional:
+                warnings.append(
+                    f"Agent '{agent_name}' has optional reference to "
+                    f"unknown parallel group '{ref_parallel}'"
+                )
+            else:
+                errors.append(
+                    f"Agent '{agent_name}' references unknown parallel group "
+                    f"'{ref_parallel}' in input"
+                )
+        # Note: We cannot validate the specific agent within the parallel group here
             # as that would require knowing which agents are in which parallel groups
             # That validation happens in _validate_parallel_groups
 
@@ -313,8 +314,9 @@ def _validate_parallel_groups(config: WorkflowConfig) -> list[str]:
     # PE-2.5: Validate unique names (parallel groups vs agents)
     name_conflicts = agent_names & parallel_names
     if name_conflicts:
+        conflicts_str = ", ".join(sorted(name_conflicts))
         errors.append(
-            f"Duplicate names found between agents and parallel groups: {', '.join(sorted(name_conflicts))}. "
+            f"Duplicate names found between agents and parallel groups: {conflicts_str}. "
             "Parallel group names must be unique from agent names."
         )
 
@@ -367,15 +369,17 @@ def _validate_parallel_groups(config: WorkflowConfig) -> list[str]:
                         errors.append(
                             f"Agent '{agent_name}' in parallel group '{pg.name}' references "
                             f"another agent '{ref_agent}' in the same parallel group. "
-                            "Agents within the same parallel group cannot have dependencies on each other."
+                            "Agents within the same parallel group cannot have dependencies "
+                            "on each other."
                         )
 
         # PE-2.6: Validate no nested parallel groups
         # This means checking if any agent name in pg.agents is actually a parallel group name
         nested_groups = pg_agents_set & parallel_names
         if nested_groups:
+            nested_str = ", ".join(sorted(nested_groups))
             errors.append(
-                f"Parallel group '{pg.name}' contains nested parallel groups: {', '.join(sorted(nested_groups))}. "
+                f"Parallel group '{pg.name}' contains nested parallel groups: {nested_str}. "
                 "Nested parallel groups are not supported."
             )
 

@@ -164,7 +164,8 @@ class ConfigLoader:
             line_info = ""
             if hasattr(e, "problem_mark") and e.problem_mark is not None:
                 mark = e.problem_mark
-                line_info = f" at line {mark.line + 1}, column {mark.column + 1}"
+                # Access YAML marker attributes (dynamic type from ruamel.yaml)
+                line_info = f" at line {mark.line + 1}, column {mark.column + 1}"  # type: ignore[union-attr]
 
             raise ConfigurationError(
                 f"Invalid YAML syntax in '{source}'{line_info}: {e}",
@@ -221,14 +222,17 @@ class ConfigLoader:
 
             # Try to extract field path from Pydantic error
             if hasattr(e, "errors") and callable(e.errors):
-                errors = e.errors()
-                if errors:
-                    formatted_errors = []
-                    for err in errors:
-                        loc = ".".join(str(x) for x in err.get("loc", []))
-                        msg = err.get("msg", "Unknown error")
-                        formatted_errors.append(f"  - {loc}: {msg}")
-                    error_msg = "\n".join(formatted_errors)
+                errors_result = e.errors()  # type: ignore[operator]
+                if errors_result and isinstance(errors_result, list):
+                    formatted_errors: list[str] = []
+                    for err in errors_result:
+                        if isinstance(err, dict):
+                            loc_parts = err.get("loc", [])  # type: ignore[call-overload]
+                            loc = ".".join(str(x) for x in loc_parts)
+                            msg = err.get("msg", "Unknown error")  # type: ignore[call-overload]
+                            formatted_errors.append(f"  - {loc}: {msg}")
+                    if formatted_errors:
+                        error_msg = "\n".join(formatted_errors)
 
             raise ConfigurationError(
                 f"Configuration validation failed in '{source}':\n{error_msg}",
@@ -268,3 +272,7 @@ def load_config_string(content: str, source_path: Path | None = None) -> Workflo
     """
     loader = ConfigLoader()
     return loader.load_string(content, source_path)
+
+
+# Alias for backward compatibility
+load_workflow = load_config

@@ -405,7 +405,8 @@ class TestTemplateRendererParallelOutputs:
             }
         }
         result = renderer.render(
-            "Results: {{ research_group.outputs.researcher1.finding }} and {{ research_group.outputs.researcher2.finding }}",
+            "Results: {{ research_group.outputs.researcher1.finding }} and "
+            "{{ research_group.outputs.researcher2.finding }}",
             context,
         )
         assert result == "Results: Discovery A and Discovery B"
@@ -426,7 +427,10 @@ class TestTemplateRendererParallelOutputs:
                 },
             }
         }
-        template = """{% if validators.errors %}Found {{ validators.errors | length }} error(s){% else %}All passed{% endif %}"""
+        template = (
+            "{% if validators.errors %}Found {{ validators.errors | length }} error(s)"
+            "{% else %}All passed{% endif %}"
+        )
         result = renderer.render(template, context)
         assert "Found 1 error(s)" in result
 
@@ -443,8 +447,11 @@ class TestTemplateRendererParallelOutputs:
                 "errors": {},
             }
         }
-        template = """{% for name, output in analyzers.outputs.items() %}{{ name }}: {{ output.score }}
-{% endfor %}"""
+        template = (
+            "{% for name, output in analyzers.outputs.items() %}"
+            "{{ name }}: {{ output.score }}\n"
+            "{% endfor %}"
+        )
         result = renderer.render(template, context)
         assert "analyzer_a: 85" in result
         assert "analyzer_b: 92" in result

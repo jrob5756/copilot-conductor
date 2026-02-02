@@ -732,9 +732,12 @@ class TestParallelGroupContextAccess:
 
         # Agent1 might not be in context since the field was missing
         # and optional
-        if "group1" in agent_ctx and "outputs" in agent_ctx["group1"]:
-            if "agent1" in agent_ctx["group1"]["outputs"]:
-                assert "missing_field" not in agent_ctx["group1"]["outputs"]["agent1"]
+        if (
+            "group1" in agent_ctx
+            and "outputs" in agent_ctx["group1"]
+            and "agent1" in agent_ctx["group1"]["outputs"]
+        ):
+            assert "missing_field" not in agent_ctx["group1"]["outputs"]["agent1"]
 
     def test_explicit_mode_required_parallel_agent_missing_raises(self) -> None:
         """Test that missing required parallel agent raises error."""

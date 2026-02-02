@@ -7,6 +7,7 @@ using the GitHub Copilot SDK.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import random
@@ -169,7 +170,8 @@ class CopilotProvider(AgentProvider):
             }
         )
 
-        logger.info(f"Executing agent '{agent.name}' with model {agent.model or self._default_model}")
+        model_name = agent.model or self._default_model
+        logger.info(f"Executing agent '{agent.name}' with model {model_name}")
         logger.debug(f"Prompt length: {len(rendered_prompt)} chars, Tools: {tools}")
 
         # Use retry logic for both mock and real SDK calls
@@ -834,7 +836,7 @@ class CopilotProvider(AgentProvider):
                 )
                 return  # Completed successfully
 
-            except TimeoutError:
+            except TimeoutError as e:
                 # No activity for idle_timeout_seconds - attempt recovery
                 recovery_attempts += 1
 
@@ -855,7 +857,7 @@ class CopilotProvider(AgentProvider):
                             "complete the task. Check verbose output (-V) for details."
                         ),
                         is_retryable=False,  # Don't retry at provider level
-                    )
+                    ) from e
 
                 # Log recovery attempt
                 if verbose_enabled:
@@ -975,10 +977,8 @@ class CopilotProvider(AgentProvider):
         Releases any resources held by the SDK client.
         """
         if self._client is not None and self._started:
-            try:
+            with contextlib.suppress(Exception):
                 await self._client.stop()
-            except Exception:
-                pass  # Ignore errors during cleanup
         self._client = None
         self._started = False
         self._call_history.clear()

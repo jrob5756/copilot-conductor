@@ -277,6 +277,6 @@ class LimitEnforcer:
                     f"{operation_name} execution time"
                 ),
                 elapsed_seconds=elapsed,
-                timeout_seconds=float(self.timeout_seconds),
+                timeout_seconds=float(self.timeout_seconds) if self.timeout_seconds else 0.0,
                 current_agent=self.current_agent,
             ) from None

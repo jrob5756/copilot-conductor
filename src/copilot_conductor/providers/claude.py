@@ -7,7 +7,7 @@ Error Handling Strategy:
 - ValidationError: Used for invalid inputs, schema violations, and parameter range errors.
   These are non-retryable and indicate user/configuration errors that should fail fast.
   Examples: temperature out of range, invalid output schema, malformed prompt.
-  
+
 - ProviderError: Used for API failures, network errors, and SDK exceptions.
   These may be retryable (connection errors, rate limits) or non-retryable (invalid API key).
   The error includes metadata (status_code, is_retryable) to guide retry logic.
@@ -158,7 +158,7 @@ class ClaudeProvider(AgentProvider):
 
     def _initialize_client(self) -> None:
         """Initialize the Anthropic client and log SDK version.
-        
+
         Note: Model verification is deferred to validate_connection() to keep
         initialization synchronous and avoid async operations in __init__.
         """
@@ -195,13 +195,13 @@ class ClaudeProvider(AgentProvider):
 
     def _validate_temperature(self, temperature: float) -> None:
         """Validate temperature parameter is in acceptable range.
-        
+
         Enforces schema.py validation bounds (0.0-1.0) at provider instantiation
         to fail fast before workflow execution. SDK also enforces this range.
-        
+
         Args:
             temperature: Temperature value to validate.
-            
+
         Raises:
             ValidationError: If temperature is out of range (0.0-1.0).
         """
@@ -213,13 +213,13 @@ class ClaudeProvider(AgentProvider):
 
     def _validate_max_tokens(self, max_tokens: int) -> None:
         """Validate max_tokens parameter is in acceptable range.
-        
+
         Enforces schema.py validation bounds (1-200000) at provider instantiation
         to fail fast before workflow execution.
-        
+
         Args:
             max_tokens: Max tokens value to validate.
-            
+
         Raises:
             ValidationError: If max_tokens is out of range (1-200000).
         """
@@ -231,7 +231,7 @@ class ClaudeProvider(AgentProvider):
 
     def get_retry_history(self) -> list[dict[str, Any]]:
         """Get the retry history for debugging purposes.
-        
+
         Returns:
             List of dictionaries containing retry attempt details.
         """
@@ -239,7 +239,7 @@ class ClaudeProvider(AgentProvider):
 
     async def validate_connection(self) -> bool:
         """Verify the provider can connect to the Claude API.
-        
+
         This method serves dual purposes:
         1. Validates API connectivity and credentials
         2. Performs async model verification (deferred from __init__)
@@ -369,11 +369,11 @@ class ClaudeProvider(AgentProvider):
         except (TypeError, AttributeError):
             # Handle mocked exceptions - check by name and attributes
             error_type_name = type(exception).__name__
-            if error_type_name == "APIStatusError" or error_type_name == "MockAPIStatusError":
-                if hasattr(exception, "status_code"):
-                    status_code = exception.status_code
-                    if 500 <= status_code < 600 or status_code == 429:
-                        return True
+            is_api_status = error_type_name in ("APIStatusError", "MockAPIStatusError")
+            if is_api_status and hasattr(exception, "status_code"):
+                status_code: int = int(exception.status_code)  # type: ignore[attr-defined]
+                if 500 <= status_code < 600 or status_code == 429:
+                    return True
 
         # Everything else is non-retryable
         return False
@@ -401,17 +401,16 @@ class ClaudeProvider(AgentProvider):
             # Handle mocked exceptions
             is_rate_limit = type(exception).__name__ in ("RateLimitError", "MockRateLimitError")
 
-        if is_rate_limit:
+        if is_rate_limit and hasattr(exception, "response") and exception.response:
             # Check response headers for retry-after
             # Anthropic SDK APIStatusError provides .response attribute with headers dict
-            if hasattr(exception, "response") and exception.response:
-                headers = getattr(exception.response, "headers", {})
-                retry_after = headers.get("retry-after") or headers.get("Retry-After")
-                if retry_after:
-                    try:
-                        return float(retry_after)
-                    except ValueError:
-                        pass
+            headers = getattr(exception.response, "headers", {})
+            retry_after = headers.get("retry-after") or headers.get("Retry-After")
+            if retry_after:
+                try:
+                    return float(retry_after)
+                except ValueError:
+                    pass
         return None
 
     def _calculate_delay(self, attempt: int, config: RetryConfig) -> float:
@@ -487,7 +486,7 @@ class ClaudeProvider(AgentProvider):
             )
 
         # Build tools for structured output if schema is defined
-        tools = None
+        tools: list[dict[str, Any]] | None = None
         if agent.output:
             tools = self._build_tools_for_structured_output(agent.output)
             # Append instruction to use the tool
@@ -596,15 +595,20 @@ class ClaudeProvider(AgentProvider):
                 retry_after = self._get_retry_after(e)
                 if retry_after is not None:
                     delay = retry_after
-                    logger.warning(f"Rate limit hit (HTTP 429), respecting retry-after header: {delay}s")
+                    logger.warning(
+                        f"Rate limit hit (HTTP 429), respecting retry-after header: {delay}s"
+                    )
                 else:
                     # Calculate delay with exponential backoff
                     delay = self._calculate_delay(attempt, config)
-                    logger.info(f"Calculated exponential backoff delay: {delay:.2f}s for attempt {attempt}")
+                    logger.info(
+                        f"Calculated exponential backoff delay: {delay:.2f}s for attempt {attempt}"
+                    )
 
                 # Log retry attempt with full context
                 logger.warning(
-                    f"[Retry {attempt}/{config.max_attempts}] Retrying after {delay:.2f}s due to {type(e).__name__}: {e}"
+                    f"[Retry {attempt}/{config.max_attempts}] Retrying after {delay:.2f}s "
+                    f"due to {type(e).__name__}: {e}"
                 )
                 retry_entry["delay"] = delay
 
@@ -621,10 +625,10 @@ class ClaudeProvider(AgentProvider):
 
     def _extract_status_code(self, exception: Exception) -> int | None:
         """Extract HTTP status code from exception if available.
-        
+
         Args:
             exception: Exception to extract status code from.
-            
+
         Returns:
             HTTP status code or None if not available.
         """
@@ -635,7 +639,9 @@ class ClaudeProvider(AgentProvider):
         except TypeError:
             # Handle mocked exceptions - check by attribute
             if hasattr(exception, "status_code"):
-                return exception.status_code
+                status_code = getattr(exception, "status_code", None)
+                if status_code is not None:
+                    return int(status_code)
 
         return None
 
@@ -748,8 +754,8 @@ class ClaudeProvider(AgentProvider):
         json_content = self._extract_json_fallback(response)
         if json_content is not None:
             logger.warning(
-                "Claude returned text instead of tool_use, but JSON extraction succeeded via fallback parsing. "
-                "Consider reviewing prompt to encourage tool usage."
+                "Claude returned text instead of tool_use, but JSON extraction succeeded "
+                "via fallback parsing. Consider reviewing prompt to encourage tool usage."
             )
             return response
 

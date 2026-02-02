@@ -153,9 +153,9 @@ class TestModelVerification:
         # once in _verify_available_models)
         assert mock_client.models.list.call_count == 2
 
-        # Check that available models were logged (at DEBUG level)
-        debug_calls = [call[0][0] for call in mock_logger.debug.call_args_list]
-        assert any("Available Claude models" in call for call in debug_calls)
+        # Check that available models were logged (at INFO level)
+        info_calls = [call[0][0] for call in mock_logger.info.call_args_list]
+        assert any("Available Claude models" in call for call in info_calls)
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
     @patch("copilot_conductor.providers.claude.AsyncAnthropic")
@@ -494,40 +494,20 @@ class TestTemperatureValidation:
     async def test_temperature_above_1_0_raises_validation_error(
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
     ) -> None:
-        """Test that SDK raises BadRequestError for temperature > 1.0.
+        """Test that provider raises ValidationError for temperature > 1.0.
 
-        This test verifies that the provider properly wraps the SDK's
-        BadRequestError as a ValidationError with a helpful message.
+        Temperature validation happens at provider instantiation time.
         """
         mock_anthropic_module.__version__ = "0.77.0"
 
-        # Create mock BadRequestError
-        mock_bad_request_error = type(
-            "BadRequestError",
-            (Exception,),
-            {},
-        )("temperature must be between 0.0 and 1.0")
-        mock_anthropic_module.BadRequestError = mock_bad_request_error.__class__
-
         mock_client = Mock()
         mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
-        mock_client.messages.create = AsyncMock(side_effect=mock_bad_request_error)
         mock_anthropic_class.return_value = mock_client
 
-        provider = ClaudeProvider(temperature=1.5)  # Invalid: > 1.0
-        agent = AgentDef(
-            name="test",
-            prompt="Test",
-        )
-
+        # Temperature validation happens during __init__
         with pytest.raises(ValidationError) as exc_info:
-            await provider.execute(
-                agent=agent,
-                context={},
-                rendered_prompt="Test",
-            )
+            ClaudeProvider(temperature=1.5)  # Invalid: > 1.0
 
-        assert "Temperature validation failed" in str(exc_info.value)
         assert "between 0.0 and 1.0" in str(exc_info.value)
 
 
@@ -1441,7 +1421,7 @@ class TestNonStreamingExecution:
             model="claude-3-5-sonnet-latest",
             temperature=0.7,
             max_tokens=100,
-            sdk_tools=None,
+            tools=None,
         )
 
         assert response == mock_response
@@ -1480,7 +1460,7 @@ class TestNonStreamingExecution:
             model="claude-3-5-sonnet-latest",
             temperature=None,
             max_tokens=100,
-            sdk_tools=tools,
+            tools=tools,
         )
 
         call_kwargs = mock_client.messages.create.call_args[1]

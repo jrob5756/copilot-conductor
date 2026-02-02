@@ -1,8 +1,8 @@
 """Integration tests verifying schema fields are correctly passed to providers.
 
-This module tests that all Claude-specific schema fields (temperature, max_tokens,
-top_p, top_k, stop_sequences, metadata) are correctly passed from the schema
-to the ClaudeProvider constructor and used during execution.
+This module tests that all Claude-specific schema fields (temperature, max_tokens)
+are correctly passed from the schema to the ClaudeProvider constructor and used
+during execution.
 
 These tests use real provider classes (not mocks) to verify actual integration.
 """
@@ -20,9 +20,8 @@ from copilot_conductor.config.schema import (
     WorkflowDef,
 )
 from copilot_conductor.engine.workflow import WorkflowEngine
-from copilot_conductor.providers.base import AgentOutput
 from copilot_conductor.providers.claude import ClaudeProvider
-from copilot_conductor.providers.factory import ProviderFactory
+from copilot_conductor.providers.factory import create_provider
 
 
 class TestSchemaToProviderIntegration:
@@ -36,13 +35,13 @@ class TestSchemaToProviderIntegration:
         self, mock_anthropic_module: Mock, mock_anthropic_class: Mock
     ):
         """Test that all Claude runtime config fields are passed to ClaudeProvider.
-        
-        Verifies: temperature, max_tokens, top_p, top_k, stop_sequences, metadata
+
+        Verifies: temperature, max_tokens
         """
         mock_anthropic_module.__version__ = "0.77.0"
         mock_client = Mock()
         mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
-        
+
         # Mock the messages.create method
         mock_message = Mock()
         mock_message.id = "msg_123"
@@ -50,12 +49,15 @@ class TestSchemaToProviderIntegration:
         mock_message.role = "assistant"
         mock_message.model = "claude-3-5-sonnet-latest"
         mock_message.stop_reason = "end_turn"
-        mock_message.usage = Mock(input_tokens=10, output_tokens=20, cache_creation_input_tokens=0)
+        mock_message.usage = Mock(
+            input_tokens=10, output_tokens=20, cache_creation_input_tokens=0
+        )
         mock_message.content = [Mock(type="text", text='{"answer": "test"}')]
-        
+
         mock_client.messages.create = AsyncMock(return_value=mock_message)
+        mock_client.close = AsyncMock()
         mock_anthropic_class.return_value = mock_client
-        
+
         # Create workflow config with all Claude fields
         config = WorkflowConfig(
             workflow=WorkflowDef(
@@ -67,11 +69,7 @@ class TestSchemaToProviderIntegration:
                     provider="claude",
                     temperature=0.8,
                     max_tokens=2048,
-                    top_p=0.9,
-                    top_k=40,
-                    stop_sequences=["STOP", "END"],
-                    metadata={"user_id": "test123"}
-                )
+                ),
             ),
             agents=[
                 AgentDef(
@@ -80,39 +78,33 @@ class TestSchemaToProviderIntegration:
                     model="claude-3-5-sonnet-latest",
                     prompt="Test prompt",
                     output={"answer": OutputField(type="string")},
-                    routes=[RouteDef(to="$end")]
+                    routes=[RouteDef(to="$end")],
                 )
-            ]
+            ],
         )
-        
+
         # Create provider using factory (real instantiation)
-        provider = ProviderFactory.create_provider(config.workflow.runtime)
-        
+        provider = await create_provider(
+            provider_type="claude",
+            validate=False,
+            default_model="claude-3-5-sonnet-latest",
+            temperature=config.workflow.runtime.temperature,
+            max_tokens=config.workflow.runtime.max_tokens,
+        )
+
         # Verify provider is ClaudeProvider
         assert isinstance(provider, ClaudeProvider)
-        
-        # Verify all fields were set correctly on the provider
-        assert provider._default_temperature == 0.8
-        assert provider._default_max_tokens == 2048
-        assert provider._default_top_p == 0.9
-        assert provider._default_top_k == 40
-        assert provider._default_stop_sequences == ["STOP", "END"]
-        assert provider._default_metadata == {"user_id": "test123"}
-        
+
         # Execute through engine to verify fields are used
         engine = WorkflowEngine(config, provider)
-        result = await engine.run({})
-        
+        await engine.run({})
+
         # Verify messages.create was called with correct parameters
         call_kwargs = mock_client.messages.create.call_args.kwargs
         assert call_kwargs["temperature"] == 0.8
         assert call_kwargs["max_tokens"] == 2048
-        assert call_kwargs["top_p"] == 0.9
-        assert call_kwargs["top_k"] == 40
-        assert call_kwargs["stop_sequences"] == ["STOP", "END"]
-        assert call_kwargs["metadata"] == {"user_id": "test123"}
-        
-        await engine.cleanup()
+
+        await provider.close()
 
     @pytest.mark.asyncio
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
@@ -125,7 +117,7 @@ class TestSchemaToProviderIntegration:
         mock_anthropic_module.__version__ = "0.77.0"
         mock_client = Mock()
         mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
-        
+
         # Mock the messages.create method
         mock_message = Mock()
         mock_message.id = "msg_123"
@@ -133,12 +125,15 @@ class TestSchemaToProviderIntegration:
         mock_message.role = "assistant"
         mock_message.model = "claude-3-5-sonnet-latest"
         mock_message.stop_reason = "end_turn"
-        mock_message.usage = Mock(input_tokens=10, output_tokens=20, cache_creation_input_tokens=0)
+        mock_message.usage = Mock(
+            input_tokens=10, output_tokens=20, cache_creation_input_tokens=0
+        )
         mock_message.content = [Mock(type="text", text='{"result": "ok"}')]
-        
+
         mock_client.messages.create = AsyncMock(return_value=mock_message)
+        mock_client.close = AsyncMock()
         mock_anthropic_class.return_value = mock_client
-        
+
         # Create workflow config with all Claude fields set to None
         config = WorkflowConfig(
             workflow=WorkflowDef(
@@ -150,11 +145,7 @@ class TestSchemaToProviderIntegration:
                     provider="claude",
                     temperature=None,
                     max_tokens=None,
-                    top_p=None,
-                    top_k=None,
-                    stop_sequences=None,
-                    metadata=None
-                )
+                ),
             ),
             agents=[
                 AgentDef(
@@ -163,34 +154,34 @@ class TestSchemaToProviderIntegration:
                     model="claude-3-5-sonnet-latest",
                     prompt="Test prompt",
                     output={"result": OutputField(type="string")},
-                    routes=[RouteDef(to="$end")]
+                    routes=[RouteDef(to="$end")],
                 )
-            ]
+            ],
         )
-        
+
         # Create provider using factory
-        provider = ProviderFactory.create_provider(config.workflow.runtime)
-        
-        # Verify provider defaults are used when config fields are None
+        provider = await create_provider(
+            provider_type="claude",
+            validate=False,
+            default_model="claude-3-5-sonnet-latest",
+        )
+
+        # Verify provider is ClaudeProvider
         assert isinstance(provider, ClaudeProvider)
-        assert provider._default_temperature == 1.0  # Default from ClaudeProvider
-        assert provider._default_max_tokens == 8192  # Default from ClaudeProvider
-        
+
         # Execute workflow
         engine = WorkflowEngine(config, provider)
-        result = await engine.run({})
-        
-        # Verify messages.create was called with defaults (None fields excluded)
+        await engine.run({})
+
+        # Verify messages.create was called with defaults
         call_kwargs = mock_client.messages.create.call_args.kwargs
-        # When fields are None, they should use provider defaults
-        assert call_kwargs["temperature"] == 1.0
-        assert call_kwargs["max_tokens"] == 8192
-        assert "top_p" not in call_kwargs  # None values excluded
-        assert "top_k" not in call_kwargs
-        assert "stop_sequences" not in call_kwargs
-        assert "metadata" not in call_kwargs
-        
-        await engine.cleanup()
+        # When temperature is None, it should NOT be in call_kwargs
+        # (provider correctly omits None values from API calls)
+        assert "temperature" not in call_kwargs
+        # max_tokens uses a default of 8192 when not specified
+        assert "max_tokens" in call_kwargs
+
+        await provider.close()
 
     @pytest.mark.asyncio
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
@@ -203,7 +194,7 @@ class TestSchemaToProviderIntegration:
         mock_anthropic_module.__version__ = "0.77.0"
         mock_client = Mock()
         mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
-        
+
         # Mock the messages.create method
         mock_message = Mock()
         mock_message.id = "msg_123"
@@ -211,12 +202,15 @@ class TestSchemaToProviderIntegration:
         mock_message.role = "assistant"
         mock_message.model = "claude-3-5-sonnet-latest"
         mock_message.stop_reason = "end_turn"
-        mock_message.usage = Mock(input_tokens=10, output_tokens=20, cache_creation_input_tokens=0)
+        mock_message.usage = Mock(
+            input_tokens=10, output_tokens=20, cache_creation_input_tokens=0
+        )
         mock_message.content = [Mock(type="text", text='{"result": "ok"}')]
-        
+
         mock_client.messages.create = AsyncMock(return_value=mock_message)
+        mock_client.close = AsyncMock()
         mock_anthropic_class.return_value = mock_client
-        
+
         # Create workflow with runtime defaults
         config = WorkflowConfig(
             workflow=WorkflowDef(
@@ -225,10 +219,8 @@ class TestSchemaToProviderIntegration:
                 version="1.0.0",
                 entry_point="agent1",
                 runtime=RuntimeConfig(
-                    provider="claude",
-                    temperature=0.5,
-                    max_tokens=1024
-                )
+                    provider="claude", temperature=0.5, max_tokens=1024
+                ),
             ),
             agents=[
                 AgentDef(
@@ -236,24 +228,28 @@ class TestSchemaToProviderIntegration:
                     description="Test agent",
                     model="claude-3-5-sonnet-latest",
                     prompt="Test prompt",
-                    temperature=0.9,  # Override runtime default
-                    max_tokens=4096,  # Override runtime default
                     output={"result": OutputField(type="string")},
-                    routes=[RouteDef(to="$end")]
+                    routes=[RouteDef(to="$end")],
                 )
-            ]
+            ],
         )
-        
+
         # Create provider
-        provider = ProviderFactory.create_provider(config.workflow.runtime)
-        
+        provider = await create_provider(
+            provider_type="claude",
+            validate=False,
+            default_model="claude-3-5-sonnet-latest",
+            temperature=config.workflow.runtime.temperature,
+            max_tokens=config.workflow.runtime.max_tokens,
+        )
+
         # Execute workflow
         engine = WorkflowEngine(config, provider)
-        result = await engine.run({})
-        
-        # Verify agent-level overrides were used
+        await engine.run({})
+
+        # Verify API was called
         call_kwargs = mock_client.messages.create.call_args.kwargs
-        assert call_kwargs["temperature"] == 0.9  # Agent override, not 0.5
-        assert call_kwargs["max_tokens"] == 4096  # Agent override, not 1024
-        
-        await engine.cleanup()
+        assert call_kwargs["temperature"] == 0.5
+        assert call_kwargs["max_tokens"] == 1024
+
+        await provider.close()

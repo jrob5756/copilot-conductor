@@ -91,3 +91,47 @@ async def create_provider(
         )
 
     return provider
+
+
+class ProviderFactory:
+    """Factory class for creating agent providers.
+
+    This class provides a static method interface for provider creation,
+    maintaining backward compatibility with tests that use the class-based API.
+
+    Example:
+        >>> provider = await ProviderFactory.create_provider(runtime_config)
+        >>> await provider.close()
+    """
+
+    @staticmethod
+    async def create_provider(
+        runtime_config: Any,
+        validate: bool = True,
+    ) -> AgentProvider:
+        """Create a provider from a RuntimeConfig object.
+
+        Args:
+            runtime_config: RuntimeConfig object containing provider settings.
+            validate: Whether to validate connection on creation.
+
+        Returns:
+            Configured AgentProvider instance.
+
+        Raises:
+            ProviderError: If provider creation or validation fails.
+        """
+        provider_type = getattr(runtime_config, "provider", "copilot")
+        default_model = getattr(runtime_config, "model", None)
+        temperature = getattr(runtime_config, "temperature", None)
+        max_tokens = getattr(runtime_config, "max_tokens", None)
+        timeout = getattr(runtime_config, "timeout", None)
+
+        return await create_provider(
+            provider_type=provider_type,
+            validate=validate,
+            default_model=default_model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            timeout=timeout,
+        )

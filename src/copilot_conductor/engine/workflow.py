@@ -425,13 +425,16 @@ class WorkflowEngine:
 
                     if agent is None and parallel_group is None and for_each_group is None:
                         raise ExecutionError(
-                            f"Agent, parallel group, or for-each group not found: {current_agent_name}",
-                            suggestion=f"Ensure '{current_agent_name}' is defined in the workflow",
+                            f"Agent, parallel group, or for-each group not found: "
+                            f"{current_agent_name}",
+                            suggestion=(
+                                f"Ensure '{current_agent_name}' is defined in the workflow"
+                            ),
                         )
 
                     # Handle for-each group execution
                     if for_each_group is not None:
-                        # Check iteration limit (count TBD based on array size, estimate with max_concurrent)
+                        # Check iteration limit (count TBD based on array size)
                         # For safety, check with current limit before resolving array
                         self.limits.check_iteration(for_each_group.name)
 
@@ -439,7 +442,8 @@ class WorkflowEngine:
                         iteration = self.limits.current_iteration + 1
                         _verbose_log(
                             f"[{iteration}] Executing for-each group: {for_each_group.name} "
-                            f"(source: {for_each_group.source}, {for_each_group.failure_mode} mode)",
+                            f"(source: {for_each_group.source}, "
+                            f"{for_each_group.failure_mode} mode)",
                             style="bold cyan",
                         )
 
@@ -460,7 +464,8 @@ class WorkflowEngine:
                         )
 
                         # Store for-each group output in context
-                        # Format: {type: 'for_each', outputs: [...] or {...}, errors: {key: {...}}, count: N}
+                        # Format: {type: 'for_each', outputs: [...] or {...},
+                        #   errors: {key: {...}}, count: N}
                         for_each_output_dict = {
                             "type": "for_each",
                             "outputs": for_each_output.outputs,
@@ -533,7 +538,8 @@ class WorkflowEngine:
                         )
 
                         # Store parallel group output in context
-                        # Format: {type: 'parallel', outputs: {agent1: {...}, agent2: {...}}, errors: {agent1: {...}}}
+                        # Format: {type: 'parallel', outputs: {agent1: {...}, ...},
+                        #   errors: {agent1: {...}}}
                         parallel_output_dict = {
                             "type": "parallel",
                             "outputs": parallel_output.outputs,
@@ -769,7 +775,7 @@ class WorkflowEngine:
         strategy = context_config.trim_strategy or "drop_oldest"
         self.context.trim_context(
             max_tokens=context_config.max_tokens,
-            strategy=strategy,  # type: ignore
+            strategy=strategy,
             provider=self.provider if strategy == "summarize" else None,
         )
 
@@ -867,10 +873,7 @@ class WorkflowEngine:
 
         # Wrap regular agent outputs with {"output": ...}
         # (matches the behavior of build_for_agent)
-        if is_group_output:
-            wrapped_output = raw_output
-        else:
-            wrapped_output = {"output": raw_output}
+        wrapped_output = raw_output if is_group_output else {"output": raw_output}
 
         # Navigate through the dotted path (starting from second part)
         current = wrapped_output
@@ -1116,7 +1119,9 @@ class WorkflowEngine:
                     )
                 else:
                     # Agent succeeded - store output
-                    agent_name_from_result, output_content = result
+                    # result is a tuple (agent_name, output_content) when not an Exception
+                    success_result: tuple[str, Any] = result  # type: ignore[assignment]
+                    agent_name_from_result, output_content = success_result
                     parallel_output.outputs[agent_name_from_result] = output_content
 
             # Verbose: Log summary
@@ -1166,7 +1171,9 @@ class WorkflowEngine:
                     )
                 else:
                     # Agent succeeded - store output
-                    agent_name_from_result, output_content = result
+                    # result is a tuple (agent_name, output_content) when not an Exception
+                    success_result: tuple[str, Any] = result  # type: ignore[assignment]
+                    agent_name_from_result, output_content = success_result
                     parallel_output.outputs[agent_name_from_result] = output_content
 
             # Verbose: Log summary
@@ -1216,16 +1223,13 @@ class WorkflowEngine:
             key_parts = key_by_path.split(".")
             current = item
             for part in key_parts:
-                if isinstance(current, dict):
-                    current = current[part]
-                else:
-                    current = getattr(current, part)
+                current = current[part] if isinstance(current, dict) else getattr(current, part)
             return str(current)
         except (KeyError, AttributeError, IndexError) as e:
             # Fallback to index-based key if extraction fails
             _verbose_log(
-                f"Warning: Failed to extract key from item {fallback_index} using '{key_by_path}': {e}. "
-                f"Falling back to index-based key.",
+                f"Warning: Failed to extract key from item {fallback_index} "
+                f"using '{key_by_path}': {e}. Falling back to index-based key.",
                 style="dim yellow",
             )
             return str(fallback_index)
@@ -1362,7 +1366,8 @@ class WorkflowEngine:
             batch_keys = item_keys[batch_start_idx:batch_end_idx]
 
             _verbose_log(
-                f"Batch {batch_idx + 1}/{batch_count}: Processing items {batch_start_idx} to {batch_end_idx - 1}",
+                f"Batch {batch_idx + 1}/{batch_count}: "
+                f"Processing items {batch_start_idx} to {batch_end_idx - 1}",
                 style="dim cyan",
             )
 
@@ -1380,9 +1385,9 @@ class WorkflowEngine:
                     # All succeeded - store outputs
                     for item_key, output_content in results:
                         if for_each_group.key_by:
-                            for_each_output.outputs[item_key] = output_content  # type: ignore
+                            for_each_output.outputs[item_key] = output_content
                         else:
-                            for_each_output.outputs.append(output_content)  # type: ignore
+                            for_each_output.outputs.append(output_content)  # type: ignore[union-attr]
 
                 except Exception as e:
                     # Extract item key from wrapped exception
@@ -1424,11 +1429,13 @@ class WorkflowEngine:
                         )
                     else:
                         # Item succeeded - store output
-                        key_from_result, output_content = result
+                        # result is a tuple (key, output) when not an Exception
+                        success_result: tuple[str, Any] = result  # type: ignore[assignment]
+                        key_from_result, output_content = success_result
                         if for_each_group.key_by:
-                            for_each_output.outputs[key_from_result] = output_content  # type: ignore
+                            for_each_output.outputs[key_from_result] = output_content  # type: ignore[index]
                         else:
-                            for_each_output.outputs.append(output_content)  # type: ignore
+                            for_each_output.outputs.append(output_content)  # type: ignore[union-attr]
 
             elif for_each_group.failure_mode == "all_or_nothing":
                 # Execute all items and collect results
@@ -1454,11 +1461,13 @@ class WorkflowEngine:
                         )
                     else:
                         # Item succeeded - store output
-                        key_from_result, output_content = result
+                        # result is a tuple (key, output) when not an Exception
+                        success_result: tuple[str, Any] = result  # type: ignore[assignment]
+                        key_from_result, output_content = success_result
                         if for_each_group.key_by:
-                            for_each_output.outputs[key_from_result] = output_content  # type: ignore
+                            for_each_output.outputs[key_from_result] = output_content  # type: ignore[index]
                         else:
-                            for_each_output.outputs.append(output_content)  # type: ignore
+                            for_each_output.outputs.append(output_content)  # type: ignore[union-attr]
 
         # Verbose: Log summary
         _group_elapsed = _time.time() - _group_start
@@ -1466,7 +1475,7 @@ class WorkflowEngine:
             len(for_each_output.outputs)
             if isinstance(for_each_output.outputs, dict)
             else len(for_each_output.outputs)
-        )  # type: ignore
+        )
         failure_count = len(for_each_output.errors)
         _verbose_log_for_each_summary(
             for_each_group.name,
@@ -1494,24 +1503,23 @@ class WorkflowEngine:
                     suggestion="At least one item must succeed in continue_on_error mode",
                 )
 
-        elif for_each_group.failure_mode == "all_or_nothing":
+        elif for_each_group.failure_mode == "all_or_nothing" and failure_count > 0:
             # Fail if ANY item failed
-            if failure_count > 0:
-                error_details = []
-                for item_key, error in for_each_output.errors.items():
-                    error_line = f"  - [{item_key}]: {error.exception_type}: {error.message}"
-                    if error.suggestion:
-                        error_line += f" (Suggestion: {error.suggestion})"
-                    error_details.append(error_line)
-                error_msg = (
-                    f"For-each group '{for_each_group.name}' failed "
-                    f"({success_count} succeeded, {failure_count} failed):\n"
-                    + "\n".join(error_details)
-                )
-                raise ExecutionError(
-                    error_msg,
-                    suggestion="All items must succeed in all_or_nothing mode",
-                )
+            error_details = []
+            for item_key, error in for_each_output.errors.items():
+                error_line = f"  - [{item_key}]: {error.exception_type}: {error.message}"
+                if error.suggestion:
+                    error_line += f" (Suggestion: {error.suggestion})"
+                error_details.append(error_line)
+            error_msg = (
+                f"For-each group '{for_each_group.name}' failed "
+                f"({success_count} succeeded, {failure_count} failed):\n"
+                + "\n".join(error_details)
+            )
+            raise ExecutionError(
+                error_msg,
+                suggestion="All items must succeed in all_or_nothing mode",
+            )
 
         return for_each_output
 

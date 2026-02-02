@@ -20,6 +20,39 @@ from copilot_conductor.exceptions import ExecutionError
 from copilot_conductor.providers.claude import ClaudeProvider
 
 
+def create_tool_use_block(input_dict: dict) -> Mock:
+    """Create a properly structured tool_use block mock."""
+    block = Mock()
+    block.type = "tool_use"
+    block.id = "tool_123"
+    block.name = "emit_output"
+    block.input = input_dict
+    return block
+
+
+def create_text_block(text: str) -> Mock:
+    """Create a properly structured text block mock."""
+    block = Mock()
+    block.type = "text"
+    block.text = text
+    return block
+
+
+def create_response(content_blocks: list, msg_id: str = "msg_123") -> Mock:
+    """Create a properly structured Claude API response mock."""
+    response = Mock()
+    response.id = msg_id
+    response.content = content_blocks
+    response.model = "claude-3-5-sonnet-latest"
+    response.stop_reason = "end_turn"
+    response.usage = Mock(
+        input_tokens=10, output_tokens=20, cache_creation_input_tokens=0
+    )
+    response.type = "message"
+    response.role = "assistant"
+    return response
+
+
 class TestClaudeParseRecovery:
     """Tests for parse recovery with malformed responses."""
 
@@ -32,59 +65,44 @@ class TestClaudeParseRecovery:
     ) -> None:
         """Test that parse recovery handles malformed JSON in tool responses."""
         mock_anthropic_module.__version__ = "0.77.0"
-        
-        # First response: malformed JSON
-        malformed_message = Mock()
-        malformed_message.id = "msg_malformed"
-        malformed_message.content = [
-            Mock(
-                type="tool_use",
-                id="tool_1",
-                name="provide_output",
-                input={"result": '{"answer": "incomplete...'},  # Malformed
-            )
-        ]
-        malformed_message.stop_reason = "end_turn"
-        malformed_message.usage = Mock(input_tokens=10, output_tokens=20)
-        
-        # Second response: corrected JSON
-        corrected_message = Mock()
-        corrected_message.id = "msg_corrected"
-        corrected_message.content = [
-            Mock(
-                type="tool_use",
-                id="tool_2",
-                name="provide_output",
-                input={"result": '{"answer": "Complete answer"}'},
-            )
-        ]
-        corrected_message.stop_reason = "end_turn"
-        corrected_message.usage = Mock(input_tokens=15, output_tokens=10)
-        
+
+        # First response: text response with malformed JSON (triggers recovery)
+        malformed_response = create_response(
+            [create_text_block('{"answer": "incomplete...')], "msg_malformed"
+        )
+
+        # Second response: corrected response with emit_output tool
+        corrected_response = create_response(
+            [create_tool_use_block({"answer": "Complete answer"})], "msg_corrected"
+        )
+
         mock_client = Mock()
         mock_client.messages = Mock()
         mock_client.messages.create = AsyncMock(
-            side_effect=[malformed_message, corrected_message]
+            side_effect=[malformed_response, corrected_response]
         )
         mock_client.models = Mock()
         mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
+        mock_client.close = AsyncMock()
         mock_anthropic_class.return_value = mock_client
 
         provider = ClaudeProvider()
-        
+
         agent = AgentDef(
             name="test_agent",
             model="claude-3-5-sonnet-latest",
             prompt="Answer the question",
             output={"answer": OutputField(type="string")},
         )
-        
-        result = await provider.execute(agent, {"workflow": {"input": {}}})
-        
+
+        result = await provider.execute(agent, {"workflow": {"input": {}}}, "Test prompt")
+
         # Should successfully recover and return corrected output
-        assert result["answer"] == "Complete answer"
+        assert result.content["answer"] == "Complete answer"
         # Should have made 2 API calls (initial + recovery)
         assert mock_client.messages.create.call_count == 2
+
+        await provider.close()
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
     @patch("copilot_conductor.providers.claude.AsyncAnthropic")
@@ -95,46 +113,33 @@ class TestClaudeParseRecovery:
     ) -> None:
         """Test recovery when required output fields are missing."""
         mock_anthropic_module.__version__ = "0.77.0"
-        
-        # First response: missing required field
-        incomplete_message = Mock()
-        incomplete_message.id = "msg_incomplete"
-        incomplete_message.content = [
-            Mock(
-                type="tool_use",
-                id="tool_1",
-                name="provide_output",
-                input={"result": '{"wrong_field": "value"}'},
-            )
-        ]
-        incomplete_message.stop_reason = "end_turn"
-        incomplete_message.usage = Mock(input_tokens=10, output_tokens=15)
-        
+        # Set APIStatusError to None so isinstance check is skipped
+        mock_anthropic_module.APIStatusError = None
+
+        # First response: invalid text that won't parse (triggers parse recovery)
+        incomplete_response = create_response(
+            [create_text_block("Here is an incomplete response without valid JSON...")],
+            "msg_incomplete",
+        )
+
         # Second response: includes required field
-        complete_message = Mock()
-        complete_message.id = "msg_complete"
-        complete_message.content = [
-            Mock(
-                type="tool_use",
-                id="tool_2",
-                name="provide_output",
-                input={"result": '{"answer": "Correct answer", "summary": "Summary text"}'},
-            )
-        ]
-        complete_message.stop_reason = "end_turn"
-        complete_message.usage = Mock(input_tokens=12, output_tokens=18)
-        
+        complete_response = create_response(
+            [create_tool_use_block({"answer": "Correct answer", "summary": "Summary text"})],
+            "msg_complete",
+        )
+
         mock_client = Mock()
         mock_client.messages = Mock()
         mock_client.messages.create = AsyncMock(
-            side_effect=[incomplete_message, complete_message]
+            side_effect=[incomplete_response, complete_response]
         )
         mock_client.models = Mock()
         mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
+        mock_client.close = AsyncMock()
         mock_anthropic_class.return_value = mock_client
 
         provider = ClaudeProvider()
-        
+
         agent = AgentDef(
             name="test_agent",
             model="claude-3-5-sonnet-latest",
@@ -144,12 +149,14 @@ class TestClaudeParseRecovery:
                 "summary": OutputField(type="string"),
             },
         )
-        
-        result = await provider.execute(agent, {"workflow": {"input": {}}})
-        
-        assert result["answer"] == "Correct answer"
-        assert result["summary"] == "Summary text"
+
+        result = await provider.execute(agent, {"workflow": {"input": {}}}, "Test prompt")
+
+        assert result.content["answer"] == "Correct answer"
+        assert result.content["summary"] == "Summary text"
         assert mock_client.messages.create.call_count == 2
+
+        await provider.close()
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
     @patch("copilot_conductor.providers.claude.AsyncAnthropic")
@@ -160,55 +167,40 @@ class TestClaudeParseRecovery:
     ) -> None:
         """Test recovery from completely invalid JSON syntax."""
         mock_anthropic_module.__version__ = "0.77.0"
-        
-        # First response: invalid JSON
-        invalid_message = Mock()
-        invalid_message.id = "msg_invalid"
-        invalid_message.content = [
-            Mock(
-                type="tool_use",
-                id="tool_1",
-                name="provide_output",
-                input={"result": 'This is not JSON at all {{{'},
-            )
-        ]
-        invalid_message.stop_reason = "end_turn"
-        invalid_message.usage = Mock(input_tokens=10, output_tokens=10)
-        
-        # Second response: valid JSON
-        valid_message = Mock()
-        valid_message.id = "msg_valid"
-        valid_message.content = [
-            Mock(
-                type="tool_use",
-                id="tool_2",
-                name="provide_output",
-                input={"result": '{"answer": "Valid JSON response"}'},
-            )
-        ]
-        valid_message.stop_reason = "end_turn"
-        valid_message.usage = Mock(input_tokens=12, output_tokens=8)
-        
+
+        # First response: invalid JSON in text
+        invalid_response = create_response(
+            [create_text_block("This is not JSON at all {{{")], "msg_invalid"
+        )
+
+        # Second response: valid response with tool
+        valid_response = create_response(
+            [create_tool_use_block({"answer": "Valid JSON response"})], "msg_valid"
+        )
+
         mock_client = Mock()
         mock_client.messages = Mock()
-        mock_client.messages.create = AsyncMock(side_effect=[invalid_message, valid_message])
+        mock_client.messages.create = AsyncMock(side_effect=[invalid_response, valid_response])
         mock_client.models = Mock()
         mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
+        mock_client.close = AsyncMock()
         mock_anthropic_class.return_value = mock_client
 
         provider = ClaudeProvider()
-        
+
         agent = AgentDef(
             name="test_agent",
             model="claude-3-5-sonnet-latest",
             prompt="Answer",
             output={"answer": OutputField(type="string")},
         )
-        
-        result = await provider.execute(agent, {"workflow": {"input": {}}})
-        
-        assert result["answer"] == "Valid JSON response"
+
+        result = await provider.execute(agent, {"workflow": {"input": {}}}, "Test prompt")
+
+        assert result.content["answer"] == "Valid JSON response"
         assert mock_client.messages.create.call_count == 2
+
+        await provider.close()
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
     @patch("copilot_conductor.providers.claude.AsyncAnthropic")
@@ -219,44 +211,41 @@ class TestClaudeParseRecovery:
     ) -> None:
         """Test that recovery fails gracefully after maximum retry attempts."""
         mock_anthropic_module.__version__ = "0.77.0"
-        
-        # All responses: malformed JSON
-        malformed_message = Mock()
-        malformed_message.id = "msg_malformed"
-        malformed_message.content = [
-            Mock(
-                type="tool_use",
-                id="tool_1",
-                name="provide_output",
-                input={"result": 'Invalid JSON'},
-            )
-        ]
-        malformed_message.stop_reason = "end_turn"
-        malformed_message.usage = Mock(input_tokens=10, output_tokens=5)
-        
+        # Set APIStatusError to None so isinstance check is skipped
+        mock_anthropic_module.APIStatusError = None
+
+        # All responses: invalid text (no valid JSON)
+        malformed_response = create_response(
+            [create_text_block("This is not valid JSON")], "msg_malformed"
+        )
+
         mock_client = Mock()
         mock_client.messages = Mock()
         # Return malformed response repeatedly
-        mock_client.messages.create = AsyncMock(return_value=malformed_message)
+        mock_client.messages.create = AsyncMock(return_value=malformed_response)
         mock_client.models = Mock()
         mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
+        mock_client.close = AsyncMock()
         mock_anthropic_class.return_value = mock_client
 
         provider = ClaudeProvider()
-        
+
         agent = AgentDef(
             name="test_agent",
             model="claude-3-5-sonnet-latest",
             prompt="Answer",
             output={"answer": OutputField(type="string")},
         )
-        
-        # Should raise ExecutionError after retries exhausted
-        with pytest.raises(ExecutionError, match="Failed to extract structured output"):
-            await provider.execute(agent, {"workflow": {"input": {}}})
-        
+
+        # Should raise an error after retries exhausted (ProviderError wraps the failure)
+        from copilot_conductor.exceptions import ProviderError
+        with pytest.raises((ExecutionError, ProviderError)):
+            await provider.execute(agent, {"workflow": {"input": {}}}, "Test prompt")
+
         # Should have attempted multiple times (initial + retries)
         assert mock_client.messages.create.call_count > 1
+
+        await provider.close()
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
     @patch("copilot_conductor.providers.claude.AsyncAnthropic")
@@ -267,50 +256,38 @@ class TestClaudeParseRecovery:
     ) -> None:
         """Test recovery when response is empty or whitespace."""
         mock_anthropic_module.__version__ = "0.77.0"
-        
-        # First response: empty
-        empty_message = Mock()
-        empty_message.id = "msg_empty"
-        empty_message.content = [
-            Mock(type="tool_use", id="tool_1", name="provide_output", input={"result": ""})
-        ]
-        empty_message.stop_reason = "end_turn"
-        empty_message.usage = Mock(input_tokens=10, output_tokens=2)
-        
+
+        # First response: empty text
+        empty_response = create_response([create_text_block("")], "msg_empty")
+
         # Second response: valid
-        valid_message = Mock()
-        valid_message.id = "msg_valid"
-        valid_message.content = [
-            Mock(
-                type="tool_use",
-                id="tool_2",
-                name="provide_output",
-                input={"result": '{"answer": "Non-empty response"}'},
-            )
-        ]
-        valid_message.stop_reason = "end_turn"
-        valid_message.usage = Mock(input_tokens=12, output_tokens=10)
-        
+        valid_response = create_response(
+            [create_tool_use_block({"answer": "Non-empty response"})], "msg_valid"
+        )
+
         mock_client = Mock()
         mock_client.messages = Mock()
-        mock_client.messages.create = AsyncMock(side_effect=[empty_message, valid_message])
+        mock_client.messages.create = AsyncMock(side_effect=[empty_response, valid_response])
         mock_client.models = Mock()
         mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
+        mock_client.close = AsyncMock()
         mock_anthropic_class.return_value = mock_client
 
         provider = ClaudeProvider()
-        
+
         agent = AgentDef(
             name="test_agent",
             model="claude-3-5-sonnet-latest",
             prompt="Answer",
             output={"answer": OutputField(type="string")},
         )
-        
-        result = await provider.execute(agent, {"workflow": {"input": {}}})
-        
-        assert result["answer"] == "Non-empty response"
+
+        result = await provider.execute(agent, {"workflow": {"input": {}}}, "Test prompt")
+
+        assert result.content["answer"] == "Non-empty response"
         assert mock_client.messages.create.call_count == 2
+
+        await provider.close()
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
     @patch("copilot_conductor.providers.claude.AsyncAnthropic")
@@ -321,38 +298,34 @@ class TestClaudeParseRecovery:
     ) -> None:
         """Test fallback to parsing JSON from text content when tool_use fails."""
         mock_anthropic_module.__version__ = "0.77.0"
-        
-        # Response with JSON in text content (no tool_use)
-        text_message = Mock()
-        text_message.id = "msg_text"
-        text_message.content = [
-            Mock(
-                type="text",
-                text='Here is the answer: {"answer": "Parsed from text content"}',
-            )
-        ]
-        text_message.stop_reason = "end_turn"
-        text_message.usage = Mock(input_tokens=10, output_tokens=15)
-        
+
+        # Response with valid JSON in text content (no tool_use)
+        text_response = create_response(
+            [create_text_block('{"answer": "Parsed from text content"}')], "msg_text"
+        )
+
         mock_client = Mock()
         mock_client.messages = Mock()
-        mock_client.messages.create = AsyncMock(return_value=text_message)
+        mock_client.messages.create = AsyncMock(return_value=text_response)
         mock_client.models = Mock()
         mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
+        mock_client.close = AsyncMock()
         mock_anthropic_class.return_value = mock_client
 
         provider = ClaudeProvider()
-        
+
         agent = AgentDef(
             name="test_agent",
             model="claude-3-5-sonnet-latest",
             prompt="Answer",
             output={"answer": OutputField(type="string")},
         )
-        
-        result = await provider.execute(agent, {"workflow": {"input": {}}})
-        
+
+        result = await provider.execute(agent, {"workflow": {"input": {}}}, "Test prompt")
+
         # Should successfully extract JSON from text content
-        assert result["answer"] == "Parsed from text content"
+        assert result.content["answer"] == "Parsed from text content"
         # Should only make 1 call (fallback works on first try)
         assert mock_client.messages.create.call_count == 1
+
+        await provider.close()

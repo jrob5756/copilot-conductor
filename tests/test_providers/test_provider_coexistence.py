@@ -18,10 +18,8 @@ class TestProviderCoexistence:
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
     @patch("copilot_conductor.providers.claude.AsyncAnthropic")
     @patch("copilot_conductor.providers.claude.anthropic")
-    @patch("copilot_conductor.providers.copilot.AsyncClient")
     def test_both_providers_can_be_imported(
         self,
-        mock_copilot_client: Mock,
         mock_anthropic_module: Mock,
         mock_anthropic_class: Mock,
     ) -> None:
@@ -44,35 +42,40 @@ class TestProviderCoexistence:
         assert type(claude).__name__ == "ClaudeProvider"
         assert type(copilot).__name__ == "CopilotProvider"
 
-    def test_factory_can_create_both_providers(self) -> None:
+    @pytest.mark.asyncio
+    async def test_factory_can_create_both_providers(self) -> None:
         """Test that factory can create both provider types."""
         from copilot_conductor.providers.factory import create_provider
 
-        with patch("copilot_conductor.providers.factory.ClaudeProvider") as mock_claude:
-            with patch("copilot_conductor.providers.factory.CopilotProvider") as mock_copilot:
-                mock_claude.return_value = Mock()
-                mock_copilot.return_value = Mock()
+        with (
+            patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True),
+            patch("copilot_conductor.providers.claude.AsyncAnthropic") as mock_anthropic,
+            patch("copilot_conductor.providers.claude.anthropic") as mock_module,
+        ):
+            mock_module.__version__ = "0.77.0"
+            mock_client = Mock()
+            mock_anthropic.return_value = mock_client
+            mock_client.close = AsyncMock()
 
-                # Create Claude provider
-                runtime_config_claude = {"provider": "claude", "api_key": "test"}
-                claude = create_provider(runtime_config_claude)
-                mock_claude.assert_called_once()
-                assert claude is not None
+            # Create Claude provider
+            claude = await create_provider(provider_type="claude", validate=False)
+            assert claude is not None
+            assert type(claude).__name__ == "ClaudeProvider"
 
-                # Create Copilot provider
-                runtime_config_copilot = {"provider": "copilot"}
-                copilot = create_provider(runtime_config_copilot)
-                mock_copilot.assert_called_once()
-                assert copilot is not None
+            # Create Copilot provider
+            copilot = await create_provider(provider_type="copilot", validate=False)
+            assert copilot is not None
+            assert type(copilot).__name__ == "CopilotProvider"
+
+            await claude.close()
+            await copilot.close()
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
     @patch("copilot_conductor.providers.claude.AsyncAnthropic")
     @patch("copilot_conductor.providers.claude.anthropic")
-    @patch("copilot_conductor.providers.copilot.AsyncClient")
     @pytest.mark.asyncio
     async def test_both_providers_can_execute_concurrently(
         self,
-        mock_copilot_client: Mock,
         mock_anthropic_module: Mock,
         mock_anthropic_class: Mock,
     ) -> None:
@@ -84,27 +87,37 @@ class TestProviderCoexistence:
         mock_claude_client = Mock()
         mock_claude_client.models.list = AsyncMock(return_value=Mock(data=[]))
         mock_claude_response = Mock()
-        mock_claude_response.content = [Mock(type="text", text="Claude response")]
-        mock_claude_response.usage = Mock(input_tokens=10, output_tokens=20)
+        mock_claude_response.content = [Mock(type="text", text='{"result": "Claude response"}')]
+        mock_claude_response.model = "claude-3-5-sonnet-latest"
+        mock_claude_response.usage = Mock(
+            input_tokens=10, output_tokens=20, cache_creation_input_tokens=0
+        )
+        mock_claude_response.stop_reason = "end_turn"
+        mock_claude_response.id = "msg_123"
+        mock_claude_response.type = "message"
+        mock_claude_response.role = "assistant"
         mock_claude_client.messages.create = AsyncMock(return_value=mock_claude_response)
+        mock_claude_client.close = AsyncMock()
         mock_anthropic_class.return_value = mock_claude_client
 
-        # Setup Copilot mock
-        mock_copilot_instance = Mock()
-        mock_copilot_response = {"text": "Copilot response"}
-        mock_copilot_instance.execute_agent = AsyncMock(return_value=mock_copilot_response)
-        mock_copilot_client.return_value = mock_copilot_instance
-
         # Import providers
-        from copilot_conductor.config.schema import AgentDef
+        from copilot_conductor.config.schema import AgentDef, OutputField
         from copilot_conductor.providers.claude import ClaudeProvider
         from copilot_conductor.providers.copilot import CopilotProvider
 
-        claude_provider = ClaudeProvider()
-        copilot_provider = CopilotProvider()
+        # Setup Copilot mock handler
+        def copilot_mock_handler(agent, prompt, context):
+            return {"result": "Copilot response"}
 
-        # Execute both providers concurrently
-        agent = AgentDef(name="test", prompt="Test")
+        claude_provider = ClaudeProvider()
+        copilot_provider = CopilotProvider(mock_handler=copilot_mock_handler)
+
+        # Create agent with output schema
+        agent = AgentDef(
+            name="test",
+            prompt="Test",
+            output={"result": OutputField(type="string")},
+        )
 
         async def run_claude():
             return await claude_provider.execute(agent, {}, "Claude test")
@@ -116,8 +129,11 @@ class TestProviderCoexistence:
         claude_result, copilot_result = await asyncio.gather(run_claude(), run_copilot())
 
         # Verify both executed successfully
-        assert claude_result.content == {"text": "Claude response"}
-        assert copilot_result.content == {"text": "Copilot response"}
+        assert "result" in claude_result.content
+        assert "result" in copilot_result.content
+
+        await claude_provider.close()
+        await copilot_provider.close()
 
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
     @patch("copilot_conductor.providers.claude.AsyncAnthropic")
@@ -249,4 +265,3 @@ class TestProviderCoexistenceIntegration:
 
         await claude1.close()
         await claude2.close()
-

@@ -203,7 +203,7 @@ class WorkflowContext:
         - agent_name.field - Shorthand for agent_name.output.field (deprecated but supported)
         - parallel_group.outputs - References all parallel group outputs
         - parallel_group.outputs.agent_name - References a specific parallel agent's output
-        - parallel_group.outputs.agent_name.field - References a specific field from a parallel agent
+        - parallel_group.outputs.agent_name.field - Specific field from parallel agent
         - parallel_group.errors - References all parallel group errors
         - Any reference with '?' suffix - Optional dependency
 
@@ -372,7 +372,7 @@ class WorkflowContext:
                 ctx[group_name]["outputs"] = outputs.copy()
             elif is_for_each_list:
                 # For-each group with list outputs
-                # Cannot handle index access here (e.g., outputs.0), must use template syntax outputs[0]
+                # Cannot handle index access (outputs.0), use template syntax outputs[0]
                 # This would be an error in input declaration
                 if not is_optional:
                     raise KeyError(
@@ -413,7 +413,8 @@ class WorkflowContext:
                         ]
                     elif not is_optional:
                         raise KeyError(
-                            f"Missing field '{field_name}' in outputs['{key_or_agent}'] of '{group_name}'"
+                            f"Missing field '{field_name}' in outputs['{key_or_agent}'] "
+                            f"of '{group_name}'"
                         )
                 elif not is_optional:
                     raise KeyError(

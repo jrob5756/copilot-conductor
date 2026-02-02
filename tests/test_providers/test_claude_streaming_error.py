@@ -26,14 +26,14 @@ class TestClaudeStreamingDeferral:
     ) -> None:
         """Test that provider uses non-streaming API calls (Phase 1 implementation)."""
         mock_anthropic_module.__version__ = "0.77.0"
-        
+
         # Setup mock response
         mock_message = Mock()
         mock_message.id = "msg_123"
         mock_message.content = [Mock(type="text", text='{"answer": "Python"}')]
         mock_message.stop_reason = "end_turn"
         mock_message.usage = Mock(input_tokens=10, output_tokens=5)
-        
+
         mock_client = Mock()
         mock_client.messages = Mock()
         mock_client.messages.create = AsyncMock(return_value=mock_message)
@@ -42,20 +42,20 @@ class TestClaudeStreamingDeferral:
         mock_anthropic_class.return_value = mock_client
 
         provider = ClaudeProvider()
-        
+
         agent = AgentDef(
             name="test_agent",
             model="claude-3-5-sonnet-latest",
             prompt="Test",
             output={"answer": OutputField(type="string")},
         )
-        
-        await provider.execute(agent, {"workflow": {"input": {}}})
-        
+
+        await provider.execute(agent, {"workflow": {"input": {}}}, "Test prompt")
+
         # Verify non-streaming call
         call_kwargs = mock_client.messages.create.call_args[1]
         assert "stream" not in call_kwargs or call_kwargs.get("stream") is False
-        
+
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
     @patch("copilot_conductor.providers.claude.AsyncAnthropic")
     @patch("copilot_conductor.providers.claude.anthropic")
@@ -65,7 +65,7 @@ class TestClaudeStreamingDeferral:
     ) -> None:
         """Test that responses are returned only after complete generation."""
         mock_anthropic_module.__version__ = "0.77.0"
-        
+
         # Setup mock response with full content
         full_response = "This is a complete response that should be returned all at once."
         mock_message = Mock()
@@ -73,7 +73,7 @@ class TestClaudeStreamingDeferral:
         mock_message.content = [Mock(type="text", text=f'{{"answer": "{full_response}"}}')]
         mock_message.stop_reason = "end_turn"
         mock_message.usage = Mock(input_tokens=15, output_tokens=20)
-        
+
         mock_client = Mock()
         mock_client.messages = Mock()
         mock_client.messages.create = AsyncMock(return_value=mock_message)
@@ -82,18 +82,20 @@ class TestClaudeStreamingDeferral:
         mock_anthropic_class.return_value = mock_client
 
         provider = ClaudeProvider()
-        
+
         agent = AgentDef(
             name="test_agent",
             model="claude-3-5-sonnet-latest",
             prompt="Generate a response",
             output={"answer": OutputField(type="string")},
         )
-        
-        result = await provider.execute(agent, {"workflow": {"input": {}}})
-        
+
+        result = await provider.execute(
+            agent, {"workflow": {"input": {}}}, "Generate a response"
+        )
+
         # Verify complete response returned
-        assert result["answer"] == full_response
+        assert result.content["answer"] == full_response
         # Verify it was a single call, not streaming chunks
         assert mock_client.messages.create.call_count == 1
 
@@ -110,13 +112,13 @@ class TestClaudeMaxTokensValidation:
     ) -> None:
         """Test that configured max_tokens is passed to API correctly."""
         mock_anthropic_module.__version__ = "0.77.0"
-        
+
         mock_message = Mock()
         mock_message.id = "msg_789"
         mock_message.content = [Mock(type="text", text='{"answer": "Short"}')]
         mock_message.stop_reason = "end_turn"
         mock_message.usage = Mock(input_tokens=10, output_tokens=5)
-        
+
         mock_client = Mock()
         mock_client.messages = Mock()
         mock_client.messages.create = AsyncMock(return_value=mock_message)
@@ -126,20 +128,20 @@ class TestClaudeMaxTokensValidation:
 
         # Create provider with custom max_tokens
         provider = ClaudeProvider(max_tokens=1024)
-        
+
         agent = AgentDef(
             name="test_agent",
             model="claude-3-5-sonnet-latest",
             prompt="Test",
             output={"answer": OutputField(type="string")},
         )
-        
-        await provider.execute(agent, {"workflow": {"input": {}}})
-        
+
+        await provider.execute(agent, {"workflow": {"input": {}}}, "Test prompt")
+
         # Verify max_tokens passed to API
         call_kwargs = mock_client.messages.create.call_args[1]
         assert call_kwargs["max_tokens"] == 1024
-        
+
     @patch("copilot_conductor.providers.claude.ANTHROPIC_SDK_AVAILABLE", True)
     @patch("copilot_conductor.providers.claude.AsyncAnthropic")
     @patch("copilot_conductor.providers.claude.anthropic")
@@ -148,13 +150,13 @@ class TestClaudeMaxTokensValidation:
     ) -> None:
         """Test that provider has reasonable default max_tokens."""
         mock_anthropic_module.__version__ = "0.77.0"
-        
+
         mock_client = Mock()
         mock_client.models = Mock()
         mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
         mock_anthropic_class.return_value = mock_client
 
         provider = ClaudeProvider()
-        
+
         # Verify default is set (8192 per implementation)
         assert provider._default_max_tokens == 8192

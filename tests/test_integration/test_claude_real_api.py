@@ -59,7 +59,7 @@ class TestClaudeRealAPI:
         )
 
         provider = ClaudeProvider()
-        
+
         # Verify connection before running workflow
         is_connected = await provider.validate_connection()
         assert is_connected, "Failed to connect to Claude API"
@@ -90,7 +90,10 @@ class TestClaudeRealAPI:
                 AgentDef(
                     name="analyzer",
                     model="claude-3-5-sonnet-latest",
-                    prompt="Analyze the programming language Python. Provide a title, a 1-sentence description, and a score from 0-100.",
+                    prompt=(
+                        "Analyze the programming language Python. Provide a title, "
+                        "a 1-sentence description, and a score from 0-100."
+                    ),
                     output={
                         "title": OutputField(type="string"),
                         "description": OutputField(type="string"),
@@ -111,12 +114,12 @@ class TestClaudeRealAPI:
         assert "title" in result["analyzer"]
         assert "description" in result["analyzer"]
         assert "score" in result["analyzer"]
-        
+
         # Verify types
         assert isinstance(result["analyzer"]["title"], str)
         assert isinstance(result["analyzer"]["description"], str)
         assert isinstance(result["analyzer"]["score"], (int, float))
-        
+
         # Verify reasonable values
         assert len(result["analyzer"]["title"]) > 0
         assert len(result["analyzer"]["description"]) > 10
@@ -135,7 +138,7 @@ class TestClaudeRealAPI:
 
         # Provider should have logged available models (check doesn't raise)
         # This test verifies the model verification feature works
-        
+
         await provider.close()
 
     @pytest.mark.asyncio
@@ -163,7 +166,7 @@ class TestClaudeRealAPI:
         engine = WorkflowEngine(workflow, provider)
 
         # Should raise an error for invalid model
-        with pytest.raises(Exception):  # Could be ValidationError or ProviderError
+        with pytest.raises((ValueError, TypeError, Exception)):
             await engine.run({})
 
         await provider.close()
@@ -222,7 +225,7 @@ class TestClaudeRealAPI:
     @pytest.mark.asyncio
     async def test_real_parameter_override_effects(self, skip_if_no_api_key) -> None:
         """Test that parameter overrides actually affect real API responses.
-        
+
         Addresses reviewer concern: No evidence parameters reach real Anthropic API.
         This test verifies parameters affect actual model behavior, not just pass validation.
         """
@@ -309,7 +312,10 @@ class TestClaudeRealAPI:
                 AgentDef(
                     name="writer",
                     model="claude-3-5-sonnet-latest",
-                    prompt="Write a long essay about the history of computing. Include many details.",
+                    prompt=(
+                        "Write a long essay about the history of computing. "
+                        "Include many details."
+                    ),
                     output={"essay": OutputField(type="string")},
                     routes=[RouteDef(to="$end")],
                 )
@@ -330,7 +336,10 @@ class TestClaudeRealAPI:
                 AgentDef(
                     name="writer",
                     model="claude-3-5-sonnet-latest",
-                    prompt="Write a long essay about the history of computing. Include many details.",
+                    prompt=(
+                        "Write a long essay about the history of computing. "
+                        "Include many details."
+                    ),
                     output={"essay": OutputField(type="string")},
                     routes=[RouteDef(to="$end")],
                 )
@@ -358,7 +367,7 @@ class TestClaudeRealAPI:
         # Verify length difference (long should be longer than short)
         short_length = len(result_short["writer"]["essay"])
         long_length = len(result_long["writer"]["essay"])
-        
+
         # Long output should be at least 2x longer than short
         # (proves max_tokens parameter affects actual API behavior)
         assert long_length > short_length * 1.5, (
@@ -369,7 +378,7 @@ class TestClaudeRealAPI:
     @pytest.mark.asyncio
     async def test_real_agent_level_parameter_override(self, skip_if_no_api_key) -> None:
         """Test that agent-level parameters override runtime defaults in real API.
-        
+
         Addresses reviewer concern: No tests verifying agent-level overrides reach real API.
         """
         workflow = WorkflowConfig(
@@ -423,7 +432,7 @@ class TestClaudeRealAPI:
         # Additionally, override agent should produce longer output due to higher max_tokens
         default_length = len(result["agent_default"]["description"])
         override_length = len(result["agent_override"]["description"])
-        
+
         # Override should be longer (proves max_tokens override worked)
         assert override_length > default_length, (
             f"Agent-level max_tokens override not working: "

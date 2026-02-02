@@ -858,7 +858,11 @@ class TestBackwardCompatibility:
                 ),
             ],
             output={
-                "result": "{{ handler_a.output.result if handler_a is defined else (handler_b.output.result if handler_b is defined else handler_default.output.result) }}"
+                "result": (
+                    "{{ handler_a.output.result if handler_a is defined else "
+                    "(handler_b.output.result if handler_b is defined else "
+                    "handler_default.output.result) }}"
+                )
             },
         )
 

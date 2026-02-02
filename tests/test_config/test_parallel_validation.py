@@ -60,7 +60,7 @@ class TestParallelAgentReferences:
         from pydantic import ValidationError
 
         with pytest.raises(ValidationError) as exc:
-            config = WorkflowConfig(
+            WorkflowConfig(
                 workflow=WorkflowDef(name="test", entry_point="parallel1"),
                 agents=[
                     AgentDef(name="agent1", model="gpt-4", prompt="Task 1"),
@@ -75,7 +75,7 @@ class TestParallelAgentReferences:
         from pydantic import ValidationError
 
         with pytest.raises(ValidationError) as exc:
-            config = WorkflowConfig(
+            WorkflowConfig(
                 workflow=WorkflowDef(name="test", entry_point="parallel1"),
                 agents=[
                     AgentDef(name="agent1", model="gpt-4", prompt="Task 1"),
@@ -280,7 +280,7 @@ class TestNestedParallelGroups:
         from pydantic import ValidationError
 
         with pytest.raises(ValidationError) as exc:
-            config = WorkflowConfig(
+            WorkflowConfig(
                 workflow=WorkflowDef(name="test", entry_point="outer"),
                 agents=[
                     AgentDef(name="agent1", model="gpt-4", prompt="Task 1"),
@@ -487,7 +487,7 @@ class TestErrorMessages:
         from pydantic import ValidationError
 
         with pytest.raises(ValidationError) as exc:
-            config = WorkflowConfig(
+            WorkflowConfig(
                 workflow=WorkflowDef(name="test", entry_point="parallel1"),
                 agents=[
                     AgentDef(name="agent1", model="gpt-4", prompt="Task 1"),

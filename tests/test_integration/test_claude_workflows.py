@@ -12,7 +12,6 @@ Tests cover:
 import json
 import time
 from pathlib import Path
-from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -347,7 +346,7 @@ class TestForEachClaudeWorkflow:
 
         async def create_message(*args, **kwargs):
             messages = kwargs.get("messages", [])
-            prompt = str(messages[0].get("content", "")) if messages else ""
+            str(messages[0].get("content", "")) if messages else ""
 
             # Determine iteration from prompt or use counter
             idx = call_index[0]
@@ -806,7 +805,7 @@ class TestClaudePerformance:
         assert p95 < 150.0, f"P95 overhead {p95:.2f}ms exceeds 150ms threshold"
 
         # Log results for baseline tracking
-        print(f"\nPerformance Baseline (100 samples):")
+        print("\nPerformance Baseline (100 samples):")
         print(f"  Mean: {mean:.2f}ms")
         print(f"  P95:  {p95:.2f}ms")
         print(f"  P99:  {p99:.2f}ms")

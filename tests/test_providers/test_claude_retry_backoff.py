@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from copilot_conductor.config.schema import AgentDef
+from copilot_conductor.config.schema import AgentDef, OutputField
 from copilot_conductor.providers.claude import ClaudeProvider, RetryConfig
 
 
@@ -159,18 +159,30 @@ class TestClaudeRetryBackoff:
         mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
 
         # Create a mock RateLimitError with retry-after header
-        mock_error = Mock()
-        mock_error.status_code = 429
-        mock_error.response = Mock()
-        mock_error.response.headers = {"retry-after": "60"}
-        type(mock_error).__name__ = "RateLimitError"
+        class MockRateLimitError(Exception):
+            status_code = 429
+            response = Mock(headers={"retry-after": "60"})
+
+        mock_error = MockRateLimitError("Rate limit exceeded")
 
         # First call fails with rate limit, second succeeds
+        mock_content_block = Mock()
+        mock_content_block.type = "text"
+        mock_content_block.text = '{"result": "Success"}'
+
         mock_response = Mock()
-        mock_response.content = [Mock(type="text", text="Success")]
-        mock_response.usage = Mock(input_tokens=10, output_tokens=20)
+        mock_response.content = [mock_content_block]
+        mock_response.usage = Mock(
+            input_tokens=10, output_tokens=20, cache_creation_input_tokens=0
+        )
+        mock_response.model = "claude-3-5-sonnet-latest"
+        mock_response.stop_reason = "end_turn"
+        mock_response.id = "msg_123"
+        mock_response.type = "message"
+        mock_response.role = "assistant"
 
         mock_client.messages.create = AsyncMock(side_effect=[mock_error, mock_response])
+        mock_client.close = AsyncMock()
         mock_anthropic_class.return_value = mock_client
 
         # Import after patching
@@ -179,7 +191,11 @@ class TestClaudeRetryBackoff:
         provider = ClaudeProvider(retry_config=RetryConfig(max_attempts=2))
 
         # Execute - should retry with delay from retry-after header
-        agent = AgentDef(name="test_agent", prompt="Test")
+        agent = AgentDef(
+            name="test_agent",
+            prompt="Test",
+            output={"result": OutputField(type="string")},
+        )
         with patch("copilot_conductor.providers.claude.asyncio.sleep") as mock_sleep:
             await provider.execute(agent, {}, "Test")
 
@@ -201,25 +217,43 @@ class TestClaudeRetryBackoff:
         mock_client.models.list = AsyncMock(return_value=Mock(data=[]))
 
         # Create a retryable error
-        mock_error = Mock()
-        mock_error.status_code = 503
-        type(mock_error).__name__ = "APIStatusError"
+        class MockAPIStatusError(Exception):
+            status_code = 503
+
+        mock_error = MockAPIStatusError("Service unavailable")
 
         # First call fails, second succeeds
+        mock_content_block = Mock()
+        mock_content_block.type = "text"
+        mock_content_block.text = '{"result": "Success"}'
+
         mock_response = Mock()
-        mock_response.content = [Mock(type="text", text="Success")]
-        mock_response.usage = Mock(input_tokens=10, output_tokens=20)
+        mock_response.content = [mock_content_block]
+        mock_response.usage = Mock(
+            input_tokens=10, output_tokens=20, cache_creation_input_tokens=0
+        )
+        mock_response.model = "claude-3-5-sonnet-latest"
+        mock_response.stop_reason = "end_turn"
+        mock_response.id = "msg_123"
+        mock_response.type = "message"
+        mock_response.role = "assistant"
 
         mock_client.messages.create = AsyncMock(side_effect=[mock_error, mock_response])
+        mock_client.close = AsyncMock()
         mock_anthropic_class.return_value = mock_client
 
         # Import after patching
         from copilot_conductor.providers.claude import ClaudeProvider
 
-        provider = ClaudeProvider(retry_config=RetryConfig(max_attempts=2, base_delay=2.0, jitter=0.0))
+        retry_cfg = RetryConfig(max_attempts=2, base_delay=2.0, jitter=0.0)
+        provider = ClaudeProvider(retry_config=retry_cfg)
 
         # Execute - should retry once
-        agent = AgentDef(name="test_agent", prompt="Test")
+        agent = AgentDef(
+            name="test_agent",
+            prompt="Test",
+            output={"result": OutputField(type="string")},
+        )
         with patch("copilot_conductor.providers.claude.asyncio.sleep"):
             await provider.execute(agent, {}, "Test")
 

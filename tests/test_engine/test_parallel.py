@@ -235,7 +235,10 @@ async def test_parallel_group_all_or_nothing_mode_all_succeed(mock_provider):
             ),
         ],
         output={
-            "combined": "{{ parallel_group_1.outputs.agent1.result }} + {{ parallel_group_1.outputs.agent2.result }}",
+            "combined": (
+                "{{ parallel_group_1.outputs.agent1.result }} + "
+                "{{ parallel_group_1.outputs.agent2.result }}"
+            ),
         },
     )
 
@@ -747,7 +750,7 @@ class TestParallelGroupRouting:
     """Tests for routing to and from parallel groups."""
 
     @pytest.mark.asyncio
-    async def test_route_to_parallel_group(self, mock_provider: MockProvider) -> None:
+    async def test_route_to_parallel_group(self, mock_provider: MagicMock) -> None:
         """Test routing from agent to parallel group."""
         workflow = WorkflowConfig(
             workflow=WorkflowDef(
@@ -801,7 +804,7 @@ class TestParallelGroupRouting:
         assert result is not None
 
     @pytest.mark.asyncio
-    async def test_route_from_parallel_group(self, mock_provider: MockProvider) -> None:
+    async def test_route_from_parallel_group(self, mock_provider: MagicMock) -> None:
         """Test routing from parallel group to downstream agent."""
         workflow = WorkflowConfig(
             workflow=WorkflowDef(
@@ -855,7 +858,7 @@ class TestParallelGroupRouting:
         assert result is not None
 
     @pytest.mark.asyncio
-    async def test_conditional_route_from_parallel_group(self, mock_provider: MockProvider) -> None:
+    async def test_conditional_route_from_parallel_group(self, mock_provider: MagicMock) -> None:
         """Test conditional routing from parallel group based on outputs."""
         workflow = WorkflowConfig(
             workflow=WorkflowDef(
@@ -900,7 +903,10 @@ class TestParallelGroupRouting:
                     routes=[
                         RouteDef(
                             to="success_handler",
-                            when="{{ output.outputs.check1.passed and output.outputs.check2.passed }}",
+                            when=(
+                                "{{ output.outputs.check1.passed and "
+                                "output.outputs.check2.passed }}"
+                            ),
                         ),
                         RouteDef(to="failure_handler"),
                     ],
@@ -916,13 +922,13 @@ class TestParallelGroupRouting:
         ]
 
         engine = WorkflowEngine(workflow, mock_provider)
-        result = await engine.run({})
+        await engine.run({})
 
         # Should execute parallel group then success_handler
         assert mock_provider.execute.call_count == 3
 
     @pytest.mark.asyncio
-    async def test_parallel_group_default_route_to_end(self, mock_provider: MockProvider) -> None:
+    async def test_parallel_group_default_route_to_end(self, mock_provider: MagicMock) -> None:
         """Test parallel group with no routes defaults to $end."""
         workflow = WorkflowConfig(
             workflow=WorkflowDef(

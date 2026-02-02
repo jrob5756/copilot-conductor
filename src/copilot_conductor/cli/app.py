@@ -86,7 +86,7 @@ def format_error(error: Exception) -> Panel:
         if hasattr(error, "field_path") and error.field_path:
             content.append("\n")
             content.append("📋 Field: ", style="yellow")
-            content.append(error.field_path, style="cyan")
+            content.append(str(error.field_path), style="cyan")
 
         # Add suggestion if available
         if error.suggestion:

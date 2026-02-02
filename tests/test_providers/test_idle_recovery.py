@@ -296,7 +296,7 @@ class TestWaitWithIdleDetection:
     async def test_done_event_cleared_after_timeout(self) -> None:
         """Test that done event is cleared after each timeout to allow waiting again."""
         config = IdleRecoveryConfig(
-            idle_timeout_seconds=0.01,
+            idle_timeout_seconds=0.02,  # 20ms timeout
             max_recovery_attempts=3,
         )
         provider = CopilotProvider(
@@ -314,7 +314,7 @@ class TestWaitWithIdleDetection:
             nonlocal recovery_count
             # Wait for 2 recovery attempts, then set done
             while recovery_count < 2:
-                await asyncio.sleep(0.015)
+                await asyncio.sleep(0.03)  # Wait slightly longer than idle timeout
                 if mock_session.send.call_count > recovery_count:
                     recovery_count = mock_session.send.call_count
             done.set()

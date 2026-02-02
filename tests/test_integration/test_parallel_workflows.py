@@ -197,9 +197,12 @@ class TestParallelValidatorsWorkflow:
                     name="reporter",
                     model="gpt-4",
                     prompt="""Generate validation report.
-Schema valid: {{ parallel_validators.outputs.schema_validator.valid if 'schema_validator' in parallel_validators.outputs else 'N/A' }}
-Security valid: {{ parallel_validators.outputs.security_validator.valid if 'security_validator' in parallel_validators.outputs else 'FAILED' }}
-Performance valid: {{ parallel_validators.outputs.performance_validator.valid if 'performance_validator' in parallel_validators.outputs else 'N/A' }}
+Schema valid: {{ parallel_validators.outputs.schema_validator.valid \
+if 'schema_validator' in parallel_validators.outputs else 'N/A' }}
+Security valid: {{ parallel_validators.outputs.security_validator.valid \
+if 'security_validator' in parallel_validators.outputs else 'FAILED' }}
+Performance valid: {{ parallel_validators.outputs.performance_validator.valid \
+if 'performance_validator' in parallel_validators.outputs else 'N/A' }}
 Errors: {{ parallel_validators.errors | json }}""",
                     output={
                         "report": OutputField(type="string"),
@@ -464,7 +467,10 @@ Original plan: {{ planner.output.plan }}""",
                 ),
             ],
             output={
-                "result": "{{ success_handler.output.message if success_handler is defined else failure_handler.output.message }}"
+                "result": (
+                    "{{ success_handler.output.message if success_handler is defined "
+                    "else failure_handler.output.message }}"
+                )
             },
         )
 
@@ -674,8 +680,10 @@ class TestParallelFailureModes:
                     name="checker",
                     model="gpt-4",
                     prompt="""Check results and errors:
-Success 1: {{ parallel_group.outputs.agent1.result if 'agent1' in parallel_group.outputs else 'N/A' }}
-Success 3: {{ parallel_group.outputs.agent3.result if 'agent3' in parallel_group.outputs else 'N/A' }}
+Success 1: {{ parallel_group.outputs.agent1.result \
+if 'agent1' in parallel_group.outputs else 'N/A' }}
+Success 3: {{ parallel_group.outputs.agent3.result \
+if 'agent3' in parallel_group.outputs else 'N/A' }}
 Has errors: {{ (parallel_group.errors | length) > 0 }}""",
                     output={"status": OutputField(type="string")},
                     routes=[RouteDef(to="$end")],
