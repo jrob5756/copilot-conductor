@@ -14,7 +14,9 @@ from typing import TYPE_CHECKING, Any
 
 from copilot_conductor.engine.context import WorkflowContext
 from copilot_conductor.engine.limits import LimitEnforcer
+from copilot_conductor.engine.pricing import ModelPricing
 from copilot_conductor.engine.router import Router, RouteResult
+from copilot_conductor.engine.usage import UsageTracker
 from copilot_conductor.exceptions import ConductorError, ExecutionError
 from copilot_conductor.executor.agent import AgentExecutor
 from copilot_conductor.executor.template import TemplateRenderer
@@ -49,12 +51,22 @@ def _verbose_log_agent_complete(
     model: str | None = None,
     tokens: int | None = None,
     output_keys: list[str] | None = None,
+    cost_usd: float | None = None,
+    input_tokens: int | None = None,
+    output_tokens: int | None = None,
 ) -> None:
     """Lazy import wrapper for verbose_log_agent_complete to avoid circular imports."""
     from copilot_conductor.cli.run import verbose_log_agent_complete
 
     verbose_log_agent_complete(
-        agent_name, elapsed, model=model, tokens=tokens, output_keys=output_keys
+        agent_name,
+        elapsed,
+        model=model,
+        tokens=tokens,
+        output_keys=output_keys,
+        cost_usd=cost_usd,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
     )
 
 
@@ -78,11 +90,14 @@ def _verbose_log_parallel_agent_complete(
     *,
     model: str | None = None,
     tokens: int | None = None,
+    cost_usd: float | None = None,
 ) -> None:
     """Lazy import wrapper for verbose_log_parallel_agent_complete to avoid circular imports."""
     from copilot_conductor.cli.run import verbose_log_parallel_agent_complete
 
-    verbose_log_parallel_agent_complete(agent_name, elapsed, model=model, tokens=tokens)
+    verbose_log_parallel_agent_complete(
+        agent_name, elapsed, model=model, tokens=tokens, cost_usd=cost_usd
+    )
 
 
 def _verbose_log_parallel_agent_failed(
@@ -126,11 +141,12 @@ def _verbose_log_for_each_item_complete(
     elapsed: float,
     *,
     tokens: int | None = None,
+    cost_usd: float | None = None,
 ) -> None:
     """Lazy import wrapper for verbose_log_for_each_item_complete to avoid circular imports."""
     from copilot_conductor.cli.run import verbose_log_for_each_item_complete
 
-    verbose_log_for_each_item_complete(item_key, elapsed, tokens=tokens)
+    verbose_log_for_each_item_complete(item_key, elapsed, tokens=tokens, cost_usd=cost_usd)
 
 
 def _verbose_log_for_each_item_failed(
@@ -381,6 +397,32 @@ class WorkflowEngine:
             timeout_seconds=config.workflow.limits.timeout_seconds,
         )
         self.gate_handler = HumanGateHandler(skip_gates=skip_gates)
+        self.usage_tracker = UsageTracker(
+            pricing_overrides=self._build_pricing_overrides(),
+        )
+
+    def _build_pricing_overrides(self) -> dict[str, ModelPricing] | None:
+        """Build pricing overrides from workflow cost configuration.
+
+        Converts PricingOverride Pydantic models from the workflow config
+        into ModelPricing dataclasses for use by the UsageTracker.
+
+        Returns:
+            Dictionary mapping model names to ModelPricing, or None if no overrides.
+        """
+        cost_config = self.config.workflow.cost
+        if not cost_config.pricing:
+            return None
+
+        overrides: dict[str, ModelPricing] = {}
+        for model_name, pricing_override in cost_config.pricing.items():
+            overrides[model_name] = ModelPricing(
+                input_per_mtok=pricing_override.input_per_mtok,
+                output_per_mtok=pricing_override.output_per_mtok,
+                cache_read_per_mtok=pricing_override.cache_read_per_mtok,
+                cache_write_per_mtok=pricing_override.cache_write_per_mtok,
+            )
+        return overrides
 
     async def run(self, inputs: dict[str, Any]) -> dict[str, Any]:
         """Execute the workflow from entry_point to $end.
@@ -631,7 +673,10 @@ class WorkflowEngine:
                         output = await self.executor.execute(agent, agent_context)
                         _agent_elapsed = _time.time() - _agent_start
 
-                        # Verbose: Log agent output summary
+                        # Record usage and calculate cost
+                        usage = self.usage_tracker.record(agent.name, output, _agent_elapsed)
+
+                        # Verbose: Log agent output summary with cost
                         output_keys = (
                             list(output.content.keys()) if isinstance(output.content, dict) else []
                         )
@@ -641,6 +686,9 @@ class WorkflowEngine:
                             model=output.model,
                             tokens=output.tokens_used,
                             output_keys=output_keys,
+                            cost_usd=usage.cost_usd,
+                            input_tokens=output.input_tokens,
+                            output_tokens=output.output_tokens,
                         )
 
                         # Store output
@@ -1023,12 +1071,16 @@ class WorkflowEngine:
                 output = await self.executor.execute(agent, agent_context)
                 _agent_elapsed = _time.time() - _agent_start
 
-                # Verbose: Log agent completion
+                # Record usage and calculate cost
+                usage = self.usage_tracker.record(agent.name, output, _agent_elapsed)
+
+                # Verbose: Log agent completion with cost
                 _verbose_log_parallel_agent_complete(
                     agent.name,
                     _agent_elapsed,
                     model=output.model,
                     tokens=output.tokens_used,
+                    cost_usd=usage.cost_usd,
                 )
 
                 # Individual parallel agents are counted toward iteration limit
@@ -1324,11 +1376,17 @@ class WorkflowEngine:
                 output = await self.executor.execute(for_each_group.agent, agent_context)
                 _item_elapsed = _time.time() - _item_start
 
-                # Verbose: Log item completion
+                # Record usage and calculate cost
+                usage = self.usage_tracker.record(
+                    f"{for_each_group.name}[{key}]", output, _item_elapsed
+                )
+
+                # Verbose: Log item completion with cost
                 _verbose_log_for_each_item_complete(
                     key,
                     _item_elapsed,
                     tokens=output.tokens_used,
+                    cost_usd=usage.cost_usd,
                 )
 
                 return (key, output.content)
@@ -1700,6 +1758,26 @@ class WorkflowEngine:
         if parallel_groups_executed:
             summary["parallel_groups_executed"] = parallel_groups_executed
             summary["parallel_agents_count"] = parallel_agents_count
+
+        # Add usage/cost information
+        usage = self.usage_tracker.get_summary()
+        summary["usage"] = {
+            "total_input_tokens": usage.total_input_tokens,
+            "total_output_tokens": usage.total_output_tokens,
+            "total_tokens": usage.total_tokens,
+            "total_cost_usd": usage.total_cost_usd,
+            "agents": [
+                {
+                    "agent_name": a.agent_name,
+                    "model": a.model,
+                    "input_tokens": a.input_tokens,
+                    "output_tokens": a.output_tokens,
+                    "cost_usd": a.cost_usd,
+                    "elapsed_seconds": a.elapsed_seconds,
+                }
+                for a in usage.agents
+            ],
+        }
 
         return summary
 

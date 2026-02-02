@@ -24,7 +24,11 @@ class AgentOutput:
     Attributes:
         content: Parsed structured output matching the agent's output schema.
         raw_response: Provider-specific raw response for debugging/logging.
-        tokens_used: Token count if provided by the SDK.
+        tokens_used: Total token count (input + output) if provided by the SDK.
+        input_tokens: Number of input/prompt tokens used.
+        output_tokens: Number of output/completion tokens generated.
+        cache_read_tokens: Tokens read from cache (Claude prompt caching).
+        cache_write_tokens: Tokens written to cache (Claude prompt caching).
         model: Actual model used (may differ from requested if aliased).
     """
 
@@ -35,7 +39,19 @@ class AgentOutput:
     """Provider-specific raw response for debugging/logging."""
 
     tokens_used: int | None = None
-    """Token count if provided by the SDK."""
+    """Total token count (input + output) if provided by the SDK."""
+
+    input_tokens: int | None = None
+    """Number of input/prompt tokens used."""
+
+    output_tokens: int | None = None
+    """Number of output/completion tokens generated."""
+
+    cache_read_tokens: int | None = None
+    """Tokens read from cache (Claude prompt caching)."""
+
+    cache_write_tokens: int | None = None
+    """Tokens written to cache (Claude prompt caching)."""
 
     model: str | None = None
     """Actual model used (may differ from requested if aliased)."""

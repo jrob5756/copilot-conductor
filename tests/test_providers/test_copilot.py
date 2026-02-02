@@ -49,7 +49,7 @@ class TestCopilotProvider:
         )
         assert result.content == {"result": "stub response"}
         assert result.model == "gpt-4"
-        assert result.tokens_used == 0
+        assert result.tokens_used is None  # Copilot SDK doesn't return token counts
 
     @pytest.mark.asyncio
     async def test_execute_uses_agent_model(self) -> None:
@@ -83,7 +83,7 @@ class TestCopilotProvider:
             context={},
             rendered_prompt="Test prompt",
         )
-        assert result.model == "mock"
+        assert result.model == "gpt-4o"  # Default model when agent.model is None
 
 
 class TestCopilotProviderToolsSupport:

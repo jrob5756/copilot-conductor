@@ -28,7 +28,29 @@ class TestAgentOutput:
         assert output.content == {"result": "test"}
         assert output.raw_response is None
         assert output.tokens_used is None
+        assert output.input_tokens is None
+        assert output.output_tokens is None
+        assert output.cache_read_tokens is None
+        assert output.cache_write_tokens is None
         assert output.model is None
+
+    def test_agent_output_with_token_breakdown(self) -> None:
+        """Test AgentOutput with detailed token breakdown."""
+        output = AgentOutput(
+            content={"result": "test"},
+            raw_response={"raw": "data"},
+            tokens_used=1500,
+            input_tokens=1000,
+            output_tokens=500,
+            cache_read_tokens=100,
+            cache_write_tokens=50,
+            model="claude-sonnet-4",
+        )
+        assert output.tokens_used == 1500
+        assert output.input_tokens == 1000
+        assert output.output_tokens == 500
+        assert output.cache_read_tokens == 100
+        assert output.cache_write_tokens == 50
 
     def test_agent_output_with_complex_content(self) -> None:
         """Test AgentOutput with nested content structure."""

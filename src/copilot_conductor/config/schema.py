@@ -302,6 +302,39 @@ class LimitsConfig(BaseModel):
     """
 
 
+class PricingOverride(BaseModel):
+    """Custom pricing for a specific model.
+
+    Used to override default pricing or add pricing for models
+    not in the default pricing table.
+    """
+
+    input_per_mtok: float = Field(ge=0, description="Cost per million input tokens (USD)")
+    output_per_mtok: float = Field(ge=0, description="Cost per million output tokens (USD)")
+    cache_read_per_mtok: float = Field(
+        default=0.0, ge=0, description="Cost per million cache read tokens (USD)"
+    )
+    cache_write_per_mtok: float = Field(
+        default=0.0, ge=0, description="Cost per million cache write tokens (USD)"
+    )
+
+
+class CostConfig(BaseModel):
+    """Cost tracking configuration.
+
+    Controls how token usage and costs are tracked and displayed.
+    """
+
+    show_per_agent: bool = True
+    """Whether to show cost per agent in verbose output."""
+
+    show_summary: bool = True
+    """Whether to show cost summary at end of workflow."""
+
+    pricing: dict[str, PricingOverride] = Field(default_factory=dict)
+    """Custom pricing overrides for specific models."""
+
+
 class HooksConfig(BaseModel):
     """Lifecycle hooks for workflow events."""
 
@@ -496,6 +529,9 @@ class WorkflowDef(BaseModel):
 
     limits: LimitsConfig = Field(default_factory=LimitsConfig)
     """Execution safety limits."""
+
+    cost: CostConfig = Field(default_factory=CostConfig)
+    """Cost tracking configuration."""
 
     hooks: HooksConfig | None = None
     """Lifecycle event hooks."""

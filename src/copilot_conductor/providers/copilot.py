@@ -204,11 +204,17 @@ class CopilotProvider(AgentProvider):
         for attempt in range(1, config.max_attempts + 1):
             try:
                 content = await self._execute_sdk_call(agent, rendered_prompt, context, tools)
+                # Note: Copilot SDK does not currently expose token usage data.
+                # When SDK adds usage support, populate these fields from response.
                 return AgentOutput(
                     content=content,
                     raw_response=json.dumps(content),
-                    tokens_used=0,
-                    model=agent.model or "mock",
+                    tokens_used=None,
+                    input_tokens=None,
+                    output_tokens=None,
+                    cache_read_tokens=None,
+                    cache_write_tokens=None,
+                    model=agent.model or self._default_model,
                 )
             except ProviderError as e:
                 last_error = e

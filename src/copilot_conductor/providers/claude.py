@@ -517,10 +517,27 @@ class ClaudeProvider(AgentProvider):
                 # Extract token usage using dedicated method
                 tokens_used = self._extract_token_usage(response)
 
+                # Extract detailed token breakdown
+                input_tokens = None
+                output_tokens = None
+                cache_read_tokens = None
+                cache_write_tokens = None
+
+                if hasattr(response, "usage"):
+                    usage = response.usage
+                    input_tokens = getattr(usage, "input_tokens", None)
+                    output_tokens = getattr(usage, "output_tokens", None)
+                    cache_read_tokens = getattr(usage, "cache_read_input_tokens", None)
+                    cache_write_tokens = getattr(usage, "cache_creation_input_tokens", None)
+
                 return AgentOutput(
                     content=content,
                     raw_response=response,
                     tokens_used=tokens_used,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    cache_read_tokens=cache_read_tokens,
+                    cache_write_tokens=cache_write_tokens,
                     model=model,
                 )
 

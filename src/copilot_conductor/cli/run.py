@@ -70,6 +70,9 @@ def verbose_log_agent_complete(
     model: str | None = None,
     tokens: int | None = None,
     output_keys: list[str] | None = None,
+    cost_usd: float | None = None,
+    input_tokens: int | None = None,
+    output_tokens: int | None = None,
 ) -> None:
     """Log agent completion with summary info.
 
@@ -77,8 +80,11 @@ def verbose_log_agent_complete(
         agent_name: Name of the agent that completed.
         elapsed: Elapsed time in seconds.
         model: Model used (if any).
-        tokens: Tokens used (if any).
+        tokens: Total tokens used (if any).
         output_keys: List of output keys (if dict output).
+        cost_usd: Estimated cost in USD (if available).
+        input_tokens: Input tokens used (if available).
+        output_tokens: Output tokens generated (if available).
     """
     from rich.text import Text
 
@@ -89,8 +95,12 @@ def verbose_log_agent_complete(
         parts = [f"{elapsed:.2f}s"]
         if model:
             parts.append(model)
-        if tokens:
+        if input_tokens is not None and output_tokens is not None:
+            parts.append(f"{input_tokens} in/{output_tokens} out")
+        elif tokens:
             parts.append(f"{tokens} tokens")
+        if cost_usd is not None:
+            parts.append(f"${cost_usd:.4f}")
         if output_keys:
             parts.append(f"→ {output_keys}")
 
@@ -184,6 +194,7 @@ def verbose_log_parallel_agent_complete(
     *,
     model: str | None = None,
     tokens: int | None = None,
+    cost_usd: float | None = None,
 ) -> None:
     """Log parallel agent completion.
 
@@ -192,6 +203,7 @@ def verbose_log_parallel_agent_complete(
         elapsed: Elapsed time in seconds.
         model: Model used (if any).
         tokens: Tokens used (if any).
+        cost_usd: Estimated cost in USD (if available).
     """
     from rich.text import Text
 
@@ -203,6 +215,8 @@ def verbose_log_parallel_agent_complete(
             parts.append(model)
         if tokens:
             parts.append(f"{tokens} tokens")
+        if cost_usd is not None:
+            parts.append(f"${cost_usd:.4f}")
 
         text = Text()
         text.append("  ✓ ", style="green")
@@ -316,6 +330,7 @@ def verbose_log_for_each_item_complete(
     elapsed: float,
     *,
     tokens: int | None = None,
+    cost_usd: float | None = None,
 ) -> None:
     """Log for-each item completion.
 
@@ -323,6 +338,7 @@ def verbose_log_for_each_item_complete(
         item_key: Key/index of the item that completed.
         elapsed: Elapsed time in seconds.
         tokens: Tokens used (if any).
+        cost_usd: Estimated cost in USD (if available).
     """
     from rich.text import Text
 
@@ -332,6 +348,8 @@ def verbose_log_for_each_item_complete(
         parts = [f"{elapsed:.2f}s"]
         if tokens:
             parts.append(f"{tokens} tokens")
+        if cost_usd is not None:
+            parts.append(f"${cost_usd:.4f}")
 
         text = Text()
         text.append("  ✓ ", style="green")
@@ -406,6 +424,61 @@ def verbose_log_for_each_summary(
             text.append(f"  ({', '.join(status_parts)}, {total_elapsed:.2f}s)", style="dim")
 
         _verbose_console.print(text)
+
+
+def display_usage_summary(usage_data: dict[str, Any], console: Console | None = None) -> None:
+    """Display final usage summary with token counts and costs.
+
+    Args:
+        usage_data: Usage dictionary from WorkflowEngine.get_execution_summary()['usage']
+        console: Optional Rich console. Uses stderr console if not provided.
+    """
+    from copilot_conductor.cli.app import is_verbose
+
+    if not is_verbose():
+        return
+
+    output_console = console if console is not None else _verbose_console
+
+    output_console.print()
+    output_console.print("=" * 60, style="dim")
+    output_console.print("[bold cyan]Token Usage Summary[/bold cyan]")
+
+    # Token totals
+    total_input = usage_data.get("total_input_tokens", 0)
+    total_output = usage_data.get("total_output_tokens", 0)
+    total_tokens = usage_data.get("total_tokens", 0)
+
+    if total_tokens > 0:
+        output_console.print(f"  Input:  {total_input:,} tokens", style="dim")
+        output_console.print(f"  Output: {total_output:,} tokens", style="dim")
+        output_console.print(f"  Total:  {total_tokens:,} tokens", style="dim")
+    else:
+        output_console.print("  [dim]No token data available[/dim]")
+
+    # Cost breakdown
+    total_cost = usage_data.get("total_cost_usd")
+    agents = usage_data.get("agents", [])
+
+    if total_cost is not None and total_cost > 0:
+        output_console.print()
+        output_console.print("[bold cyan]Cost Breakdown:[/bold cyan]")
+
+        for agent in agents:
+            agent_cost = agent.get("cost_usd")
+            if agent_cost is not None and agent_cost > 0:
+                pct = (agent_cost / total_cost * 100) if total_cost > 0 else 0
+                output_console.print(
+                    f"  {agent['agent_name']}: ${agent_cost:.4f} ({pct:.0f}%)",
+                    style="dim",
+                )
+
+        output_console.print(f"  [bold]Total: ${total_cost:.4f}[/bold]")
+    elif total_tokens > 0:
+        output_console.print()
+        output_console.print("  [dim]Cost data unavailable (unknown model pricing)[/dim]")
+
+    output_console.print("=" * 60, style="dim")
 
 
 def parse_input_flags(raw_inputs: list[str]) -> dict[str, Any]:
@@ -633,6 +706,12 @@ async def run_workflow_async(
         # Log completion
         verbose_log_timing("Total workflow execution", time.time() - start_time)
         verbose_log("Workflow completed successfully", style="green")
+
+        # Display usage summary if cost tracking is enabled
+        if config.workflow.cost.show_summary:
+            summary = engine.get_execution_summary()
+            if "usage" in summary:
+                display_usage_summary(summary["usage"])
 
         return result
     finally:
