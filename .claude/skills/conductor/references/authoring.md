@@ -13,7 +13,7 @@ workflow:
   
   runtime:
     provider: copilot            # copilot, claude, openai-agents
-    default_model: gpt-4         # Default model for agents
+    default_model: gpt-5.2         # Default model for agents
   
   input:                         # Define workflow inputs
     param_name:
@@ -37,7 +37,7 @@ agents:
   - name: my_agent               # Required: unique identifier
     type: agent                  # agent (default) or human_gate
     description: What it does
-    model: gpt-4                 # Override workflow default
+    model: gpt-5.2                 # Override workflow default
     
     prompt: |
       You are a helpful assistant.

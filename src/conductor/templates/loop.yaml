@@ -11,7 +11,7 @@ workflow:
 
 agents:
   - name: generator
-    model: gpt-4
+    model: gpt-5.2
     prompt: |
       Generate content based on the following request:
       {{ '{{' }} workflow.input.request {{ '}}' }}
@@ -28,7 +28,7 @@ agents:
       - to: reviewer
 
   - name: reviewer
-    model: gpt-4
+    model: gpt-5.2
     prompt: |
       Review the following content:
       {{ '{{' }} generator.output.content {{ '}}' }}

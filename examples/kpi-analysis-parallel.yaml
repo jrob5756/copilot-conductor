@@ -25,7 +25,7 @@ workflow:
 
   runtime:
     provider: copilot
-    default_model: claude-opus-4.5
+    default_model: claude-opus-4.5-latest
     mcp_servers:
       enghub:
         command: node
@@ -71,7 +71,7 @@ for_each:
     
     agent:
       name: kpi_analyzer
-      model: claude-opus-4.5
+      model: claude-opus-4.5-latest
       # tools: null means use all workflow tools (MCP tools are available via provider)
       input:
         - workflow.input.output_dir
@@ -150,7 +150,7 @@ agents:
   # Agent 1: Load and filter KPIs
   - name: kpi_loader
     description: Loads KPIs from JSON and applies optional category filter
-    model: claude-sonnet-4.5
+    model: claude-sonnet-4.5-latest
     input:
       - workflow.input.kpi_directory
       - workflow.input.category
@@ -201,7 +201,7 @@ agents:
   # Agent 2: Generate final report
   - name: report_generator
     description: Aggregates all KPI analyses and generates final report
-    model: claude-sonnet-4.5
+    model: claude-sonnet-4.5-latest
     input:
       - workflow.input.output_dir
       - kpi_loader.output

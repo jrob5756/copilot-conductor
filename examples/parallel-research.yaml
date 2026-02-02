@@ -19,7 +19,7 @@ workflow:
 
   runtime:
     provider: copilot
-    default_model: gpt-4
+    default_model: gpt-5.2
     mcp_servers:
       web-search:
         command: sh
@@ -60,7 +60,7 @@ agents:
   # 1. Planning phase - create research strategy
   - name: planner
     description: Creates a structured research plan
-    model: gpt-4
+    model: gpt-5.2
     input:
       - workflow.input.topic
       - workflow.input.depth
@@ -97,7 +97,7 @@ agents:
   # Parallel Agent 1: Academic research
   - name: academic_researcher
     description: Searches academic and scholarly sources
-    model: gpt-4
+    model: gpt-5.2
     input:
       - workflow.input.topic
       - planner.output
@@ -131,7 +131,7 @@ agents:
   # Parallel Agent 2: Web research
   - name: web_researcher
     description: Searches web sources and news
-    model: gpt-4
+    model: gpt-5.2
     input:
       - workflow.input.topic
       - planner.output
@@ -165,7 +165,7 @@ agents:
   # Parallel Agent 3: Technical research
   - name: technical_researcher
     description: Searches technical documentation and specifications
-    model: gpt-4
+    model: gpt-5.2
     input:
       - workflow.input.topic
       - planner.output
@@ -199,7 +199,7 @@ agents:
   # 3. Synthesis phase - combine parallel results
   - name: synthesizer
     description: Synthesizes findings from all parallel researchers
-    model: gpt-4
+    model: gpt-5.2
     input:
       - workflow.input.topic
       - planner.output
@@ -273,7 +273,7 @@ agents:
   # 4. Quality check phase - evaluate research completeness
   - name: quality_checker
     description: Evaluates research quality and completeness
-    model: gpt-4
+    model: gpt-5.2
     input:
       - workflow.input.topic
       - planner.output

@@ -12,7 +12,7 @@ The `runtime` section of your workflow defines provider settings and global defa
 workflow:
   runtime:
     provider: copilot  # or 'claude'
-    default_model: gpt-4o
+    default_model: gpt-5.2
     # Provider-specific settings...
 ```
 
@@ -26,7 +26,7 @@ Uses GitHub Copilot SDK for agent execution.
 workflow:
   runtime:
     provider: copilot
-    default_model: gpt-4o
+    default_model: gpt-5.2
     mcp_servers:
       web-search:
         command: npx
@@ -39,7 +39,7 @@ workflow:
 - Streaming responses
 - GitHub authentication
 
-**Models**: `gpt-4`, `gpt-4-turbo`, `gpt-4o`, `o1-preview`
+**Models**: `gpt-5.2`, `gpt-5.2-mini`, `o1-preview`
 
 ### Claude Provider
 
@@ -49,7 +49,7 @@ Uses Anthropic Claude SDK for agent execution.
 workflow:
   runtime:
     provider: claude
-    default_model: claude-3-5-sonnet-latest
+    default_model: claude-sonnet-4.5-latest
     temperature: 0.7
     max_tokens: 4096
 ```
@@ -58,7 +58,7 @@ workflow:
 - 200K context window (all models)
 - Pay-per-token pricing
 
-**Models**: `claude-3-5-sonnet-latest`, `claude-haiku-4-20250318`, `claude-opus-4-20250514`
+**Models**: `claude-sonnet-4.5-latest`, `claude-haiku-4.5-latest`, `claude-opus-4.5-latest`
 
 **See**: [Claude Provider Documentation](providers/claude.md)
 
@@ -73,7 +73,7 @@ Set the default model for all agents:
 ```yaml
 workflow:
   runtime:
-    default_model: gpt-4o  # or claude-3-5-sonnet-latest
+    default_model: gpt-5.2  # or claude-sonnet-4.5-latest
 ```
 
 Override per agent:
@@ -81,7 +81,7 @@ Override per agent:
 ```yaml
 agents:
   - name: fast_agent
-    model: claude-haiku-4-20250318  # Override default
+    model: claude-haiku-4.5-latest  # Override default
     prompt: "Quick task..."
 ```
 
@@ -217,7 +217,7 @@ workflow:
   name: claude-example
   runtime:
     provider: claude
-    default_model: claude-3-5-sonnet-latest
+    default_model: claude-sonnet-4.5-latest
     temperature: 0.7
     max_tokens: 4096
 
@@ -230,12 +230,12 @@ workflow:
 
 agents:
   - name: classifier
-    model: claude-haiku-4-20250318  # Fast model override
+    model: claude-haiku-4.5-latest  # Fast model override
     input: [workflow.input.text]
     prompt: "Classify: {{ workflow.input.text }}"
 
   - name: analyzer
-    model: claude-3-5-sonnet-latest  # Use default
+    model: claude-sonnet-4.5-latest  # Use default
     input: [workflow.input.text, classifier.output]
     prompt: "Analyze based on classification..."
 ```
@@ -247,7 +247,7 @@ workflow:
   name: copilot-example
   runtime:
     provider: copilot
-    default_model: gpt-4o
+    default_model: gpt-5.2
     temperature: 0.7
     mcp_servers:
       web-search:
@@ -298,9 +298,9 @@ export CONDUCTOR_LOG_LEVEL=DEBUG  # INFO, DEBUG, WARNING, ERROR
 
 ### Model Selection
 
-1. **Default to balanced models**: `claude-3-5-sonnet-latest` or `gpt-4o`
-2. **Use fast models for simple tasks**: `claude-haiku-4` for classification
-3. **Reserve premium models**: `claude-opus-4` or `o1-preview` for complex reasoning
+1. **Default to balanced models**: `claude-sonnet-4.5-latest` or `gpt-5.2`
+2. **Use fast models for simple tasks**: `claude-haiku-4.5-latest` for classification
+3. **Reserve premium models**: `claude-opus-4.5-latest` or `o1-preview` for complex reasoning
 
 ### Temperature
 
@@ -352,7 +352,7 @@ Check model name spelling:
 
 ```yaml
 # Good
-default_model: claude-3-5-sonnet-latest
+default_model: claude-sonnet-4.5-latest
 
 # Bad
 default_model: claude-3.5-sonnet-latest  # Wrong: dot instead of dash

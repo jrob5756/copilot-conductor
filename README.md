@@ -56,7 +56,7 @@ workflow:
 
 agents:
   - name: answerer
-    model: gpt-4
+    model: gpt-5.2
     prompt: |
       Answer the following question:
       {{ workflow.input.question }}
@@ -114,13 +114,13 @@ workflow:
   entry_point: answerer
   runtime:
     provider: claude  # Change from 'copilot' to 'claude'
-    default_model: claude-3-5-sonnet-latest
+    default_model: claude-sonnet-4.5-latest
     temperature: 0.7
     max_tokens: 2048  # Note: max_tokens not max_tokens_claude
 
 agents:
   - name: answerer
-    model: claude-3-5-sonnet-latest
+    model: claude-sonnet-4.5-latest
     prompt: |
       Answer the following question:
       {{ workflow.input.question }}
@@ -144,9 +144,9 @@ conductor run my-claude-workflow.yaml --input question="What is Python?"
 
 | Model | Best For | Cost |
 |-------|----------|------|
-| `claude-3-5-sonnet-latest` | General purpose (recommended) | $3/$15 per MTok |
-| `claude-haiku-4-20250318` | Fast, simple tasks | $1/$5 per MTok |
-| `claude-opus-4-20250514` | Complex reasoning | $5/$25 per MTok |
+| `claude-sonnet-4.5-latest` | General purpose (recommended) | $3/$15 per MTok |
+| `claude-haiku-4.5-latest` | Fast, simple tasks | $1/$5 per MTok |
+| `claude-opus-4.5-latest` | Complex reasoning | $5/$25 per MTok |
 
 **Pricing**: Input/Output per 1M tokens. [Verify latest pricing](https://www.anthropic.com/pricing)
 

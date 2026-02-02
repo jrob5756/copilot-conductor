@@ -31,7 +31,7 @@ workflow:
 
   runtime:
     provider: copilot
-    default_model: gpt-4
+    default_model: gpt-5.2
     mcp_servers:
       web-search:
         command: sh
@@ -54,7 +54,7 @@ tools:
 agents:
   - name: planner
     description: Creates a research plan based on the topic
-    model: gpt-4
+    model: gpt-5.2
     input:
       - workflow.input.topic
       - workflow.input.depth
@@ -88,7 +88,7 @@ agents:
 
   - name: researcher
     description: Conducts research using available tools
-    model: gpt-4
+    model: gpt-5.2
     input:
       - workflow.input.topic
       - planner.output
@@ -127,7 +127,7 @@ agents:
 
   - name: synthesizer
     description: Synthesizes research findings into a coherent report
-    model: gpt-4
+    model: gpt-5.2
     input:
       - workflow.input.topic
       - planner.output
@@ -174,7 +174,7 @@ agents:
 
   - name: quality_checker
     description: Reviews the research report for quality
-    model: gpt-4
+    model: gpt-5.2
     input:
       - workflow.input.topic
       - synthesizer.output

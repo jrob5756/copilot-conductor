@@ -67,20 +67,20 @@ Update `default_model` and per-agent `model` fields:
 # Before (Copilot)
 workflow:
   runtime:
-    default_model: gpt-4o
+    default_model: gpt-5.2
 
 agents:
   - name: analyzer
-    model: gpt-4-turbo
+    model: gpt-5.2-turbo
 
 # After (Claude)
 workflow:
   runtime:
-    default_model: claude-3-5-sonnet-latest
+    default_model: claude-sonnet-4.5-latest
 
 agents:
   - name: analyzer
-    model: claude-3-5-sonnet-latest  # See model mapping table below
+    model: claude-sonnet-4.5-latest  # See model mapping table below
 ```
 
 ### Step 4: Update Runtime Configuration
@@ -92,7 +92,7 @@ Claude has different configuration parameters:
 workflow:
   runtime:
     provider: copilot
-    default_model: gpt-4o
+    default_model: gpt-5.2
     temperature: 0.7
     max_tokens: 4096
 
@@ -100,7 +100,7 @@ workflow:
 workflow:
   runtime:
     provider: claude
-    default_model: claude-3-5-sonnet-latest
+    default_model: claude-sonnet-4.5-latest
     temperature: 0.7  # Keep this (Claude also uses 0.0-1.0)
     max_tokens: 4096  # Controls output length (Claude-specific meaning)
 ```
@@ -150,7 +150,7 @@ workflow:
   name: research-workflow
   runtime:
     provider: copilot
-    default_model: gpt-4o
+    default_model: gpt-5.2
     temperature: 0.7
     max_tokens: 4096
     mcp_servers:
@@ -161,7 +161,7 @@ workflow:
 
 agents:
   - name: researcher
-    model: gpt-4-turbo
+    model: gpt-5.2-turbo
     tools: [web_search]
     prompt: "Research {{ topic }}"
 ```
@@ -172,14 +172,14 @@ workflow:
   name: research-workflow
   runtime:
     provider: claude
-    default_model: claude-3-5-sonnet-latest
+    default_model: claude-sonnet-4.5-latest
     temperature: 0.7
     max_tokens: 4096
     # Remove mcp_servers
 
 agents:
   - name: researcher
-    model: claude-3-5-sonnet-latest
+    model: claude-sonnet-4.5-latest
     # Remove tools
     prompt: "Research {{ topic }}"
 ```
@@ -192,25 +192,25 @@ Map your Copilot models to Claude equivalents based on use case:
 
 | Copilot Model | Claude Equivalent | Reasoning | Cost Impact |
 |---------------|------------------|-----------|-------------|
-| `gpt-4o` | `claude-3-5-sonnet-latest` | Balanced performance, most workflows | Similar |
-| `gpt-4-turbo` | `claude-3-5-sonnet-latest` | General purpose, large context | Similar |
-| `gpt-4` | `claude-3-5-sonnet-latest` | Standard model, widely used | Cheaper (Claude) |
-| `gpt-3.5-turbo` | `claude-haiku-4-20250318` | Fast, cheap, simple tasks | Cheaper (Claude) |
-| `o1-preview` | `claude-opus-4-20250514` | Advanced reasoning, complex tasks | More expensive |
+| `gpt-5.2` | `claude-sonnet-4.5-latest` | Balanced performance, most workflows | Similar |
+| `gpt-5.2-turbo` | `claude-sonnet-4.5-latest` | General purpose, large context | Similar |
+| `gpt-5.2-mini` | `claude-sonnet-4.5-latest` | Standard model, widely used | Cheaper (Claude) |
+| `gpt-3.5-turbo` | `claude-haiku-4.5-latest` | Fast, cheap, simple tasks | Cheaper (Claude) |
+| `o1-preview` | `claude-opus-4.5-latest` | Advanced reasoning, complex tasks | More expensive |
 
 ### Model Selection Guidelines
 
-**For most workflows**: Use `claude-3-5-sonnet-latest`
-- Direct replacement for GPT-4, GPT-4 Turbo, GPT-4o
+**For most workflows**: Use `claude-sonnet-4.5-latest`
+- Direct replacement for GPT-5.2
 - Excellent performance/cost balance
-- 200K context (vs GPT-4 Turbo's 128K)
+- 200K context (vs GPT-5.2 Turbo's 128K)
 
-**For simple, high-volume tasks**: Use `claude-haiku-4-20250318`
+**For simple, high-volume tasks**: Use `claude-haiku-4.5-latest`
 - Replacement for GPT-3.5 Turbo
 - 3-5x faster, 3x cheaper
 - Classification, routing, simple Q&A
 
-**For complex reasoning**: Use `claude-opus-4-20250514`
+**For complex reasoning**: Use `claude-opus-4.5-latest`
 - Replacement for o1-preview
 - Superior multi-step reasoning
 - Worth the cost for critical workflows
@@ -451,15 +451,15 @@ echo $ANTHROPIC_API_KEY
 
 ### Pitfall 2: Using Copilot Model Names
 
-**Error**: `NotFoundError: model 'gpt-4o' not found`
+**Error**: `NotFoundError: model 'gpt-5.2' not found`
 
 **Solution**: Update all model references:
 ```yaml
 # Bad
-model: gpt-4o
+model: gpt-5.2
 
 # Good
-model: claude-3-5-sonnet-latest
+model: claude-sonnet-4.5-latest
 ```
 
 ### Pitfall 3: Temperature > 1.0
@@ -549,11 +549,11 @@ Migrate one agent at a time:
 agents:
   # Keep working Copilot agents
   - name: agent1
-    model: gpt-4o
-  
+    model: gpt-5.2
+
   # Test Claude on one agent
   - name: agent2
-    model: claude-3-5-sonnet-latest
+    model: claude-sonnet-4.5-latest
 ```
 
 ### Monitoring After Migration

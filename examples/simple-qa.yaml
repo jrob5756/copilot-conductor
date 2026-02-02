@@ -46,7 +46,7 @@ workflow:
 agents:
   - name: answerer
     description: Answers the user's question clearly and concisely
-    model: haiku-4.5
+    model: claude-haiku-4.5-latest
     prompt: |
       You are a helpful assistant. Please answer the following question 
       clearly and concisely:

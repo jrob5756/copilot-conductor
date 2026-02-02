@@ -50,7 +50,7 @@ agents:
   - name: string                    # Required: Unique agent identifier
     description: string             # Optional: Purpose description
     type: agent                     # agent | human_gate (default: agent)
-    model: string                   # Optional: Model identifier (e.g., 'claude-sonnet-4')
+    model: string                   # Optional: Model identifier (e.g., 'claude-sonnet-4.5-latest')
     
     prompt: |                       # Required for type=agent: Agent instructions
       Multi-line prompt with Jinja2 templates
@@ -446,7 +446,7 @@ tools:
 
 agents:
   - name: analyzer
-    model: claude-sonnet-4
+    model: claude-sonnet-4.5-latest
     prompt: |
       Analyze this {{ workflow.input.language }} code for issues:
       {{ workflow.input.code }}

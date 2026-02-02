@@ -19,7 +19,7 @@ workflow:
 
   runtime:
     provider: copilot
-    default_model: gpt-4
+    default_model: gpt-5.2
 
   input:
     code:
@@ -61,7 +61,7 @@ agents:
   # 1. Initial analysis phase
   - name: code_analyzer
     description: Analyzes code structure and complexity
-    model: gpt-4
+    model: gpt-5.2
     input:
       - workflow.input.code
       - workflow.input.language
@@ -97,7 +97,7 @@ agents:
   # Parallel Validator 1: Syntax and structure
   - name: syntax_validator
     description: Validates code syntax and structure
-    model: gpt-4
+    model: gpt-5.2
     input:
       - workflow.input.code
       - workflow.input.language
@@ -138,7 +138,7 @@ agents:
   # Parallel Validator 2: Security checks
   - name: security_validator
     description: Validates code for security vulnerabilities
-    model: gpt-4
+    model: gpt-5.2
     input:
       - workflow.input.code
       - workflow.input.language
@@ -187,7 +187,7 @@ agents:
   # Parallel Validator 3: Code style and best practices
   - name: style_validator
     description: Validates code style and best practices
-    model: gpt-4
+    model: gpt-5.2
     input:
       - workflow.input.code
       - workflow.input.language
@@ -234,7 +234,7 @@ agents:
   # Parallel Validator 4: Logic and correctness
   - name: logic_validator
     description: Validates code logic and correctness
-    model: gpt-4
+    model: gpt-5.2
     input:
       - workflow.input.code
       - workflow.input.language
@@ -280,7 +280,7 @@ agents:
   # 3. Validation summary phase
   - name: validation_summary
     description: Summarizes all validation results
-    model: gpt-4
+    model: gpt-5.2
     input:
       - workflow.input.code
       - code_analyzer.output
@@ -349,7 +349,7 @@ agents:
   # 4a. Auto-approval path
   - name: auto_approve
     description: Automatically approves code that passed all checks
-    model: gpt-4
+    model: gpt-5.2
     input:
       - validation_summary.output
     tools: []
@@ -372,7 +372,7 @@ agents:
   # 4b. Conditional review path
   - name: conditional_review
     description: Handles code that passed with minor issues
-    model: gpt-4
+    model: gpt-5.2
     input:
       - validation_summary.output
       - parallel_validators.outputs
@@ -403,7 +403,7 @@ agents:
   # 4c. Rejection path
   - name: rejection_handler
     description: Handles code that failed validation
-    model: gpt-4
+    model: gpt-5.2
     input:
       - validation_summary.output
       - parallel_validators.outputs

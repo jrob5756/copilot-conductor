@@ -36,7 +36,7 @@ workflow:
 agents:
   - name: designer
     description: Creates or refines the design based on requirements and feedback
-    model: gpt-4
+    model: gpt-5.2
     input:
       - workflow.input.requirement
       - reviewer.output?           # Optional: may not exist on first iteration
@@ -79,7 +79,7 @@ agents:
 
   - name: reviewer
     description: Reviews the design for quality and completeness
-    model: gpt-4
+    model: gpt-5.2
     input:
       - designer.output
       - workflow.input.requirement

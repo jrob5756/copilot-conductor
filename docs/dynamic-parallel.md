@@ -46,7 +46,7 @@ for_each:
     failure_mode: continue_on_error  # Error handling
     
     agent:
-      model: claude-sonnet-4
+      model: claude-sonnet-4.5-latest
       prompt: |
         Analyze this KPI:
         Name: {{ kpi.name }}
@@ -530,7 +530,7 @@ workflow:
   entry_point: kpi_finder
   runtime:
     provider: copilot
-    default_model: claude-sonnet-4
+    default_model: claude-sonnet-4.5-latest
 
 for_each:
   - name: kpi_analyzers
@@ -543,7 +543,7 @@ for_each:
     key_by: kpi.kpi_id
     
     agent:
-      model: claude-opus-4.5
+      model: claude-opus-4.5-latest
       prompt: |
         You are a KPI analyst. Analyze this KPI:
         

@@ -9,7 +9,7 @@ This guide helps you choose between GitHub Copilot and Anthropic Claude provider
 | **Context Window** | 8K-128K | 200K (all models) | Claude |
 | **Pricing Model** | Subscription ($10-39/mo) | Pay-per-token | Depends |
 | **Setup** | GitHub auth | API key | Copilot (easier) |
-| **Model Selection** | GPT-4, GPT-4 Turbo, o1 | Haiku, Sonnet, Opus | Tie |
+| **Model Selection** | GPT-5.2, o1 | Haiku, Sonnet, Opus | Tie |
 | **Streaming** | Yes | No (Phase 1) | Copilot |
 | **Tool Support** | Yes (MCP) | No (Phase 1) | Copilot |
 | **Speed** | Fast | Fast | Tie |
@@ -53,7 +53,7 @@ workflow:
   name: copilot-workflow
   runtime:
     provider: copilot
-    default_model: gpt-4o
+    default_model: gpt-5.2
     mcp_servers:
       web-search:
         command: npx
@@ -102,7 +102,7 @@ workflow:
   name: claude-workflow
   runtime:
     provider: claude
-    default_model: claude-3-5-sonnet-latest
+    default_model: claude-sonnet-4.5-latest
     max_tokens: 4096
     temperature: 0.7
 
@@ -172,8 +172,8 @@ agents:
 ### Context Window
 
 **Copilot**:
-- GPT-4: 8K tokens
-- GPT-4 Turbo: 128K tokens
+- GPT-5.2: 8K tokens
+- GPT-5.2 Turbo: 128K tokens
 - Model-dependent
 
 **Claude**:
@@ -186,15 +186,15 @@ agents:
 ### Model Selection
 
 **Copilot**:
-- `gpt-4` - Balanced performance
-- `gpt-4-turbo` - Faster, larger context
-- `gpt-4o` - Latest, optimized
+- `gpt-5.2` - Balanced performance
+- `gpt-5.2-turbo` - Faster, larger context
+- `gpt-5.2-mini` - Latest, optimized
 - `o1-preview` - Advanced reasoning (limited availability)
 
 **Claude**:
-- `claude-haiku-4` - Fast, cheap
-- `claude-3-5-sonnet-latest` - Balanced (default)
-- `claude-opus-4` - Premium reasoning
+- `claude-haiku-4.5-latest` - Fast, cheap
+- `claude-sonnet-4.5-latest` - Balanced (default)
+- `claude-opus-4.5-latest` - Premium reasoning
 
 **Winner**: Tie (both offer good model tiers)
 
@@ -251,13 +251,13 @@ Minimal changes required:
 workflow:
   runtime:
     provider: copilot
-    default_model: gpt-4o
+    default_model: gpt-5.2
 
 # After (Claude)
 workflow:
   runtime:
     provider: claude
-    default_model: claude-3-5-sonnet-latest
+    default_model: claude-sonnet-4.5-latest
 ```
 
 See the [Migration Guide](migration.md) for detailed instructions.
@@ -271,14 +271,14 @@ Also straightforward:
 workflow:
   runtime:
     provider: claude
-    default_model: claude-3-5-sonnet-latest
+    default_model: claude-sonnet-4.5-latest
     max_tokens: 4096
 
 # After (Copilot)
 workflow:
   runtime:
     provider: copilot
-    default_model: gpt-4o
+    default_model: gpt-5.2
     # Remove Claude-specific fields
 ```
 
@@ -297,7 +297,7 @@ Use this matrix to decide:
 | Want pay-per-use pricing | **Claude** |
 | Process long documents | **Claude** |
 | Complex reasoning tasks | **Claude** (Opus) |
-| Simple high-volume tasks | **Claude** (Haiku) |
+| Simple high-volume tasks | **Claude** (Haiku 4.5) |
 
 ## Multi-Provider Strategy
 

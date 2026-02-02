@@ -60,7 +60,7 @@ workflow:
 agents:
   - name: finder
     description: Finds the next unprocessed KPI by checking existing output files
-    model: sonnet
+    model: claude-sonnet-4.5-latest
     input:
       - workflow.input.kpi_directory
       - workflow.input.output_dir
@@ -127,7 +127,7 @@ agents:
 
   - name: analyzer
     description: Analyzes a single KPI using S360 and Eng Hub tools, then saves to category doc
-    model: opus-4.5
+    model: claude-opus-4.5-latest
     input:
       - finder.output
       - workflow.input.output_dir
