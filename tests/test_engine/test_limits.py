@@ -266,7 +266,8 @@ class TestWorkflowEngineLimits:
             return {"value": "looped"}
 
         provider = CopilotProvider(mock_handler=mock_handler)
-        engine = WorkflowEngine(infinite_loop_config, provider)
+        # Use skip_gates=True to auto-stop without interactive prompt
+        engine = WorkflowEngine(infinite_loop_config, provider, skip_gates=True)
 
         with pytest.raises(MaxIterationsError) as exc_info:
             await engine.run({})
@@ -704,7 +705,8 @@ class TestParallelGroupLimits:
             return {"result": agent.name}
 
         provider = CopilotProvider(mock_handler=mock_handler)
-        engine = WorkflowEngine(config, provider)
+        # Use skip_gates=True to auto-stop without interactive prompt
+        engine = WorkflowEngine(config, provider, skip_gates=True)
 
         with pytest.raises(MaxIterationsError) as exc_info:
             await engine.run({})
@@ -814,3 +816,186 @@ class TestParallelGroupLimits:
         # Timeout should be enforced during workflow execution
         assert error.timeout_seconds == 1
         assert "timeout" in str(error).lower()
+
+
+class TestIncreaseLimitMethod:
+    """Tests for LimitEnforcer.increase_limit() method."""
+
+    def test_increase_limit_basic(self) -> None:
+        """Test that increase_limit increases max_iterations."""
+        enforcer = LimitEnforcer(max_iterations=10)
+        enforcer.increase_limit(5)
+        assert enforcer.max_iterations == 15
+
+    def test_increase_limit_zero(self) -> None:
+        """Test that increase_limit with 0 does not change limit."""
+        enforcer = LimitEnforcer(max_iterations=10)
+        enforcer.increase_limit(0)
+        assert enforcer.max_iterations == 10
+
+    def test_increase_limit_negative(self) -> None:
+        """Test that increase_limit with negative value does not change limit."""
+        enforcer = LimitEnforcer(max_iterations=10)
+        enforcer.increase_limit(-5)
+        assert enforcer.max_iterations == 10
+
+    def test_increase_limit_multiple_times(self) -> None:
+        """Test that increase_limit can be called multiple times."""
+        enforcer = LimitEnforcer(max_iterations=5)
+        enforcer.increase_limit(3)
+        enforcer.increase_limit(2)
+        assert enforcer.max_iterations == 10
+
+    def test_increase_limit_allows_more_iterations(self) -> None:
+        """Test that increasing limit allows more iterations."""
+        enforcer = LimitEnforcer(max_iterations=2)
+        enforcer.start()
+
+        # Execute up to limit
+        enforcer.check_iteration("agent1")
+        enforcer.record_execution("agent1")
+        enforcer.check_iteration("agent2")
+        enforcer.record_execution("agent2")
+
+        # Should now fail
+        with pytest.raises(MaxIterationsError):
+            enforcer.check_iteration("agent3")
+
+        # Increase limit
+        enforcer.increase_limit(2)
+
+        # Should now succeed
+        enforcer.check_iteration("agent3")
+        enforcer.record_execution("agent3")
+        enforcer.check_iteration("agent4")
+        enforcer.record_execution("agent4")
+
+        # Should fail again at new limit
+        with pytest.raises(MaxIterationsError):
+            enforcer.check_iteration("agent5")
+
+
+class TestMaxIterationsWorkflowIntegration:
+    """Tests for interactive max iterations prompt integration with WorkflowEngine."""
+
+    @pytest.fixture
+    def looping_workflow_config(self) -> WorkflowConfig:
+        """Create a workflow that loops indefinitely."""
+        return WorkflowConfig(
+            workflow=WorkflowDef(
+                name="looping-workflow",
+                entry_point="looper",
+                limits=LimitsConfig(max_iterations=2),  # Low limit
+            ),
+            agents=[
+                AgentDef(
+                    name="looper",
+                    model="gpt-4",
+                    prompt="Loop",
+                    output={"value": OutputField(type="string")},
+                    routes=[RouteDef(to="looper")],  # Always loops back
+                ),
+            ],
+            output={"result": "{{ looper.output.value }}"},
+        )
+
+    @pytest.mark.asyncio
+    async def test_interactive_prompt_increases_limit_and_continues(
+        self, looping_workflow_config: WorkflowConfig
+    ) -> None:
+        """Test that providing more iterations via prompt allows workflow to continue."""
+        from unittest.mock import AsyncMock, patch
+
+        call_count = 0
+
+        def mock_handler(agent, prompt, context):
+            nonlocal call_count
+            call_count += 1
+            # Stop looping after 4 iterations by returning a special value
+            if call_count >= 4:
+                return {"value": "done", "stop": True}
+            return {"value": f"loop_{call_count}"}
+
+        # Modify the workflow to terminate after 4 loops
+        config = WorkflowConfig(
+            workflow=WorkflowDef(
+                name="conditional-loop",
+                entry_point="looper",
+                limits=LimitsConfig(max_iterations=2),
+            ),
+            agents=[
+                AgentDef(
+                    name="looper",
+                    model="gpt-4",
+                    prompt="Loop",
+                    output={"value": OutputField(type="string")},
+                    routes=[
+                        RouteDef(to="$end", when="value == 'done'"),
+                        RouteDef(to="looper"),
+                    ],
+                ),
+            ],
+            output={"result": "{{ looper.output.value }}"},
+        )
+
+        provider = CopilotProvider(mock_handler=mock_handler)
+        engine = WorkflowEngine(config, provider, skip_gates=False)
+
+        # Mock the max iterations handler to return 5 more iterations
+        mock_result = AsyncMock()
+        mock_result.continue_execution = True
+        mock_result.additional_iterations = 5
+        engine.max_iterations_handler.handle_limit_reached = AsyncMock(return_value=mock_result)
+
+        result = await engine.run({})
+
+        # Workflow should have completed successfully
+        assert result["result"] == "done"
+        assert call_count == 4
+        # Handler should have been called once when limit was reached
+        engine.max_iterations_handler.handle_limit_reached.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_interactive_prompt_stop_raises_error(
+        self, looping_workflow_config: WorkflowConfig
+    ) -> None:
+        """Test that choosing to stop via prompt raises MaxIterationsError."""
+        from unittest.mock import AsyncMock
+
+        def mock_handler(agent, prompt, context):
+            return {"value": "looped"}
+
+        provider = CopilotProvider(mock_handler=mock_handler)
+        engine = WorkflowEngine(looping_workflow_config, provider, skip_gates=False)
+
+        # Mock the max iterations handler to return stop
+        mock_result = AsyncMock()
+        mock_result.continue_execution = False
+        mock_result.additional_iterations = 0
+        engine.max_iterations_handler.handle_limit_reached = AsyncMock(return_value=mock_result)
+
+        with pytest.raises(MaxIterationsError) as exc_info:
+            await engine.run({})
+
+        error = exc_info.value
+        assert error.iterations == 2
+        assert error.max_iterations == 2
+
+    @pytest.mark.asyncio
+    async def test_skip_gates_auto_stops(
+        self, looping_workflow_config: WorkflowConfig
+    ) -> None:
+        """Test that skip_gates mode auto-stops without prompting."""
+
+        def mock_handler(agent, prompt, context):
+            return {"value": "looped"}
+
+        provider = CopilotProvider(mock_handler=mock_handler)
+        # skip_gates=True should auto-stop
+        engine = WorkflowEngine(looping_workflow_config, provider, skip_gates=True)
+
+        with pytest.raises(MaxIterationsError) as exc_info:
+            await engine.run({})
+
+        error = exc_info.value
+        assert error.iterations == 2

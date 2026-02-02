@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from rich.console import Console
 from rich.panel import Panel
-from rich.prompt import Prompt
+from rich.prompt import IntPrompt, Prompt
 
 from copilot_conductor.exceptions import HumanGateError
 from copilot_conductor.executor.template import TemplateRenderer
@@ -199,3 +199,161 @@ class HumanGateHandler:
             route=option.route,
             additional_input={},  # No input collection in skip mode
         )
+
+
+@dataclass
+class MaxIterationsPromptResult:
+    """Result of a max iterations limit prompt.
+
+    Contains whether to continue execution and how many additional
+    iterations to allow.
+    """
+
+    continue_execution: bool
+    """Whether to continue execution with additional iterations."""
+
+    additional_iterations: int
+    """Number of additional iterations to allow (0 if stopping)."""
+
+
+class MaxIterationsHandler:
+    """Handles max iterations limit prompts.
+
+    When a workflow reaches its max iterations limit, this handler displays
+    an interactive prompt allowing the user to specify additional iterations
+    or stop execution. In skip_gates mode, it auto-stops without prompting.
+
+    Example:
+        >>> handler = MaxIterationsHandler()
+        >>> result = await handler.handle_limit_reached(10, 10, ["agent1", "agent2"])
+        >>> if result.continue_execution:
+        ...     print(f"Continuing with {result.additional_iterations} more iterations")
+        ... else:
+        ...     print("Stopping workflow")
+    """
+
+    def __init__(
+        self,
+        console: Console | None = None,
+        skip_gates: bool = False,
+    ) -> None:
+        """Initialize the MaxIterationsHandler.
+
+        Args:
+            console: Rich console for output. Creates one if not provided.
+            skip_gates: If True, auto-stops without prompting (for automation).
+        """
+        self.console = console or Console()
+        self.skip_gates = skip_gates
+
+    async def handle_limit_reached(
+        self,
+        current_iteration: int,
+        max_iterations: int,
+        agent_history: list[str],
+    ) -> MaxIterationsPromptResult:
+        """Prompt user when max iterations limit is reached.
+
+        Displays the current workflow state and prompts the user to specify
+        how many additional iterations to allow. If skip_gates is enabled,
+        returns immediately with continue_execution=False.
+
+        Args:
+            current_iteration: Current number of iterations executed.
+            max_iterations: The configured maximum iterations limit.
+            agent_history: Ordered list of agent names that were executed.
+
+        Returns:
+            MaxIterationsPromptResult with user's decision.
+        """
+        # In skip_gates mode, auto-stop without prompting
+        if self.skip_gates:
+            self.console.print("\n[dim]Max iterations reached. Auto-stopping (--skip-gates)[/dim]")
+            return MaxIterationsPromptResult(
+                continue_execution=False,
+                additional_iterations=0,
+            )
+
+        # Display the max iterations panel
+        self._display_limit_reached_panel(current_iteration, max_iterations, agent_history)
+
+        # Prompt for additional iterations
+        additional = await self._prompt_for_additional_iterations()
+
+        if additional > 0:
+            self.console.print(
+                f"\n[green]Continuing with {additional} additional iteration(s)[/green]"
+            )
+            return MaxIterationsPromptResult(
+                continue_execution=True,
+                additional_iterations=additional,
+            )
+        else:
+            self.console.print("\n[yellow]Stopping workflow execution[/yellow]")
+            return MaxIterationsPromptResult(
+                continue_execution=False,
+                additional_iterations=0,
+            )
+
+    def _display_limit_reached_panel(
+        self,
+        current_iteration: int,
+        max_iterations: int,
+        agent_history: list[str],
+    ) -> None:
+        """Display the max iterations reached panel.
+
+        Shows the current iteration state and recent agent execution history
+        to help the user understand if there's a loop issue.
+
+        Args:
+            current_iteration: Current number of iterations executed.
+            max_iterations: The configured maximum iterations limit.
+            agent_history: Ordered list of agent names that were executed.
+        """
+        # Build content for the panel
+        content_lines = [
+            f"Workflow has reached the iteration limit ({current_iteration}/{max_iterations})",
+            "",
+        ]
+
+        # Show last N agents executed
+        last_n = 5
+        if agent_history:
+            recent_agents = agent_history[-last_n:]
+            content_lines.append(f"Last {len(recent_agents)} agents executed:")
+            for i, agent_name in enumerate(recent_agents, 1):
+                content_lines.append(f"  {i}. {agent_name}")
+            content_lines.append("")
+
+        # Check for potential loop (same agent repeated)
+        if len(agent_history) >= 3:
+            last_agents = agent_history[-3:]
+            if len(set(last_agents)) <= 2:
+                content_lines.append("[yellow]This may indicate a loop between agents.[/yellow]")
+
+        # Create and display the panel
+        self.console.print()
+        self.console.print(
+            Panel(
+                "\n".join(content_lines),
+                title="[bold yellow]Max Iterations Reached[/bold yellow]",
+                border_style="yellow",
+            )
+        )
+
+    async def _prompt_for_additional_iterations(self) -> int:
+        """Prompt the user for additional iterations.
+
+        Returns:
+            Number of additional iterations to allow (0 to stop).
+        """
+        self.console.print()
+        try:
+            value = IntPrompt.ask(
+                "[bold]How many more iterations would you like to allow?[/bold]",
+                default=0,
+            )
+            return max(0, value)  # Ensure non-negative
+        except (ValueError, KeyboardInterrupt):
+            return 0

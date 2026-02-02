@@ -17,10 +17,14 @@ from copilot_conductor.engine.limits import LimitEnforcer
 from copilot_conductor.engine.pricing import ModelPricing
 from copilot_conductor.engine.router import Router, RouteResult
 from copilot_conductor.engine.usage import UsageTracker
-from copilot_conductor.exceptions import ConductorError, ExecutionError
+from copilot_conductor.exceptions import ConductorError, ExecutionError, MaxIterationsError
 from copilot_conductor.executor.agent import AgentExecutor
 from copilot_conductor.executor.template import TemplateRenderer
-from copilot_conductor.gates.human import GateResult, HumanGateHandler
+from copilot_conductor.gates.human import (
+    GateResult,
+    HumanGateHandler,
+    MaxIterationsHandler,
+)
 
 
 def _verbose_log(message: str, style: str = "dim") -> None:
@@ -397,6 +401,7 @@ class WorkflowEngine:
             timeout_seconds=config.workflow.limits.timeout_seconds,
         )
         self.gate_handler = HumanGateHandler(skip_gates=skip_gates)
+        self.max_iterations_handler = MaxIterationsHandler(skip_gates=skip_gates)
         self.usage_tracker = UsageTracker(
             pricing_overrides=self._build_pricing_overrides(),
         )
@@ -478,7 +483,7 @@ class WorkflowEngine:
                     if for_each_group is not None:
                         # Check iteration limit (count TBD based on array size)
                         # For safety, check with current limit before resolving array
-                        self.limits.check_iteration(for_each_group.name)
+                        await self._check_iteration_with_prompt(for_each_group.name)
 
                         # Verbose: Log for-each group execution start
                         iteration = self.limits.current_iteration + 1
@@ -550,7 +555,7 @@ class WorkflowEngine:
                     # Handle parallel group execution
                     if parallel_group is not None:
                         # Check iteration limit for all parallel agents before executing
-                        self.limits.check_parallel_group_iteration(
+                        await self._check_parallel_group_iteration_with_prompt(
                             parallel_group.name, len(parallel_group.agents)
                         )
 
@@ -623,7 +628,7 @@ class WorkflowEngine:
                     # Handle regular agent execution
                     if agent is not None:
                         # Check iteration limit before executing
-                        self.limits.check_iteration(current_agent_name)
+                        await self._check_iteration_with_prompt(current_agent_name)
 
                         # Verbose: Log agent execution start (1-indexed for user display)
                         iteration = self.limits.current_iteration + 1
@@ -826,6 +831,66 @@ class WorkflowEngine:
             strategy=strategy,
             provider=self.provider if strategy == "summarize" else None,
         )
+
+    async def _check_iteration_with_prompt(self, agent_name: str) -> None:
+        """Check iteration limit with interactive prompt on limit reached.
+
+        This method wraps the standard iteration check with interactive handling.
+        When the limit is reached, it prompts the user for additional iterations
+        instead of immediately raising MaxIterationsError.
+
+        Args:
+            agent_name: Name of agent about to execute.
+
+        Raises:
+            MaxIterationsError: If limit exceeded and user chooses not to continue.
+        """
+        try:
+            self.limits.check_iteration(agent_name)
+        except MaxIterationsError:
+            # Prompt user for more iterations
+            result = await self.max_iterations_handler.handle_limit_reached(
+                current_iteration=self.limits.current_iteration,
+                max_iterations=self.limits.max_iterations,
+                agent_history=self.limits.execution_history,
+            )
+            if result.continue_execution:
+                self.limits.increase_limit(result.additional_iterations)
+                # Re-check should now pass
+                self.limits.check_iteration(agent_name)
+            else:
+                raise  # Re-raise MaxIterationsError
+
+    async def _check_parallel_group_iteration_with_prompt(
+        self, group_name: str, agent_count: int
+    ) -> None:
+        """Check parallel group iteration limit with interactive prompt.
+
+        This method wraps the parallel group iteration check with interactive handling.
+        When the limit would be exceeded, it prompts the user for additional iterations.
+
+        Args:
+            group_name: Name of parallel group about to execute.
+            agent_count: Number of agents in the parallel group.
+
+        Raises:
+            MaxIterationsError: If limit exceeded and user chooses not to continue.
+        """
+        try:
+            self.limits.check_parallel_group_iteration(group_name, agent_count)
+        except MaxIterationsError:
+            # Prompt user for more iterations
+            result = await self.max_iterations_handler.handle_limit_reached(
+                current_iteration=self.limits.current_iteration,
+                max_iterations=self.limits.max_iterations,
+                agent_history=self.limits.execution_history,
+            )
+            if result.continue_execution:
+                self.limits.increase_limit(result.additional_iterations)
+                # Re-check should now pass
+                self.limits.check_parallel_group_iteration(group_name, agent_count)
+            else:
+                raise  # Re-raise MaxIterationsError
 
     def _find_agent(self, name: str) -> AgentDef | None:
         """Find agent by name.
@@ -1571,8 +1636,7 @@ class WorkflowEngine:
                 error_details.append(error_line)
             error_msg = (
                 f"For-each group '{for_each_group.name}' failed "
-                f"({success_count} succeeded, {failure_count} failed):\n"
-                + "\n".join(error_details)
+                f"({success_count} succeeded, {failure_count} failed):\n" + "\n".join(error_details)
             )
             raise ExecutionError(
                 error_msg,

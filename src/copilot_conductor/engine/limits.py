@@ -147,6 +147,23 @@ class LimitEnforcer:
         self.execution_history.append(agent_name)
         self.current_iteration += count
 
+    def increase_limit(self, additional: int) -> None:
+        """Increase the max_iterations limit by the given amount.
+
+        This allows dynamically extending the iteration limit during workflow
+        execution, typically in response to a user prompt when the limit is reached.
+
+        Args:
+            additional: Number of additional iterations to allow. Must be positive.
+
+        Example:
+            >>> enforcer = LimitEnforcer(max_iterations=10)
+            >>> enforcer.increase_limit(5)
+            >>> assert enforcer.max_iterations == 15
+        """
+        if additional > 0:
+            self.max_iterations += additional
+
     def check_timeout(self) -> None:
         """Check if workflow has exceeded timeout.
 

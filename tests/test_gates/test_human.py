@@ -326,3 +326,221 @@ class TestHumanGateHandlerAutoSelect:
         mock_console.print.assert_called()
         call_args = str(mock_console.print.call_args)
         assert "--skip-gates" in call_args or "Auto-selecting" in call_args
+
+
+class TestMaxIterationsPromptResult:
+    """Tests for MaxIterationsPromptResult dataclass."""
+
+    def test_prompt_result_continue(self) -> None:
+        """Test creating a result that continues execution."""
+        from copilot_conductor.gates.human import MaxIterationsPromptResult
+
+        result = MaxIterationsPromptResult(
+            continue_execution=True,
+            additional_iterations=10,
+        )
+        assert result.continue_execution is True
+        assert result.additional_iterations == 10
+
+    def test_prompt_result_stop(self) -> None:
+        """Test creating a result that stops execution."""
+        from copilot_conductor.gates.human import MaxIterationsPromptResult
+
+        result = MaxIterationsPromptResult(
+            continue_execution=False,
+            additional_iterations=0,
+        )
+        assert result.continue_execution is False
+        assert result.additional_iterations == 0
+
+
+class TestMaxIterationsHandler:
+    """Tests for MaxIterationsHandler class."""
+
+    def test_init_defaults(self) -> None:
+        """Test handler initialization with defaults."""
+        from copilot_conductor.gates.human import MaxIterationsHandler
+
+        handler = MaxIterationsHandler()
+        assert handler.skip_gates is False
+        assert handler.console is not None
+
+    def test_init_with_skip_gates(self) -> None:
+        """Test handler initialization with skip_gates=True."""
+        from copilot_conductor.gates.human import MaxIterationsHandler
+
+        handler = MaxIterationsHandler(skip_gates=True)
+        assert handler.skip_gates is True
+
+    def test_init_with_console(self, mock_console: MagicMock) -> None:
+        """Test handler initialization with custom console."""
+        from copilot_conductor.gates.human import MaxIterationsHandler
+
+        handler = MaxIterationsHandler(console=mock_console)
+        assert handler.console is mock_console
+
+
+class TestMaxIterationsHandlerSkipGates:
+    """Tests for --skip-gates mode (auto-stop)."""
+
+    @pytest.mark.asyncio
+    async def test_skip_gates_auto_stops(self, mock_console: MagicMock) -> None:
+        """Test that skip_gates mode auto-stops without prompting."""
+        from copilot_conductor.gates.human import MaxIterationsHandler
+
+        handler = MaxIterationsHandler(console=mock_console, skip_gates=True)
+
+        result = await handler.handle_limit_reached(
+            current_iteration=10,
+            max_iterations=10,
+            agent_history=["agent1", "agent2", "agent3"],
+        )
+
+        assert result.continue_execution is False
+        assert result.additional_iterations == 0
+        # Verify console output indicates auto-stop
+        mock_console.print.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_skip_gates_with_empty_history(self, mock_console: MagicMock) -> None:
+        """Test skip_gates mode with empty agent history."""
+        from copilot_conductor.gates.human import MaxIterationsHandler
+
+        handler = MaxIterationsHandler(console=mock_console, skip_gates=True)
+
+        result = await handler.handle_limit_reached(
+            current_iteration=5,
+            max_iterations=5,
+            agent_history=[],
+        )
+
+        assert result.continue_execution is False
+        assert result.additional_iterations == 0
+
+
+class TestMaxIterationsHandlerInteractive:
+    """Tests for interactive mode with mocked terminal input."""
+
+    @pytest.mark.asyncio
+    async def test_user_enters_positive_number(self, mock_console: MagicMock) -> None:
+        """Test that user entering positive number continues execution."""
+        from copilot_conductor.gates.human import MaxIterationsHandler
+
+        handler = MaxIterationsHandler(console=mock_console, skip_gates=False)
+
+        # Mock IntPrompt.ask to return 5
+        with patch("copilot_conductor.gates.human.IntPrompt.ask", return_value=5):
+            result = await handler.handle_limit_reached(
+                current_iteration=10,
+                max_iterations=10,
+                agent_history=["agent1", "agent2"],
+            )
+
+        assert result.continue_execution is True
+        assert result.additional_iterations == 5
+
+    @pytest.mark.asyncio
+    async def test_user_enters_zero(self, mock_console: MagicMock) -> None:
+        """Test that user entering 0 stops execution."""
+        from copilot_conductor.gates.human import MaxIterationsHandler
+
+        handler = MaxIterationsHandler(console=mock_console, skip_gates=False)
+
+        # Mock IntPrompt.ask to return 0
+        with patch("copilot_conductor.gates.human.IntPrompt.ask", return_value=0):
+            result = await handler.handle_limit_reached(
+                current_iteration=10,
+                max_iterations=10,
+                agent_history=["agent1", "agent2"],
+            )
+
+        assert result.continue_execution is False
+        assert result.additional_iterations == 0
+
+    @pytest.mark.asyncio
+    async def test_user_enters_negative_number(self, mock_console: MagicMock) -> None:
+        """Test that user entering negative number stops execution."""
+        from copilot_conductor.gates.human import MaxIterationsHandler
+
+        handler = MaxIterationsHandler(console=mock_console, skip_gates=False)
+
+        # Mock IntPrompt.ask to return -5 (should be treated as 0)
+        with patch("copilot_conductor.gates.human.IntPrompt.ask", return_value=-5):
+            result = await handler.handle_limit_reached(
+                current_iteration=10,
+                max_iterations=10,
+                agent_history=["agent1", "agent2"],
+            )
+
+        assert result.continue_execution is False
+        assert result.additional_iterations == 0
+
+    @pytest.mark.asyncio
+    async def test_panel_displays_iteration_info(self, mock_console: MagicMock) -> None:
+        """Test that panel displays iteration information."""
+        from copilot_conductor.gates.human import MaxIterationsHandler
+
+        handler = MaxIterationsHandler(console=mock_console, skip_gates=False)
+
+        with (
+            patch("copilot_conductor.gates.human.IntPrompt.ask", return_value=0),
+            patch("copilot_conductor.gates.human.Panel") as mock_panel,
+        ):
+            await handler.handle_limit_reached(
+                current_iteration=10,
+                max_iterations=10,
+                agent_history=["agent1", "agent2", "agent3"],
+            )
+
+            # Verify Panel was called with iteration info
+            mock_panel.assert_called()
+            panel_args = mock_panel.call_args
+            panel_content = panel_args[0][0]
+            assert "10/10" in panel_content or "10" in panel_content
+
+    @pytest.mark.asyncio
+    async def test_panel_shows_agent_history(self, mock_console: MagicMock) -> None:
+        """Test that panel shows recent agent history."""
+        from copilot_conductor.gates.human import MaxIterationsHandler
+
+        handler = MaxIterationsHandler(console=mock_console, skip_gates=False)
+
+        with (
+            patch("copilot_conductor.gates.human.IntPrompt.ask", return_value=0),
+            patch("copilot_conductor.gates.human.Panel") as mock_panel,
+        ):
+            await handler.handle_limit_reached(
+                current_iteration=5,
+                max_iterations=5,
+                agent_history=["agent1", "agent2", "agent3", "agent2", "agent3"],
+            )
+
+            # Verify Panel was called with agent history
+            mock_panel.assert_called()
+            panel_args = mock_panel.call_args
+            panel_content = panel_args[0][0]
+            assert "agent" in panel_content.lower()
+
+    @pytest.mark.asyncio
+    async def test_detects_potential_loop(self, mock_console: MagicMock) -> None:
+        """Test that handler warns about potential loops."""
+        from copilot_conductor.gates.human import MaxIterationsHandler
+
+        handler = MaxIterationsHandler(console=mock_console, skip_gates=False)
+
+        # Create a repeating pattern that suggests a loop
+        with (
+            patch("copilot_conductor.gates.human.IntPrompt.ask", return_value=0),
+            patch("copilot_conductor.gates.human.Panel") as mock_panel,
+        ):
+            await handler.handle_limit_reached(
+                current_iteration=6,
+                max_iterations=6,
+                agent_history=["loop_agent", "loop_agent", "loop_agent"],
+            )
+
+            # Verify Panel was called with loop warning
+            mock_panel.assert_called()
+            panel_args = mock_panel.call_args
+            panel_content = panel_args[0][0]
+            assert "loop" in panel_content.lower()
