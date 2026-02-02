@@ -2,7 +2,7 @@
 
 This directory contains example workflow files demonstrating various features of Conductor.
 
-## Examples
+## Quick Start Examples
 
 ### simple-qa.yaml
 
@@ -16,9 +16,80 @@ A minimal workflow with a single agent that answers questions. Demonstrates:
 conductor run examples/simple-qa.yaml --input question="What is Python?"
 ```
 
+### simple-qa-claude.yaml
+
+The same simple Q&A workflow configured for Claude provider. Demonstrates:
+- Claude provider configuration
+- Model selection with `claude-sonnet-4.5-latest`
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+conductor run examples/simple-qa-claude.yaml --input question="What is Python?"
+```
+
+## Parallel Execution Examples
+
+### for-each-simple.yaml
+
+Dynamic parallel processing with for-each groups. Demonstrates:
+- For-each group definition
+- Processing variable-length arrays
+- Loop variable access (`{{ item }}`, `{{ _index }}`)
+- Aggregating parallel outputs
+
+```bash
+conductor run examples/for-each-simple.yaml --input items='["apple", "banana", "cherry"]'
+```
+
+### kpi-analysis-parallel.yaml
+
+Parallel KPI analysis combining for-each with structured output. Demonstrates:
+- For-each groups for dynamic parallel processing
+- `key_by` for organized output access
+- Complex output schemas
+
+```bash
+conductor run examples/kpi-analysis-parallel.yaml --input kpis='["revenue", "churn", "nps"]'
+```
+
+### kpi-analysis.yaml
+
+Sequential KPI analysis workflow. Demonstrates:
+- Multi-agent sequential workflow
+- Context passing between agents
+- Structured analysis output
+
+```bash
+conductor run examples/kpi-analysis.yaml --input kpi="monthly_revenue"
+```
+
+### parallel-research.yaml
+
+Parallel research from multiple sources. Demonstrates:
+- Static parallel groups
+- Multiple specialized research agents
+- Result aggregation from parallel outputs
+
+```bash
+conductor run examples/parallel-research.yaml --input topic="Renewable energy"
+```
+
+### parallel-validation.yaml
+
+Parallel code validation checks. Demonstrates:
+- Static parallel groups for concurrent validation
+- Multiple validation agents (security, performance, style)
+- Failure mode configuration
+
+```bash
+conductor run examples/parallel-validation.yaml --input code="def hello(): print('world')"
+```
+
+## Human-in-the-Loop Examples
+
 ### design-review.yaml
 
-An iterative design workflow with human-in-the-loop approval. Demonstrates:
+An iterative design workflow with human approval. Demonstrates:
 - Multiple agents with conditional routing
 - Loop-back patterns for refinement
 - Human gates for approval decisions
@@ -32,6 +103,8 @@ conductor run examples/design-review.yaml --input requirement="Build a REST API"
 # Automation mode (auto-approves)
 conductor run examples/design-review.yaml --input requirement="Build a REST API" --skip-gates
 ```
+
+## Multi-Agent Workflows
 
 ### research-assistant.yaml
 
@@ -49,21 +122,28 @@ conductor run examples/research-assistant.yaml --input topic="AI in healthcare"
 conductor run examples/research-assistant.yaml --input topic="Quantum computing" --input depth="comprehensive"
 ```
 
-### design.yaml
+### research-assistant-claude.yaml
 
-A solution design workflow with architect and reviewer agents. Demonstrates:
-- Architect agent for creating comprehensive solution designs
-- Reviewer agent for quality assessment with scoring
-- Loop-back pattern for iterative refinement
-- Quality threshold gate (score >= 90 to pass)
-- Structured design document output
+The research assistant configured for Claude provider. Demonstrates:
+- Claude provider with multi-agent workflow
+- Model selection per agent
 
 ```bash
-conductor run examples/design.yaml --input purpose="Build a user authentication system with OAuth2"
-
-# With verbose output
-conductor -V run examples/design.yaml --input purpose="Add caching layer to API"
+export ANTHROPIC_API_KEY=sk-ant-...
+conductor run examples/research-assistant-claude.yaml --input topic="Machine learning"
 ```
+
+### multi-provider-research.yaml
+
+Research workflow demonstrating multi-provider patterns. Demonstrates:
+- Provider configuration options
+- Cross-provider workflow patterns
+
+```bash
+conductor run examples/multi-provider-research.yaml --input topic="Cloud computing"
+```
+
+## Planning and Implementation
 
 ### plan.yaml
 
@@ -81,6 +161,16 @@ conductor run examples/plan.yaml --input design="Build a REST API with CRUD oper
 conductor -V run examples/plan.yaml --input design="./docs/my-feature.design.md"
 ```
 
+### implement.yaml
+
+Implementation workflow for executing planned changes. Demonstrates:
+- Reading plans from previous stages
+- Structured implementation output
+
+```bash
+conductor run examples/implement.yaml --input plan="./output/implementation-plan.json"
+```
+
 ## Running Examples
 
 ### Prerequisites
@@ -90,7 +180,9 @@ conductor -V run examples/plan.yaml --input design="./docs/my-feature.design.md"
    uvx conductor
    ```
 
-2. Ensure you have valid credentials for the Copilot SDK (or the provider you're using).
+2. Ensure you have valid credentials for your provider:
+   - **Copilot**: GitHub authentication via `gh auth login`
+   - **Claude**: Set `ANTHROPIC_API_KEY` environment variable
 
 ### Validate Before Running
 
@@ -141,3 +233,10 @@ conductor init my-workflow --template loop
 5. **Safety limits**: Always set appropriate `max_iterations` and `timeout_seconds` for workflows with loops.
 
 6. **Optional dependencies**: Use `?` suffix for optional input references to avoid errors when agents haven't run yet.
+
+## See Also
+
+- [Workflow Syntax Reference](../docs/workflow-syntax.md) - Complete YAML schema
+- [CLI Reference](../docs/cli-reference.md) - Full command documentation
+- [Parallel Execution](../docs/parallel-execution.md) - Static parallel groups
+- [Dynamic Parallel](../docs/dynamic-parallel.md) - For-each groups

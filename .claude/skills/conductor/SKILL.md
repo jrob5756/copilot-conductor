@@ -1,6 +1,6 @@
 ---
 name: conductor
-description: Create, validate, and run workflows with Conductor CLI. Use when orchestrating AI agents via YAML workflow files, creating new workflows, debugging execution, configuring routing between agents, setting up human-in-the-loop gates, or understanding workflow YAML schema.
+description: Create, validate, and run workflows. Use when orchestrating AI agents via YAML workflow files, creating new workflows, debugging execution, configuring routing between agents, setting up human-in-the-loop gates, or understanding workflow YAML schema.
 ---
 
 # Conductor
