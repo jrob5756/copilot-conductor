@@ -79,6 +79,25 @@ class IdleRecoveryConfig:
     )
 
 
+@dataclass
+class SDKResponse:
+    """Response from a Copilot SDK call with usage data.
+
+    Attributes:
+        content: The response content string.
+        input_tokens: Number of input tokens used (from assistant.usage event).
+        output_tokens: Number of output tokens generated (from assistant.usage event).
+        cache_read_tokens: Tokens read from cache (if available).
+        cache_write_tokens: Tokens written to cache (if available).
+    """
+
+    content: str
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    cache_read_tokens: int | None = None
+    cache_write_tokens: int | None = None
+
+
 class CopilotProvider(AgentProvider):
     """GitHub Copilot SDK provider.
 
@@ -203,17 +222,26 @@ class CopilotProvider(AgentProvider):
 
         for attempt in range(1, config.max_attempts + 1):
             try:
-                content = await self._execute_sdk_call(agent, rendered_prompt, context, tools)
-                # Note: Copilot SDK does not currently expose token usage data.
-                # When SDK adds usage support, populate these fields from response.
+                content, sdk_response = await self._execute_sdk_call(
+                    agent, rendered_prompt, context, tools
+                )
+                # Extract usage data from SDK response if available
+                input_tokens = sdk_response.input_tokens if sdk_response else None
+                output_tokens = sdk_response.output_tokens if sdk_response else None
+                cache_read = sdk_response.cache_read_tokens if sdk_response else None
+                cache_write = sdk_response.cache_write_tokens if sdk_response else None
+                tokens_used = None
+                if input_tokens is not None and output_tokens is not None:
+                    tokens_used = input_tokens + output_tokens
+
                 return AgentOutput(
                     content=content,
                     raw_response=json.dumps(content),
-                    tokens_used=None,
-                    input_tokens=None,
-                    output_tokens=None,
-                    cache_read_tokens=None,
-                    cache_write_tokens=None,
+                    tokens_used=tokens_used,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    cache_read_tokens=cache_read,
+                    cache_write_tokens=cache_write,
                     model=agent.model or self._default_model,
                 )
             except ProviderError as e:
@@ -285,7 +313,7 @@ class CopilotProvider(AgentProvider):
         rendered_prompt: str,
         context: dict[str, Any],
         tools: list[str] | None = None,
-    ) -> dict[str, Any]:
+    ) -> tuple[dict[str, Any], SDKResponse | None]:
         """Execute the actual SDK call or mock handler.
 
         Args:
@@ -295,14 +323,14 @@ class CopilotProvider(AgentProvider):
             tools: List of tool names available to this agent.
 
         Returns:
-            Dict containing the agent's response content.
+            Tuple of (content dict, SDKResponse with usage data or None for mock).
 
         Raises:
             ProviderError: If the SDK call fails.
         """
         if self._mock_handler is not None:
-            # Mock handler for testing
-            return self._mock_handler(agent, rendered_prompt, context)
+            # Mock handler for testing - no usage data available
+            return self._mock_handler(agent, rendered_prompt, context), None
 
         # Use the real Copilot SDK
         if not COPILOT_SDK_AVAILABLE:
@@ -365,13 +393,27 @@ class CopilotProvider(AgentProvider):
 
             try:
                 # Send initial prompt and get response
-                response_content = await self._send_and_wait(
+                sdk_response = await self._send_and_wait(
                     session, full_prompt, verbose_enabled, full_enabled
                 )
+                response_content = sdk_response.content
+
+                # Track cumulative usage across potential recovery calls
+                total_input_tokens = sdk_response.input_tokens
+                total_output_tokens = sdk_response.output_tokens
+                cache_read_tokens = sdk_response.cache_read_tokens
+                cache_write_tokens = sdk_response.cache_write_tokens
 
                 # If no output schema, we're done
                 if not agent.output:
-                    return {"result": response_content}
+                    final_usage = SDKResponse(
+                        content=response_content,
+                        input_tokens=total_input_tokens,
+                        output_tokens=total_output_tokens,
+                        cache_read_tokens=cache_read_tokens,
+                        cache_write_tokens=cache_write_tokens,
+                    )
+                    return {"result": response_content}, final_usage
 
                 # Try to parse the response as JSON with recovery loop
                 max_recovery = self._retry_config.max_parse_recovery_attempts
@@ -379,7 +421,15 @@ class CopilotProvider(AgentProvider):
 
                 for recovery_attempt in range(max_recovery + 1):  # +1 for initial attempt
                     try:
-                        return self._extract_json(response_content)
+                        parsed_content = self._extract_json(response_content)
+                        final_usage = SDKResponse(
+                            content=response_content,
+                            input_tokens=total_input_tokens,
+                            output_tokens=total_output_tokens,
+                            cache_read_tokens=cache_read_tokens,
+                            cache_write_tokens=cache_write_tokens,
+                        )
+                        return parsed_content, final_usage
                     except (json.JSONDecodeError, ValueError) as e:
                         last_parse_error = str(e)
 
@@ -403,9 +453,20 @@ class CopilotProvider(AgentProvider):
                         )
 
                         # Send recovery prompt and get new response
-                        response_content = await self._send_and_wait(
+                        recovery_response = await self._send_and_wait(
                             session, recovery_prompt, verbose_enabled, full_enabled
                         )
+                        response_content = recovery_response.content
+
+                        # Accumulate usage from recovery calls
+                        if recovery_response.input_tokens is not None:
+                            total_input_tokens = (
+                                (total_input_tokens or 0) + recovery_response.input_tokens
+                            )
+                        if recovery_response.output_tokens is not None:
+                            total_output_tokens = (
+                                (total_output_tokens or 0) + recovery_response.output_tokens
+                            )
 
                 # All recovery attempts exhausted
                 expected_fields = list(agent.output.keys())
@@ -437,7 +498,7 @@ class CopilotProvider(AgentProvider):
         prompt: str,
         verbose_enabled: bool,
         full_enabled: bool,
-    ) -> str:
+    ) -> SDKResponse:
         """Send a prompt to the session and wait for response.
 
         Args:
@@ -447,7 +508,7 @@ class CopilotProvider(AgentProvider):
             full_enabled: Whether full logging mode is enabled.
 
         Returns:
-            The response content string.
+            SDKResponse with content and usage data.
 
         Raises:
             ProviderError: If an error occurs during the SDK call or session gets stuck.
@@ -460,6 +521,9 @@ class CopilotProvider(AgentProvider):
         # Using a list so the nested callback can mutate it
         last_activity_ref: list[Any] = [None, None, time.monotonic()]
 
+        # Mutable container for usage data: [input_tokens, output_tokens, cache_read, cache_write]
+        usage_ref: list[int | None] = [None, None, None, None]
+
         def on_event(event: Any) -> None:
             nonlocal response_content, error_message
             event_type = event.type.value if hasattr(event.type, "value") else str(event.type)
@@ -470,6 +534,21 @@ class CopilotProvider(AgentProvider):
 
             if event_type == "assistant.message":
                 response_content = event.data.content
+            elif event_type == "assistant.usage":
+                # Capture token usage from the assistant.usage event
+                input_tokens = getattr(event.data, "input_tokens", None)
+                output_tokens = getattr(event.data, "output_tokens", None)
+                cache_read = getattr(event.data, "cache_read_tokens", None)
+                cache_write = getattr(event.data, "cache_write_tokens", None)
+                # Convert floats to ints if needed (SDK sometimes returns floats)
+                if input_tokens is not None:
+                    usage_ref[0] = int(input_tokens)
+                if output_tokens is not None:
+                    usage_ref[1] = int(output_tokens)
+                if cache_read is not None:
+                    usage_ref[2] = int(cache_read)
+                if cache_write is not None:
+                    usage_ref[3] = int(cache_write)
             elif event_type == "session.idle":
                 done.set()
             elif event_type == "error" or event_type == "session.error":
@@ -500,7 +579,13 @@ class CopilotProvider(AgentProvider):
                 is_retryable=True,
             )
 
-        return response_content
+        return SDKResponse(
+            content=response_content,
+            input_tokens=usage_ref[0],
+            output_tokens=usage_ref[1],
+            cache_read_tokens=usage_ref[2],
+            cache_write_tokens=usage_ref[3],
+        )
 
     def _log_parse_recovery(
         self,
