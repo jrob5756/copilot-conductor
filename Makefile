@@ -57,4 +57,7 @@ run:
 
 # Validate example workflows
 validate-examples:
-	uv run conductor validate examples/*.yaml
+	@for file in examples/*.yaml; do \
+		echo "Validating $$file..."; \
+		uv run conductor validate "$$file" || exit 1; \
+	done
