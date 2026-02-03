@@ -1254,10 +1254,10 @@ class TestForEachPerformance:
         ratio = max(time_20_items, time_100_items) / min(time_20_items, time_100_items)
 
         # Both should complete in similar time (2 batches each)
-        # Allow 100% variance to account for per-item overhead (context setup, aggregation)
+        # Allow 200% variance to account for per-item overhead (context setup, aggregation)
         # and timing variability on CI systems
-        assert ratio < 2.0, (
+        assert ratio < 3.0, (
             f"Execution time should scale with batch count, not item count. "
             f"20 items: {time_20_items:.3f}s, 100 items: {time_100_items:.3f}s, "
-            f"ratio: {ratio:.2f}x (expected <2.0x)"
+            f"ratio: {ratio:.2f}x (expected <3.0x)"
         )

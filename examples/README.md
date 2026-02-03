@@ -41,28 +41,6 @@ Dynamic parallel processing with for-each groups. Demonstrates:
 conductor run examples/for-each-simple.yaml --input items='["apple", "banana", "cherry"]'
 ```
 
-### kpi-analysis-parallel.yaml
-
-Parallel KPI analysis combining for-each with structured output. Demonstrates:
-- For-each groups for dynamic parallel processing
-- `key_by` for organized output access
-- Complex output schemas
-
-```bash
-conductor run examples/kpi-analysis-parallel.yaml --input kpis='["revenue", "churn", "nps"]'
-```
-
-### kpi-analysis.yaml
-
-Sequential KPI analysis workflow. Demonstrates:
-- Multi-agent sequential workflow
-- Context passing between agents
-- Structured analysis output
-
-```bash
-conductor run examples/kpi-analysis.yaml --input kpi="monthly_revenue"
-```
-
 ### parallel-research.yaml
 
 Parallel research from multiple sources. Demonstrates:
@@ -145,7 +123,7 @@ conductor run examples/multi-provider-research.yaml --input topic="Cloud computi
 
 ## Planning and Implementation
 
-### plan.yaml
+### implementation-plan.yaml
 
 An implementation planning workflow with architect and reviewer agents. Demonstrates:
 - Architect agent for creating detailed implementation plans
@@ -155,20 +133,10 @@ An implementation planning workflow with architect and reviewer agents. Demonstr
 - Traceability between requirements and implementation tasks
 
 ```bash
-conductor run examples/plan.yaml --input design="Build a REST API with CRUD operations for users"
+conductor run examples/implementation-plan.yaml --input design="Build a REST API with CRUD operations for users"
 
 # With verbose output
-conductor -V run examples/plan.yaml --input design="./docs/my-feature.design.md"
-```
-
-### implement.yaml
-
-Implementation workflow for executing planned changes. Demonstrates:
-- Reading plans from previous stages
-- Structured implementation output
-
-```bash
-conductor run examples/implement.yaml --input plan="./output/implementation-plan.json"
+conductor -V run examples/implementation-plan.yaml --input design="./docs/my-feature.design.md"
 ```
 
 ## Running Examples

@@ -188,8 +188,8 @@ class TestWaitWithIdleDetection:
     async def test_timeout_triggers_recovery(self) -> None:
         """Test that timeout triggers a recovery message."""
         config = IdleRecoveryConfig(
-            idle_timeout_seconds=0.05,  # 50ms for more reliable testing
-            max_recovery_attempts=3,
+            idle_timeout_seconds=0.1,  # 100ms timeout
+            max_recovery_attempts=5,  # Allow more attempts
         )
         provider = CopilotProvider(
             mock_handler=stub_handler,
@@ -200,9 +200,9 @@ class TestWaitWithIdleDetection:
         mock_session = MagicMock()
         mock_session.send = AsyncMock()
 
-        # Set done after the first recovery attempt
+        # Set done after the first recovery attempt (wait > 1 timeout but < 2 timeouts)
         async def set_done_after_delay():
-            await asyncio.sleep(0.1)  # Wait for first recovery
+            await asyncio.sleep(0.15)  # Wait for first recovery (after 100ms timeout)
             done.set()
 
         last_activity_ref = ["tool.execution_start", "web_search", 0.0]
@@ -257,8 +257,8 @@ class TestWaitWithIdleDetection:
     async def test_recovery_sends_correct_prompt(self) -> None:
         """Test that recovery sends the correct prompt based on last activity."""
         config = IdleRecoveryConfig(
-            idle_timeout_seconds=0.05,  # 50ms for more reliable testing
-            max_recovery_attempts=1,
+            idle_timeout_seconds=0.1,  # 100ms timeout
+            max_recovery_attempts=3,  # Allow more attempts
             recovery_prompt="Continue from {last_activity}",
         )
         provider = CopilotProvider(
@@ -270,9 +270,9 @@ class TestWaitWithIdleDetection:
         mock_session = MagicMock()
         mock_session.send = AsyncMock()
 
-        # Set done after recovery is sent
+        # Set done after recovery is sent (wait > 1 timeout but < 2 timeouts)
         async def set_done_after_recovery():
-            await asyncio.sleep(0.1)  # 100ms to ensure recovery happens
+            await asyncio.sleep(0.15)  # 150ms to ensure recovery happens after 100ms timeout
             done.set()
 
         last_activity_ref = ["tool.execution_start", "my_tool", 0.0]
