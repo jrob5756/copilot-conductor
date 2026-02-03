@@ -5,10 +5,12 @@ This module tests:
 - Type coercion for input values
 - InputCollector for --input.name=value patterns
 - Run command execution with mock provider
+- MCP environment variable resolution
 """
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from unittest.mock import patch
 
@@ -20,6 +22,7 @@ from conductor.cli.run import (
     InputCollector,
     coerce_value,
     parse_input_flags,
+    resolve_mcp_env_vars,
 )
 
 runner = CliRunner()
@@ -121,6 +124,96 @@ class TestParseInputFlags:
 
         with pytest.raises(typer.BadParameter, match="Empty input name"):
             parse_input_flags(["=value"])
+
+
+class TestResolveMcpEnvVars:
+    """Tests for the resolve_mcp_env_vars function."""
+
+    def test_resolve_simple_env_var(self) -> None:
+        """Test resolving a simple ${VAR} pattern."""
+        with patch.dict(os.environ, {"MY_VAR": "my_value"}):
+            result = resolve_mcp_env_vars({"KEY": "${MY_VAR}"})
+            assert result == {"KEY": "my_value"}
+
+    def test_resolve_with_default_when_set(self) -> None:
+        """Test ${VAR:-default} when VAR is set."""
+        with patch.dict(os.environ, {"MY_VAR": "actual_value"}):
+            result = resolve_mcp_env_vars({"KEY": "${MY_VAR:-default_value}"})
+            assert result == {"KEY": "actual_value"}
+
+    def test_resolve_with_default_when_unset(self) -> None:
+        """Test ${VAR:-default} when VAR is not set."""
+        # Ensure the var is not set
+        env = os.environ.copy()
+        env.pop("UNSET_VAR", None)
+        with patch.dict(os.environ, env, clear=True):
+            result = resolve_mcp_env_vars({"KEY": "${UNSET_VAR:-default_value}"})
+            assert result == {"KEY": "default_value"}
+
+    def test_resolve_missing_var_returns_empty(self) -> None:
+        """Test that missing var without default returns empty string."""
+        env = os.environ.copy()
+        env.pop("MISSING_VAR", None)
+        with patch.dict(os.environ, env, clear=True):
+            result = resolve_mcp_env_vars({"KEY": "${MISSING_VAR}"})
+            assert result == {"KEY": ""}
+
+    def test_resolve_multiple_vars_in_one_value(self) -> None:
+        """Test resolving multiple ${VAR} patterns in a single value."""
+        with patch.dict(os.environ, {"HOST": "localhost", "PORT": "8080"}):
+            result = resolve_mcp_env_vars({"URL": "http://${HOST}:${PORT}/api"})
+            assert result == {"URL": "http://localhost:8080/api"}
+
+    def test_resolve_multiple_keys(self) -> None:
+        """Test resolving env vars across multiple keys."""
+        with patch.dict(os.environ, {"VAR1": "value1", "VAR2": "value2"}):
+            result = resolve_mcp_env_vars({
+                "KEY1": "${VAR1}",
+                "KEY2": "${VAR2}",
+                "KEY3": "literal",
+            })
+            assert result == {
+                "KEY1": "value1",
+                "KEY2": "value2",
+                "KEY3": "literal",
+            }
+
+    def test_resolve_empty_dict(self) -> None:
+        """Test resolving empty env dict."""
+        result = resolve_mcp_env_vars({})
+        assert result == {}
+
+    def test_resolve_literal_values_unchanged(self) -> None:
+        """Test that literal values without ${} are unchanged."""
+        result = resolve_mcp_env_vars({
+            "MODE": "stdio",
+            "DEBUG": "false",
+            "NAME": "my-server",
+        })
+        assert result == {
+            "MODE": "stdio",
+            "DEBUG": "false",
+            "NAME": "my-server",
+        }
+
+    def test_resolve_empty_default(self) -> None:
+        """Test ${VAR:-} with empty default."""
+        env = os.environ.copy()
+        env.pop("EMPTY_DEFAULT_VAR", None)
+        with patch.dict(os.environ, env, clear=True):
+            result = resolve_mcp_env_vars({"KEY": "${EMPTY_DEFAULT_VAR:-}"})
+            assert result == {"KEY": ""}
+
+    def test_resolve_preserves_non_var_braces(self) -> None:
+        """Test that non-${} patterns are preserved."""
+        result = resolve_mcp_env_vars({
+            "DATA": "{key: value}",
+            "EXPR": "$(command)",
+        })
+        assert result == {
+            "DATA": "{key: value}",
+            "EXPR": "$(command)",
+        }
 
 
 class TestInputCollector:

@@ -32,6 +32,7 @@ from conductor.providers.base import AgentOutput, AgentProvider
 
 if TYPE_CHECKING:
     from conductor.config.schema import AgentDef, OutputField
+    from conductor.mcp.manager import MCPManager
 
 # Try to import the Anthropic SDK
 try:
@@ -109,6 +110,7 @@ class ClaudeProvider(AgentProvider):
         max_tokens: int | None = None,
         timeout: float = 600.0,
         retry_config: RetryConfig | None = None,
+        mcp_servers: dict[str, Any] | None = None,
     ) -> None:
         """Initialize the Claude provider.
 
@@ -122,6 +124,8 @@ class ClaudeProvider(AgentProvider):
             max_tokens: Maximum output tokens. Defaults to 8192.
             timeout: Request timeout in seconds. Defaults to 600s.
             retry_config: Optional retry configuration. Uses default if not provided.
+            mcp_servers: Optional MCP server configurations for tool support.
+                Each server config should have: command, args, env (optional).
 
         Raises:
             ProviderError: If SDK is not installed.
@@ -152,6 +156,10 @@ class ClaudeProvider(AgentProvider):
         self._retry_history: list[dict[str, Any]] = []  # For testing/debugging retries
         self._max_parse_recovery_attempts = 2  # Max retry attempts for malformed JSON
         self._max_schema_depth = 10  # Max nesting depth for recursive schema building
+
+        # MCP server configuration for tool support
+        self._mcp_servers_config = mcp_servers
+        self._mcp_manager: MCPManager | None = None
 
         # Initialize the client (sync initialization)
         self._initialize_client()
@@ -287,8 +295,89 @@ class ClaudeProvider(AgentProvider):
         except Exception as e:
             logger.warning(f"Could not list available models (discovery failed): {e}")
 
+    async def _ensure_mcp_connected(self) -> None:
+        """Connect to MCP servers if configured.
+
+        This method lazily initializes MCP connections on first use.
+        It creates an MCPManager instance and connects to all configured
+        MCP servers.
+        """
+        # Skip if already initialized or no servers configured
+        if self._mcp_manager is not None:
+            return
+        if not self._mcp_servers_config:
+            return
+
+        from conductor.mcp.manager import MCP_SDK_AVAILABLE, MCPManager
+
+        if not MCP_SDK_AVAILABLE:
+            logger.warning(
+                "MCP servers configured but MCP SDK not installed. "
+                "Install with: uv add 'mcp>=1.0.0'"
+            )
+            return
+
+        self._mcp_manager = MCPManager()
+
+        for name, config in self._mcp_servers_config.items():
+            server_type = config.get("type", "stdio")
+            if server_type == "stdio":
+                try:
+                    await self._mcp_manager.connect_server(
+                        name=name,
+                        command=config["command"],
+                        args=config.get("args", []),
+                        env=config.get("env"),
+                        timeout=config.get("timeout"),
+                    )
+                    logger.info(f"Connected to MCP server '{name}'")
+                except Exception as e:
+                    logger.error(f"Failed to connect to MCP server '{name}': {e}")
+                    # Continue with other servers
+            else:
+                logger.warning(
+                    f"MCP server '{name}' has unsupported type '{server_type}' "
+                    "(Claude provider only supports 'stdio')"
+                )
+
+    def _convert_mcp_tools_to_claude(
+        self,
+        tool_filter: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Convert MCP tools to Claude tool format.
+
+        Args:
+            tool_filter: Optional list of tool names to include (prefixed names).
+                If None, all tools are included.
+
+        Returns:
+            List of tool definitions in Claude's expected format.
+        """
+        if not self._mcp_manager:
+            return []
+
+        claude_tools: list[dict[str, Any]] = []
+        for tool in self._mcp_manager.get_all_tools():
+            # Apply filter if specified
+            if tool_filter is not None and tool["name"] not in tool_filter:
+                continue
+
+            claude_tools.append({
+                "name": tool["name"],
+                "description": tool["description"],
+                "input_schema": tool["input_schema"],
+            })
+
+        return claude_tools
+
     async def close(self) -> None:
         """Release provider resources and close connections."""
+        # Close MCP connections first
+        if self._mcp_manager is not None:
+            await self._mcp_manager.close()
+            self._mcp_manager = None
+            logger.debug("MCP manager closed")
+
         if self._client is not None:
             # AsyncAnthropic uses httpx AsyncClient internally which should be closed
             await self._client.close()
@@ -443,13 +532,19 @@ class ClaudeProvider(AgentProvider):
         rendered_prompt: str,
         tools: list[str] | None = None,
     ) -> AgentOutput:
-        """Execute with exponential backoff retry logic.
+        """Execute with exponential backoff retry logic and MCP tool support.
+
+        This method implements an agentic loop that:
+        1. Sends the initial prompt to Claude
+        2. If Claude returns tool_use blocks (other than emit_output), executes them
+        3. Sends tool results back to Claude and continues the loop
+        4. Terminates when Claude returns emit_output or a final text response
 
         Args:
             agent: Agent definition from workflow config.
             context: Accumulated workflow context.
             rendered_prompt: Jinja2-rendered user prompt.
-            tools: List of tool names available to this agent.
+            tools: List of tool names available to this agent (for MCP tool filtering).
 
         Returns:
             Normalized AgentOutput with structured content.
@@ -460,6 +555,9 @@ class ClaudeProvider(AgentProvider):
         """
         if self._client is None:
             raise ProviderError("Claude client not initialized")
+
+        # Connect to MCP servers if configured (lazy initialization)
+        await self._ensure_mcp_connected()
 
         last_error: Exception | None = None
         config = self._retry_config
@@ -485,26 +583,40 @@ class ClaudeProvider(AgentProvider):
                 "API may reject request."
             )
 
-        # Build tools for structured output if schema is defined
-        tools: list[dict[str, Any]] | None = None
-        if agent.output:
-            tools = self._build_tools_for_structured_output(agent.output)
+        # Build tools list: emit_output (for structured output) + MCP tools
+        all_tools: list[dict[str, Any]] = []
+
+        # Add emit_output tool if agent has output schema
+        has_output_schema = bool(agent.output)
+        if has_output_schema:
+            all_tools.extend(self._build_tools_for_structured_output(agent.output))
             # Append instruction to use the tool
             messages[-1]["content"] += (
                 "\n\nPlease use the 'emit_output' tool to return your response "
                 "in the required structured format."
             )
 
+        # Add MCP tools if available
+        if self._mcp_manager and self._mcp_manager.has_servers():
+            mcp_tools = self._convert_mcp_tools_to_claude(tools)  # tools is the filter
+            all_tools.extend(mcp_tools)
+            if mcp_tools:
+                logger.debug(f"Added {len(mcp_tools)} MCP tools to request")
+
+        # Use tools if any are defined
+        request_tools: list[dict[str, Any]] | None = all_tools if all_tools else None
+
         for attempt in range(1, config.max_attempts + 1):
             try:
-                # Execute non-streaming API call with parse recovery
-                response = await self._execute_with_parse_recovery(
+                # Execute with agentic tool loop
+                response, total_tokens = await self._execute_agentic_loop(
                     messages=messages,
                     model=model,
                     temperature=temperature,
                     max_tokens=max_tokens,
-                    tools=tools,
+                    tools=request_tools,
                     output_schema=agent.output,
+                    has_output_schema=has_output_schema,
                 )
 
                 # Extract structured output
@@ -514,10 +626,12 @@ class ClaudeProvider(AgentProvider):
                 if agent.output:
                     validate_output(content, agent.output)
 
-                # Extract token usage using dedicated method
-                tokens_used = self._extract_token_usage(response)
+                # Use total_tokens from the agentic loop (includes all turns)
+                # If available, use it; otherwise fall back to extracting from final response
+                tokens_used = total_tokens if total_tokens else self._extract_token_usage(response)
 
-                # Extract detailed token breakdown
+                # Extract detailed token breakdown from final response
+                # Note: For multi-turn conversations, this only shows the final turn's breakdown
                 input_tokens = None
                 output_tokens = None
                 cache_read_tokens = None
@@ -716,6 +830,172 @@ class ClaudeProvider(AgentProvider):
         response = await self._client.messages.create(**kwargs)
 
         return response
+
+    async def _execute_agentic_loop(
+        self,
+        messages: list[dict[str, Any]],
+        model: str,
+        temperature: float | None,
+        max_tokens: int,
+        tools: list[dict[str, Any]] | None,
+        output_schema: dict[str, OutputField] | None,
+        has_output_schema: bool,
+        max_iterations: int = 10,
+    ) -> tuple[ClaudeResponse, int | None]:
+        """Execute an agentic loop that handles MCP tool calls.
+
+        This method implements a tool-use loop:
+        1. Call the Claude API
+        2. If Claude returns tool_use blocks (other than emit_output), execute them
+        3. Send tool results back and continue the loop
+        4. Terminate when Claude returns emit_output or a final text response
+
+        Args:
+            messages: Initial message history.
+            model: Model identifier.
+            temperature: Temperature setting.
+            max_tokens: Maximum output tokens.
+            tools: Tool definitions (emit_output + MCP tools).
+            output_schema: Expected output schema.
+            has_output_schema: Whether agent has output schema defined.
+            max_iterations: Maximum number of tool-use iterations to prevent infinite loops.
+
+        Returns:
+            Tuple of (final_response, total_tokens_used).
+
+        Raises:
+            ProviderError: If execution fails or max iterations exceeded.
+        """
+        # Make a copy of messages to avoid mutating the original
+        working_messages = list(messages)
+        total_tokens = 0
+        iteration = 0
+
+        while iteration < max_iterations:
+            iteration += 1
+            logger.debug(f"Agentic loop iteration {iteration}/{max_iterations}")
+
+            # Execute API call (with parse recovery for structured output)
+            if has_output_schema:
+                response = await self._execute_with_parse_recovery(
+                    messages=working_messages,
+                    model=model,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    tools=tools,
+                    output_schema=output_schema,
+                )
+            else:
+                response = await self._execute_api_call(
+                    messages=working_messages,
+                    model=model,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    tools=tools,
+                )
+
+            # Accumulate token usage
+            if hasattr(response, "usage"):
+                input_tokens = getattr(response.usage, "input_tokens", 0)
+                output_tokens = getattr(response.usage, "output_tokens", 0)
+                total_tokens += input_tokens + output_tokens
+
+            # Check for tool_use blocks
+            tool_uses = [
+                block for block in response.content
+                if hasattr(block, "type") and block.type == "tool_use"
+            ]
+
+            if not tool_uses:
+                # No tool calls, we're done
+                logger.debug("No tool_use in response, exiting agentic loop")
+                return response, total_tokens
+
+            # Check if emit_output was called (structured output)
+            emit_output = next(
+                (t for t in tool_uses if t.name == "emit_output"),
+                None
+            )
+            if emit_output:
+                # Final output received, we're done
+                logger.debug("emit_output tool called, exiting agentic loop")
+                return response, total_tokens
+
+            # Handle MCP tool calls
+            mcp_tool_uses = [t for t in tool_uses if t.name != "emit_output"]
+
+            if not mcp_tool_uses:
+                # No MCP tools to execute
+                return response, total_tokens
+
+            if not self._mcp_manager:
+                logger.warning(
+                    f"Claude called MCP tools but no MCP manager available: "
+                    f"{[t.name for t in mcp_tool_uses]}"
+                )
+                return response, total_tokens
+
+            logger.info(
+                f"Executing {len(mcp_tool_uses)} MCP tool call(s): "
+                f"{[t.name for t in mcp_tool_uses]}"
+            )
+
+            # Execute each MCP tool call
+            tool_results: list[dict[str, Any]] = []
+            for tool_use in mcp_tool_uses:
+                try:
+                    result = await self._mcp_manager.call_tool(
+                        tool_use.name,
+                        dict(tool_use.input) if hasattr(tool_use, "input") else {}
+                    )
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": tool_use.id,
+                        "content": result,
+                    })
+                    logger.debug(f"MCP tool '{tool_use.name}' succeeded")
+                except Exception as e:
+                    logger.error(f"MCP tool '{tool_use.name}' failed: {e}")
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": tool_use.id,
+                        "content": f"Error executing tool: {e}",
+                        "is_error": True,
+                    })
+
+            # Build assistant message with the tool_use content
+            # We need to serialize the content blocks properly
+            assistant_content: list[dict[str, Any]] = []
+            for block in response.content:
+                if hasattr(block, "type"):
+                    if block.type == "text":
+                        assistant_content.append({
+                            "type": "text",
+                            "text": block.text,
+                        })
+                    elif block.type == "tool_use":
+                        assistant_content.append({
+                            "type": "tool_use",
+                            "id": block.id,
+                            "name": block.name,
+                            "input": dict(block.input) if hasattr(block, "input") else {},
+                        })
+
+            # Add assistant response and tool results to message history
+            working_messages.append({
+                "role": "assistant",
+                "content": assistant_content,
+            })
+            working_messages.append({
+                "role": "user",
+                "content": tool_results,
+            })
+
+        # Max iterations exceeded
+        raise ProviderError(
+            f"Agentic loop exceeded maximum iterations ({max_iterations})",
+            suggestion="The agent may be stuck in a tool-use loop. Check your MCP tools.",
+        )
 
     async def _execute_with_parse_recovery(
         self,

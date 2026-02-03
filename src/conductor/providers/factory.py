@@ -35,7 +35,7 @@ async def create_provider(
         validate: Whether to validate connection on creation. If True,
             calls validate_connection() and raises ProviderError on failure.
         mcp_servers: MCP server configurations to pass to the provider.
-            Note: Phase 1 Claude provider does not support MCP servers.
+            Both Copilot and Claude providers support MCP servers.
         default_model: Default model to use for agents that don't specify one.
         temperature: Default temperature for generation (0.0-1.0).
         max_tokens: Maximum output tokens.
@@ -70,13 +70,12 @@ async def create_provider(
                     "Claude provider requires anthropic SDK",
                     suggestion="Install with: uv add 'anthropic>=0.77.0,<1.0.0'",
                 )
-            # Phase 1: MCP servers not supported for Claude provider
-            # Will be added in Phase 2 (EPIC-005)
             provider = ClaudeProvider(
                 model=default_model,
                 temperature=temperature,
                 max_tokens=max_tokens,
                 timeout=timeout if timeout is not None else 600.0,
+                mcp_servers=mcp_servers,
             )
         case _:
             raise ProviderError(

@@ -25,6 +25,9 @@ workflow:
   runtime:
     provider: copilot
     mcp_servers:
+      # Note: The Copilot CLI has a bug where 'env' vars in MCP server
+      # configs are not passed to MCP server subprocesses.
+      # See: https://github.com/github/copilot-sdk/issues/163
       web-search:
         command: sh
         args: ["-c", "MODE=stdio DEFAULT_SEARCH_ENGINE=bing exec npx -y open-websearch@latest"]

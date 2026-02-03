@@ -433,7 +433,16 @@ class MCPServerDef(BaseModel):
     """Command-line arguments for the MCP server (stdio type only)."""
 
     env: dict[str, str] = Field(default_factory=dict)
-    """Environment variables for the MCP server (stdio type only)."""
+    """Environment variables for the MCP server (stdio type only).
+
+    Supports ${VAR} and ${VAR:-default} syntax for environment variable
+    interpolation at runtime.
+
+    Note: With the Claude provider, env vars are passed correctly to MCP
+    server subprocesses via the MCP SDK. However, the Copilot provider
+    has a known bug where env vars are not passed to MCP servers.
+    See: https://github.com/github/copilot-sdk/issues/163
+    """
 
     url: str | None = None
     """URL for the MCP server (required for http/sse type)."""

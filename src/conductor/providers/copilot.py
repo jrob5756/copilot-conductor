@@ -139,6 +139,9 @@ class CopilotProvider(AgentProvider):
             retry_config: Optional retry configuration. Uses default if not provided.
             model: Default model to use if not specified in agent. Defaults to "gpt-4o".
             mcp_servers: MCP server configurations to pass to the SDK.
+                Note: The Copilot CLI has a bug where 'env' vars in MCP server
+                configs are not passed to MCP server subprocesses.
+                See: https://github.com/github/copilot-sdk/issues/163
             idle_recovery_config: Optional idle detection and recovery configuration.
                                   Uses default if not provided.
             temperature: Default temperature for generation (0.0-1.0). Optional.

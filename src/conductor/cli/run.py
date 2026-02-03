@@ -6,6 +6,7 @@ This module provides helper functions for executing workflow files.
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 import time
@@ -27,6 +28,51 @@ if TYPE_CHECKING:
 
 # Verbose console for logging (stderr)
 _verbose_console = Console(stderr=True, highlight=False)
+
+# Pattern for resolving ${VAR} and ${VAR:-default} in env values
+_ENV_VAR_PATTERN = re.compile(r'\$\{([^}:]+)(?::-([^}]*))?\}')
+
+
+def resolve_mcp_env_vars(env: dict[str, str]) -> dict[str, str]:
+    """Resolve ${VAR} and ${VAR:-default} patterns in env values.
+
+    Unlike the config loader which resolves at load time, this resolves
+    at runtime from the current process environment. This allows users
+    to reference environment variables (like API keys) in MCP server
+    configuration without hardcoding them in the YAML.
+
+    Syntax:
+        - ${VAR} - Replace with value of VAR, or empty string if not set
+        - ${VAR:-default} - Replace with value of VAR, or 'default' if not set
+
+    Args:
+        env: Dictionary of environment variable names to values,
+             where values may contain ${VAR} patterns.
+
+    Returns:
+        New dictionary with all ${VAR} patterns resolved.
+
+    Example:
+        >>> import os
+        >>> os.environ['MY_KEY'] = 'secret123'
+        >>> resolve_mcp_env_vars({'API_KEY': '${MY_KEY}', 'DEBUG': '${DEBUG:-false}'})
+        {'API_KEY': 'secret123', 'DEBUG': 'false'}
+    """
+    def replace_match(match: re.Match[str]) -> str:
+        var_name = match.group(1)
+        default_value = match.group(2)
+        env_value = os.environ.get(var_name)
+        if env_value is not None:
+            return env_value
+        elif default_value is not None:
+            return default_value
+        else:
+            return ''
+
+    resolved: dict[str, str] = {}
+    for key, value in env.items():
+        resolved[key] = _ENV_VAR_PATTERN.sub(replace_match, value)
+    return resolved
 
 
 def verbose_log(message: str, style: str = "dim") -> None:
@@ -679,7 +725,8 @@ async def run_workflow_async(
                     "tools": server.tools,
                 }
                 if server.env:
-                    server_config["env"] = server.env
+                    # Resolve ${VAR} and ${VAR:-default} patterns at runtime
+                    server_config["env"] = resolve_mcp_env_vars(server.env)
                 if server.timeout:
                     server_config["timeout"] = server.timeout
             mcp_servers[name] = server_config
