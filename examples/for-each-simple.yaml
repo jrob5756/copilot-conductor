@@ -19,7 +19,7 @@ workflow:
   
   runtime:
     provider: copilot
-    default_model: claude-sonnet-4.5-latest
+    default_model: claude-sonnet-4.5
   
   limits:
     max_iterations: 20
@@ -37,7 +37,7 @@ for_each:
     
     agent:
       name: item_processor
-      model: claude-sonnet-4.5-latest.5-latest
+      model: claude-sonnet-4.5
       prompt: |
         You are a data processor. Process this item:
         
@@ -62,7 +62,7 @@ agents:
   # Agent 1: Find items to process
   - name: item_finder
     description: Finds a list of items to process
-    model: claude-sonnet-4.5-latest
+    model: claude-sonnet-4.5
     prompt: |
       Generate a list of 5 interesting programming concepts to analyze.
       
@@ -78,7 +78,7 @@ agents:
   # Agent 2: Aggregate results
   - name: aggregator
     description: Aggregates results from all processed items
-    model: claude-sonnet-4.5-latest
+    model: claude-sonnet-4.5
     input:
       - item_finder.output
       - item_processors.outputs

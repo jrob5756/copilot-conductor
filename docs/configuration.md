@@ -49,7 +49,7 @@ Uses Anthropic Claude SDK for agent execution.
 workflow:
   runtime:
     provider: claude
-    default_model: claude-sonnet-4.5-latest
+    default_model: claude-sonnet-4.5
     temperature: 0.7
     max_tokens: 4096
 ```
@@ -58,7 +58,7 @@ workflow:
 - 200K context window (all models)
 - Pay-per-token pricing
 
-**Models**: `claude-sonnet-4.5-latest`, `claude-haiku-4.5-latest`, `claude-opus-4.5-latest`
+**Models**: `claude-sonnet-4.5`, `claude-haiku-4.5`, `claude-opus-4.5`
 
 **See**: [Claude Provider Documentation](providers/claude.md)
 
@@ -73,7 +73,7 @@ Set the default model for all agents:
 ```yaml
 workflow:
   runtime:
-    default_model: gpt-5.2  # or claude-sonnet-4.5-latest
+    default_model: gpt-5.2  # or claude-sonnet-4.5
 ```
 
 Override per agent:
@@ -81,7 +81,7 @@ Override per agent:
 ```yaml
 agents:
   - name: fast_agent
-    model: claude-haiku-4.5-latest  # Override default
+    model: claude-haiku-4.5  # Override default
     prompt: "Quick task..."
 ```
 
@@ -217,7 +217,7 @@ workflow:
   name: claude-example
   runtime:
     provider: claude
-    default_model: claude-sonnet-4.5-latest
+    default_model: claude-sonnet-4.5
     temperature: 0.7
     max_tokens: 4096
 
@@ -230,12 +230,12 @@ workflow:
 
 agents:
   - name: classifier
-    model: claude-haiku-4.5-latest  # Fast model override
+    model: claude-haiku-4.5  # Fast model override
     input: [workflow.input.text]
     prompt: "Classify: {{ workflow.input.text }}"
 
   - name: analyzer
-    model: claude-sonnet-4.5-latest  # Use default
+    model: claude-sonnet-4.5  # Use default
     input: [workflow.input.text, classifier.output]
     prompt: "Analyze based on classification..."
 ```
@@ -298,9 +298,9 @@ export CONDUCTOR_LOG_LEVEL=DEBUG  # INFO, DEBUG, WARNING, ERROR
 
 ### Model Selection
 
-1. **Default to balanced models**: `claude-sonnet-4.5-latest` or `gpt-5.2`
-2. **Use fast models for simple tasks**: `claude-haiku-4.5-latest` for classification
-3. **Reserve premium models**: `claude-opus-4.5-latest` or `o1-preview` for complex reasoning
+1. **Default to balanced models**: `claude-sonnet-4.5` or `gpt-5.2`
+2. **Use fast models for simple tasks**: `claude-haiku-4.5` for classification
+3. **Reserve premium models**: `claude-opus-4.5` or `o1-preview` for complex reasoning
 
 ### Temperature
 
@@ -352,10 +352,10 @@ Check model name spelling:
 
 ```yaml
 # Good
-default_model: claude-sonnet-4.5-latest
+default_model: claude-sonnet-4.5
 
 # Bad
-default_model: claude-3.5-sonnet-latest  # Wrong: dot instead of dash
+default_model: claude-3.5-sonnet  # Wrong: dot instead of dash
 ```
 
 ### "MCP servers not supported" (Claude)

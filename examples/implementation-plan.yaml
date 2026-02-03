@@ -23,7 +23,7 @@ workflow:
   entry_point: architect
 
   runtime:
-    provider: copilot
+    provider: copilot # can be copilot or claude
     mcp_servers:
       # Note: The Copilot CLI has a bug where 'env' vars in MCP server
       # configs are not passed to MCP server subprocesses.
@@ -57,7 +57,7 @@ workflow:
 agents:
   - name: architect
     description: Creates or refines the solution design and implementation plan based on requirements and feedback
-    model: claude-opus-4.5-latest
+    model: claude-opus-4.5
     input:
       - workflow.input.purpose
       - workflow.input.existing_plan?
@@ -182,7 +182,7 @@ agents:
 
   - name: reviewer
     description: Reviews the design document and implementation plan for quality, completeness, and actionability
-    model: claude-opus-4.5-latest
+    model: claude-opus-4.5
     input:
       - workflow.input.purpose
       - architect.output.file_path

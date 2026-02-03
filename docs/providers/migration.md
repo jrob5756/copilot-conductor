@@ -76,11 +76,11 @@ agents:
 # After (Claude)
 workflow:
   runtime:
-    default_model: claude-sonnet-4.5-latest
+    default_model: claude-sonnet-4.5
 
 agents:
   - name: analyzer
-    model: claude-sonnet-4.5-latest  # See model mapping table below
+    model: claude-sonnet-4.5  # See model mapping table below
 ```
 
 ### Step 4: Update Runtime Configuration
@@ -100,7 +100,7 @@ workflow:
 workflow:
   runtime:
     provider: claude
-    default_model: claude-sonnet-4.5-latest
+    default_model: claude-sonnet-4.5
     temperature: 0.7  # Keep this (Claude also uses 0.0-1.0)
     max_tokens: 4096  # Controls output length (Claude-specific meaning)
 ```
@@ -172,14 +172,14 @@ workflow:
   name: research-workflow
   runtime:
     provider: claude
-    default_model: claude-sonnet-4.5-latest
+    default_model: claude-sonnet-4.5
     temperature: 0.7
     max_tokens: 4096
     # Remove mcp_servers
 
 agents:
   - name: researcher
-    model: claude-sonnet-4.5-latest
+    model: claude-sonnet-4.5
     # Remove tools
     prompt: "Research {{ topic }}"
 ```
@@ -192,25 +192,25 @@ Map your Copilot models to Claude equivalents based on use case:
 
 | Copilot Model | Claude Equivalent | Reasoning | Cost Impact |
 |---------------|------------------|-----------|-------------|
-| `gpt-5.2` | `claude-sonnet-4.5-latest` | Balanced performance, most workflows | Similar |
-| `gpt-5.2-turbo` | `claude-sonnet-4.5-latest` | General purpose, large context | Similar |
-| `gpt-5.2-mini` | `claude-sonnet-4.5-latest` | Standard model, widely used | Cheaper (Claude) |
-| `gpt-3.5-turbo` | `claude-haiku-4.5-latest` | Fast, cheap, simple tasks | Cheaper (Claude) |
-| `o1-preview` | `claude-opus-4.5-latest` | Advanced reasoning, complex tasks | More expensive |
+| `gpt-5.2` | `claude-sonnet-4.5` | Balanced performance, most workflows | Similar |
+| `gpt-5.2-turbo` | `claude-sonnet-4.5` | General purpose, large context | Similar |
+| `gpt-5.2-mini` | `claude-sonnet-4.5` | Standard model, widely used | Cheaper (Claude) |
+| `gpt-3.5-turbo` | `claude-haiku-4.5` | Fast, cheap, simple tasks | Cheaper (Claude) |
+| `o1-preview` | `claude-opus-4.5` | Advanced reasoning, complex tasks | More expensive |
 
 ### Model Selection Guidelines
 
-**For most workflows**: Use `claude-sonnet-4.5-latest`
+**For most workflows**: Use `claude-sonnet-4.5`
 - Direct replacement for GPT-5.2
 - Excellent performance/cost balance
 - 200K context (vs GPT-5.2 Turbo's 128K)
 
-**For simple, high-volume tasks**: Use `claude-haiku-4.5-latest`
+**For simple, high-volume tasks**: Use `claude-haiku-4.5`
 - Replacement for GPT-3.5 Turbo
 - 3-5x faster, 3x cheaper
 - Classification, routing, simple Q&A
 
-**For complex reasoning**: Use `claude-opus-4.5-latest`
+**For complex reasoning**: Use `claude-opus-4.5`
 - Replacement for o1-preview
 - Superior multi-step reasoning
 - Worth the cost for critical workflows
@@ -459,7 +459,7 @@ echo $ANTHROPIC_API_KEY
 model: gpt-5.2
 
 # Good
-model: claude-sonnet-4.5-latest
+model: claude-sonnet-4.5
 ```
 
 ### Pitfall 3: Temperature > 1.0
@@ -553,7 +553,7 @@ agents:
 
   # Test Claude on one agent
   - name: agent2
-    model: claude-sonnet-4.5-latest
+    model: claude-sonnet-4.5
 ```
 
 ### Monitoring After Migration

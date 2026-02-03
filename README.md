@@ -2,8 +2,7 @@
 
 A CLI tool for defining and running multi-agent workflows with the GitHub Copilot SDK and Anthropic Claude.
 
-[![CI](https://github.com/microsoft/conductor/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/conductor/actions/workflows/ci.yml)
-[![PyPI version](https://badge.fury.io/py/conductor-cli.svg)](https://badge.fury.io/py/conductor-cli)
+[![CI](https://github.com/jrob5756/copilot-conductor/actions/workflows/ci.yml/badge.svg)](https://github.com/jrob5756/copilot-conductor/actions/workflows/ci.yml)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 
 ## Why Conductor?
@@ -27,26 +26,39 @@ Conductor provides the patterns that work: evaluator-optimizer loops for iterati
 ### Using uv (Recommended)
 
 ```bash
-# Run without installing (use --from since package name differs from command)
-uvx --from conductor-cli conductor run workflow.yaml
+# Install from GitHub
+uv tool install git+https://github.com/jrob5756/copilot-conductor.git
 
-# Or install persistently
-uv tool install conductor-cli
+# Run the CLI
 conductor run workflow.yaml
+
+# Or run directly without installing
+uvx --from git+https://github.com/jrob5756/copilot-conductor.git conductor run workflow.yaml
+
+# Install a specific branch, tag, or commit
+uv tool install git+https://github.com/jrob5756/copilot-conductor.git@branch-name
+uv tool install git+https://github.com/jrob5756/copilot-conductor.git@v1.0.0
+uv tool install git+https://github.com/jrob5756/copilot-conductor.git@abc1234
 ```
 
 ### Using pipx
 
 ```bash
-pipx install conductor-cli
+pipx install git+https://github.com/jrob5756/copilot-conductor.git
 conductor run workflow.yaml
+
+# Install a specific branch or tag
+pipx install git+https://github.com/jrob5756/copilot-conductor.git@branch-name
 ```
 
 ### Using pip
 
 ```bash
-pip install conductor-cli
+pip install git+https://github.com/jrob5756/copilot-conductor.git
 conductor run workflow.yaml
+
+# Install a specific tag or commit
+pip install git+https://github.com/jrob5756/copilot-conductor.git@v1.0.0
 ```
 
 ## Quick Start
@@ -108,7 +120,7 @@ Conductor supports multiple AI providers. Choose based on your needs:
 workflow:
   runtime:
     provider: claude
-    default_model: claude-sonnet-4.5-latest
+    default_model: claude-sonnet-4.5
 ```
 
 Set your API key: `export ANTHROPIC_API_KEY=sk-ant-...`
@@ -169,7 +181,6 @@ See the [`examples/`](./examples/) directory for complete workflows:
 | [for-each-simple.yaml](./examples/for-each-simple.yaml) | Dynamic parallel processing |
 | [parallel-research.yaml](./examples/parallel-research.yaml) | Static parallel execution |
 | [design-review.yaml](./examples/design-review.yaml) | Human gate with loop pattern |
-| [kpi-analysis-parallel.yaml](./examples/kpi-analysis-parallel.yaml) | For-each with parallel analysis |
 
 **More examples and running instructions:** [examples/README.md](./examples/README.md)
 
@@ -194,7 +205,7 @@ See the [`examples/`](./examples/) directory for complete workflows:
 ### Setup
 
 ```bash
-git clone https://github.com/microsoft/conductor.git
+git clone https://github.com/jrob5756/copilot-conductor.git
 cd conductor
 make dev
 ```

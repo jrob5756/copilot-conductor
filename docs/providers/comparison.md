@@ -102,7 +102,7 @@ workflow:
   name: claude-workflow
   runtime:
     provider: claude
-    default_model: claude-sonnet-4.5-latest
+    default_model: claude-sonnet-4.5
     max_tokens: 4096
     temperature: 0.7
 
@@ -192,9 +192,9 @@ agents:
 - `o1-preview` - Advanced reasoning (limited availability)
 
 **Claude**:
-- `claude-haiku-4.5-latest` - Fast, cheap
-- `claude-sonnet-4.5-latest` - Balanced (default)
-- `claude-opus-4.5-latest` - Premium reasoning
+- `claude-haiku-4.5` - Fast, cheap
+- `claude-sonnet-4.5` - Balanced (default)
+- `claude-opus-4.5` - Premium reasoning
 
 **Winner**: Tie (both offer good model tiers)
 
@@ -257,7 +257,7 @@ workflow:
 workflow:
   runtime:
     provider: claude
-    default_model: claude-sonnet-4.5-latest
+    default_model: claude-sonnet-4.5
 ```
 
 See the [Migration Guide](migration.md) for detailed instructions.
@@ -271,7 +271,7 @@ Also straightforward:
 workflow:
   runtime:
     provider: claude
-    default_model: claude-sonnet-4.5-latest
+    default_model: claude-sonnet-4.5
     max_tokens: 4096
 
 # After (Copilot)

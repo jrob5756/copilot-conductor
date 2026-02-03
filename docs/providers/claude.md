@@ -37,11 +37,11 @@ workflow:
   name: my-workflow
   runtime:
     provider: claude  # Change from 'copilot' to 'claude'
-    default_model: claude-sonnet-4.5-latest
+    default_model: claude-sonnet-4.5
 
 agents:
   - name: assistant
-    model: claude-sonnet-4.5-latest
+    model: claude-sonnet-4.5
     prompt: |
       Answer the following question: {{ workflow.input.question }}
     output:
@@ -103,11 +103,11 @@ Claude offers multiple model tiers optimized for different use cases. All models
 
 | Model | Best For | Speed | Cost (Input/Output) | Max Output Tokens | Recommended Use |
 |-------|----------|-------|---------------------|-------------------|-----------------|
-| **claude-sonnet-4.5-latest** | General purpose, most workflows | Medium | $3/$15 per MTok | 8192 | **Default recommendation** - stable, avoids deprecation |
+| **claude-sonnet-4.5** | General purpose, most workflows | Medium | $3/$15 per MTok | 8192 | **Default recommendation** - stable, avoids deprecation |
 | claude-sonnet-4.5-20250929 | Latest features, cutting-edge | Medium | $3/$15 per MTok | 8192 | When you need the newest capabilities |
 | claude-sonnet-4.5-20241022 | Stable, well-tested | Medium | $3/$15 per MTok | 8192 | Production workloads requiring stability |
-| claude-opus-4.5-latest | Complex reasoning, creative tasks | Slowest | $5/$25 per MTok | 8192 | Critical analysis, complex decision-making |
-| claude-haiku-4.5-latest | Simple tasks, high volume | Fastest | $1/$5 per MTok | 4096 | Classification, routing, simple Q&A |
+| claude-opus-4.5 | Complex reasoning, creative tasks | Slowest | $5/$25 per MTok | 8192 | Critical analysis, complex decision-making |
+| claude-haiku-4.5 | Simple tasks, high volume | Fastest | $1/$5 per MTok | 4096 | Classification, routing, simple Q&A |
 | claude-3-opus-20240229 | Legacy - complex reasoning | Slow | $15/$75 per MTok | 4096 | Legacy workflows (not recommended) |
 
 **Note**: Pricing verified as of 2026-02-01 from Anthropic documentation. Always verify current rates at [anthropic.com/pricing](https://www.anthropic.com/pricing) before production deployment.
@@ -116,7 +116,7 @@ Claude offers multiple model tiers optimized for different use cases. All models
 
 Claude models follow different naming conventions:
 
-- **Latest stable**: `claude-sonnet-4.5-latest` (recommended for stability)
+- **Latest stable**: `claude-sonnet-4.5` (recommended for stability)
 - **Claude 4.5 series**: `claude-sonnet-4.5-YYYYMMDD`
 - **Claude 4 series**: `claude-opus-4.5-YYYYMMDD`
 - **Claude 3.x series**: `claude-3-5-sonnet-YYYYMMDD`, `claude-3-opus-YYYYMMDD`
@@ -125,17 +125,17 @@ The provider will log available models at startup and warn if your requested mod
 
 ### Choosing a Model
 
-**For most workflows**: Use `claude-sonnet-4.5-latest`
+**For most workflows**: Use `claude-sonnet-4.5`
 - Excellent balance of performance and cost
 - Automatic updates to latest stable version
 - No dated model deprecation risk
 
-**For simple, high-volume tasks**: Use `claude-haiku-4.5-latest`
+**For simple, high-volume tasks**: Use `claude-haiku-4.5`
 - 3-5x faster than Sonnet
 - 3x cheaper ($1/$5 vs $3/$15 per MTok)
 - Best for classification, routing, simple transformations
 
-**For complex reasoning**: Use `claude-opus-4.5-latest`
+**For complex reasoning**: Use `claude-opus-4.5`
 - Superior performance on multi-step reasoning
 - Better at following complex instructions
 - Worth the cost for critical workflows
@@ -151,7 +151,7 @@ The provider will log available models at startup and warn if your requested mod
 workflow:
   runtime:
     provider: claude
-    default_model: claude-sonnet-4.5-latest
+    default_model: claude-sonnet-4.5
 
 agents:
   # Use default model
@@ -160,12 +160,12 @@ agents:
 
   # Override with Haiku for simple task
   - name: classifier
-    model: claude-haiku-4.5-latest
+    model: claude-haiku-4.5
     prompt: "Classify this as positive or negative: {{ input }}"
 
   # Override with Opus for complex reasoning
   - name: strategic_analyzer
-    model: claude-opus-4.5-latest
+    model: claude-opus-4.5
     prompt: "Develop a comprehensive strategy for..."
 ```
 
@@ -228,7 +228,7 @@ workflow:
   name: comprehensive-example
   runtime:
     provider: claude
-    default_model: claude-sonnet-4.5-latest
+    default_model: claude-sonnet-4.5
     temperature: 0.7
     max_tokens: 4096
 
@@ -272,7 +272,7 @@ If you need faster responses:
 2. **Use Haiku models**: 3-5x faster than Sonnet/Opus
    ```yaml
    runtime:
-     default_model: claude-haiku-4.5-latest
+     default_model: claude-haiku-4.5
    ```
 
 3. **Break workflows into smaller agents**: Multiple short responses instead of one long response
@@ -307,7 +307,7 @@ curl https://api.anthropic.com/v1/messages \
   -H "x-api-key: $ANTHROPIC_API_KEY" \
   -H "anthropic-version: 2023-06-01" \
   -H "content-type: application/json" \
-  -d '{"model":"claude-sonnet-4.5-latest","max_tokens":100,"messages":[{"role":"user","content":"Hi"}]}'
+  -d '{"model":"claude-sonnet-4.5","max_tokens":100,"messages":[{"role":"user","content":"Hi"}]}'
 ```
 
 #### 2. Model Not Found
@@ -317,18 +317,17 @@ curl https://api.anthropic.com/v1/messages \
 **Solutions**:
 - Check available models: see the provider logs at startup
 - Verify model name spelling
-- Use `-latest` suffix for stable models: `claude-sonnet-4.5-latest`
 - Check if model is deprecated: [Anthropic docs](https://docs.anthropic.com/en/docs/models-overview)
 
 **Valid model names**:
 ```yaml
 # Good
-default_model: claude-sonnet-4.5-latest
+default_model: claude-sonnet-4.5
 default_model: claude-sonnet-4.5-20250929
 
 # Bad (typos)
-default_model: claude-3.5-sonnet-latest  # Wrong: uses dot instead of dash
-default_model: claude-sonnet-latest      # Wrong: missing version number
+default_model: claude-3.5-sonnet  # Wrong: uses dot instead of dash
+default_model: claude-sonnet      # Wrong: missing version number
 ```
 
 #### 3. Rate Limit Errors
@@ -374,7 +373,7 @@ runtime:
 # For Haiku
 agents:
   - name: simple_task
-    model: claude-haiku-4.5-latest
+    model: claude-haiku-4.5
     # Bad: max_tokens: 8192 (exceeds Haiku limit)
     # Good:
     runtime:
@@ -494,17 +493,17 @@ workflow:
 agents:
   # Simple classification: Haiku (3x cheaper)
   - name: categorize
-    model: claude-haiku-4.5-latest
+    model: claude-haiku-4.5
     prompt: "Categorize as positive/negative: {{ text }}"
 
   # General analysis: Sonnet (balanced)
   - name: analyze
-    model: claude-sonnet-4.5-latest
+    model: claude-sonnet-4.5
     prompt: "Analyze the following..."
 
   # Complex reasoning: Opus (only when necessary)
   - name: strategic_planning
-    model: claude-opus-4.5-latest
+    model: claude-opus-4.5
     prompt: "Develop a comprehensive strategy..."
 ```
 

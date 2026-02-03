@@ -6,7 +6,6 @@
 # - Input parameters
 # - Output schema validation
 # - Simple routing to $end
-# - MCP server configuration for web search
 #
 # Usage:
 #   conductor run examples/simple-qa.yaml --input question="What is Python?"
@@ -18,25 +17,17 @@ workflow:
   entry_point: answerer
   
   runtime:
-    provider: copilot
+    provider: copilot # can be copilot or claude
+    temperature: 0.7
     mcp_servers:
+      # Note: The Copilot CLI has a bug where 'env' vars in MCP server
+      # configs are not passed to MCP server subprocesses.
+      # See: https://github.com/github/copilot-sdk/issues/163
       web-search:
         command: sh
         args: ["-c", "MODE=stdio DEFAULT_SEARCH_ENGINE=bing exec npx -y open-websearch@latest"]
         tools: ["*"]
-      context7:
-        command: npx
-        args: ["-y", "@upstash/context7-mcp@latest"]
-        tools: ["*"]
-      enghub:
-        command: node
-        args: ["/Users/jason/src/enghub-mcp-server-tools/dist/index.js"]
-        tools: ["*"]
-      s360:
-        type: http
-        url: https://mcp.vnext.s360.msftcloudes.com/
-        tools: ["*"]
-
+        
   input:
     question:
       type: string
@@ -46,7 +37,7 @@ workflow:
 agents:
   - name: answerer
     description: Answers the user's question clearly and concisely
-    model: claude-haiku-4.5-latest
+    model: claude-haiku-4.5
     prompt: |
       You are a helpful assistant. Please answer the following question 
       clearly and concisely:

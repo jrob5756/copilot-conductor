@@ -20,7 +20,7 @@ conductor run examples/simple-qa.yaml --input question="What is Python?"
 
 The same simple Q&A workflow configured for Claude provider. Demonstrates:
 - Claude provider configuration
-- Model selection with `claude-sonnet-4.5-latest`
+- Model selection with `claude-sonnet-4.5`
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
