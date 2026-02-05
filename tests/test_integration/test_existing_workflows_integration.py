@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Integration tests verifying existing Copilot workflows still work after schema changes.
 
 This test suite addresses critical review feedback:

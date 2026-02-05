@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Abstract base class for SDK providers.
 
 This module defines the AgentProvider ABC and AgentOutput dataclass that

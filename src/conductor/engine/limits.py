@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Safety limit enforcement for workflow execution.
 
 This module provides the LimitEnforcer class for tracking and enforcing

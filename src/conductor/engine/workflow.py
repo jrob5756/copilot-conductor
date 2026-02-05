@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Workflow execution engine for Conductor.
 
 This module provides the WorkflowEngine class for orchestrating

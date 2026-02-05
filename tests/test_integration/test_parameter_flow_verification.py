@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Parameter flow verification tests.
 
 These tests verify that parameters ACTUALLY reach the Anthropic SDK API calls,

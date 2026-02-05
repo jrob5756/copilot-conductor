@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Jinja2-based template renderer for prompts and expressions.
 
 This module provides the TemplateRenderer class for rendering Jinja2 templates

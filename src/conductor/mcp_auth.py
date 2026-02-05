@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """MCP OAuth authentication helpers.
 
 This module provides functions to discover OAuth requirements for HTTP MCP servers

@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Tests for provider coexistence.
 
 Verifies that Claude and Copilot providers can coexist in the same

@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Unit tests for HumanGateHandler with mocked terminal input."""
 
 from __future__ import annotations

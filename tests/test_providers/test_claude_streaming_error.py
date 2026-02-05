@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Tests for Claude provider streaming error handling.
 
 Since streaming is deferred to Phase 2+, this test verifies that:

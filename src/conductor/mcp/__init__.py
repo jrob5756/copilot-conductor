@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """MCP (Model Context Protocol) integration for Conductor.
 
 This module provides MCP server management for providers that need to

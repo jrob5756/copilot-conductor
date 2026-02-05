@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Integration tests for provider comparison.
 
 EPIC-008-T7: Provider comparison test (same workflow, different provider)

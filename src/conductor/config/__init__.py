@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Configuration module for Conductor.
 
 This module handles YAML parsing, Pydantic schema validation,

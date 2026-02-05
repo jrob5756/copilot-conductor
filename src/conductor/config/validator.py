@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Cross-field validators for workflow configuration.
 
 This module provides additional validation beyond Pydantic schema validation,

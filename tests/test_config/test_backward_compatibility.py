@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Backward compatibility tests for schema changes.
 
 This module ensures that adding new fields to the schema

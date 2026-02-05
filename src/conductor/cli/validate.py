@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Implementation of the 'conductor validate' command.
 
 This module provides functionality to validate workflow YAML files

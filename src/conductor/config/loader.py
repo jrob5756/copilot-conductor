@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """YAML configuration loader with environment variable resolution.
 
 This module handles loading YAML workflow configuration files,

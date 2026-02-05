@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Route evaluation for workflow conditional branching.
 
 This module provides the Router class for evaluating routing rules to

@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """End-to-end integration tests for Claude provider.
 
 Tests the complete flow from schema → provider → execution → output.

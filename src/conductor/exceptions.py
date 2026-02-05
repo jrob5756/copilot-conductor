@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Exception hierarchy for Conductor.
 
 This module defines all custom exceptions used throughout the application.

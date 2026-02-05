@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Pricing tables and cost calculation for LLM models.
 
 This module provides pricing information for various LLM models

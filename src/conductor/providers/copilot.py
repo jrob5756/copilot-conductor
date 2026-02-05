@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """GitHub Copilot SDK provider implementation.
 
 This module provides the CopilotProvider class for executing agents

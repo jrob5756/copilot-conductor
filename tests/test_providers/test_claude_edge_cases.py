@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Edge case tests for ClaudeProvider.
 
 Tests cover:

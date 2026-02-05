@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Providers module for Conductor.
 
 This module defines the agent provider abstraction and implementations

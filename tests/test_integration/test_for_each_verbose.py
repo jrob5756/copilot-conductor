@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Test verbose logging for for-each execution.
 
 This module tests that verbose logging functions are called correctly

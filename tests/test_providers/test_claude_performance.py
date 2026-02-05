@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Performance tests for Claude provider.
 
 These tests measure performance characteristics of the Claude provider

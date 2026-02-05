@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Integration tests for for-each (dynamic parallel) execution.
 
 Tests cover:

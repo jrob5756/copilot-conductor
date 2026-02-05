@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Tests for Claude provider parse recovery mechanism.
 
 Tests comprehensive failure scenarios for parse recovery:

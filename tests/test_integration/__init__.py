@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Integration tests package for Conductor.
 
 This package contains end-to-end integration tests that verify

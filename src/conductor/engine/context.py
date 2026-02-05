@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Workflow context management for Conductor.
 
 This module provides the WorkflowContext class for managing workflow state,

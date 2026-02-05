@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Conductor - A CLI tool for defining and running multi-agent workflows.
 
 Conductor enables orchestration of multi-agent workflows defined in YAML.

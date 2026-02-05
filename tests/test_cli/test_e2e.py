@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """End-to-end tests for the CLI with example workflows.
 
 This module tests complete workflow execution from CLI to output.

@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Pydantic models for workflow configuration.
 
 This module defines all Pydantic models for validating and parsing

@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Human gate handler for interactive workflow decisions.
 
 This module implements human-in-the-loop gates that pause workflow execution

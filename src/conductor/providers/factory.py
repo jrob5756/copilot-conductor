@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Factory for creating agent providers.
 
 This module provides the create_provider factory function for instantiating

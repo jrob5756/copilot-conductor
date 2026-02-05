@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Real API integration tests for Claude provider.
 
 EPIC-008-T9: Real API tests marked with pytest.mark.real_api

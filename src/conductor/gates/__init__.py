@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Gates module for Conductor.
 
 This module implements human-in-the-loop gates for interactive

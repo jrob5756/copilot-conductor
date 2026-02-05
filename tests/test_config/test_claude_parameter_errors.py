@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Tests for error handling of configuration parameters.
 
 Tests validation of temperature and max_tokens ranges and types.

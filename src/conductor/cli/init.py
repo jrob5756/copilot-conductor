@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Implementation of the 'conductor init' and 'conductor templates' commands.
 
 This module provides functionality to initialize new workflow files

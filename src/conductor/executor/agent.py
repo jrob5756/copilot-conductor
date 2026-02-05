@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Agent execution orchestration for Conductor.
 
 This module provides the AgentExecutor class for executing a single agent

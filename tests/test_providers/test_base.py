@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Unit tests for the AgentProvider ABC and AgentOutput dataclass."""
 
 from conductor.providers.base import AgentOutput

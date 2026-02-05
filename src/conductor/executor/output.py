@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Output parsing and validation for agent responses.
 
 This module provides functions for validating agent output against

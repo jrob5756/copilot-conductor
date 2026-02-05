@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Executor module for Conductor.
 
 This module handles agent execution, template rendering,

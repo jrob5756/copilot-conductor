@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Workflow engine module for Conductor.
 
 This module contains the workflow execution engine, context management,

@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Tests for Claude provider error conditions and edge cases.
 
 Note: Tests for top_p, top_k, stop_sequences, and metadata have been removed

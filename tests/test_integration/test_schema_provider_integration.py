@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Integration tests verifying schema fields are correctly passed to providers.
 
 This module tests that all Claude-specific schema fields (temperature, max_tokens)

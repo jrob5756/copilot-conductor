@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Integration tests for example workflows.
 
 These tests verify that the example workflows in the examples/ directory

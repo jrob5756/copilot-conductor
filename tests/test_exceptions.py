@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Test that the exceptions module works correctly."""
 
 from conductor.exceptions import (

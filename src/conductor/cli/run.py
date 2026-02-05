@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Implementation of the 'conductor run' command.
 
 This module provides helper functions for executing workflow files.

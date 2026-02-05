@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Token usage tracking for workflow execution.
 
 This module provides classes for tracking token usage and costs

@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """End-to-end parameter passing tests for Claude provider.
 
 Verifies that common parameters are properly passed through:

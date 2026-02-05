@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Provider registry for multi-provider workflow support.
 
 This module provides the ProviderRegistry class for managing multiple

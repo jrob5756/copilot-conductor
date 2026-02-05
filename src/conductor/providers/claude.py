@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Anthropic Claude SDK provider implementation.
 
 This module provides the ClaudeProvider class for executing agents

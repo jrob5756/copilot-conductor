@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """MCP server manager for spawning and managing MCP server connections.
 
 This module provides the MCPManager class that handles:

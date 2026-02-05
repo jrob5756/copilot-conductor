@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Tests for workflows attempting to mix Copilot and Claude providers.
 
 Verifies that mixing providers is properly documented as unsupported

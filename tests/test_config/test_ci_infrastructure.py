@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """CI-specific tests for verifying test infrastructure safety.
 
 These tests verify that the CI environment properly prevents accidental

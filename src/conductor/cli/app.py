@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 """Typer application definition for Conductor CLI.
 
 This module defines the main Typer app and global options.
